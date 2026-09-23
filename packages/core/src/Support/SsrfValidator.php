@@ -1,0 +1,272 @@
+<?php
+
+declare(strict_types=1);
+
+namespace PhpClaw\Support;
+
+use PhpClaw\Exceptions\ToolException;
+
+/**
+ * Shared SSRF guard: resolves a URL's host via DNS and blocks private, loopback, link-local, and internal addresses.
+ */
+final class SsrfValidator
+{
+    private const BLOCKED_HOSTS = [
+        'localhost',
+        '127.',
+        '0.',
+        '10.',
+        '169.254.',
+        '192.168.',
+        '::1',
+        'fc00:',
+        'fe80:',
+    ];
+
+    private const CGNAT_START = 100 * 256 * 256 * 256 + 64 * 256 * 256;
+
+    private const CGNAT_END = 100 * 256 * 256 * 256 + 127 * 256 * 256 + 255 * 256 + 255;
+
+    /**
+     * Validate the URL's host and return the vetted addresses used for IP-pinning. Runs every check assertPublicHost performs: numeric-encoding rejection, blocked-host prefix matching, assertBlockedIpv4 (including CGNAT), and IPv6 range checks, then collects every address that cleared all checks and returns them together with the parsed host and port. For an IP-literal host the literal itself is returned in ips (after passing validation). Port defaults to 443 for https and 80 for http when not present in the URL.
+     *
+     * @param  string  $url  Full URL to validate.
+     * @return array{host: string, port: int, ips: list<string>}
+     *
+     * @throws ToolException When the host is empty, uses non-standard numeric encoding, resolves to a private/internal address, or cannot be resolved.
+     */
+    public static function resolveValidated(string $url): array
+    {
+        $host = strtolower((string) (parse_url($url, PHP_URL_HOST) ?? ''));
+        $host = trim($host, '[]');
+
+        if ($host === '') {
+            throw new ToolException('Could not extract host from URL.');
+        }
+
+        $scheme = strtolower((string) (parse_url($url, PHP_URL_SCHEME) ?? ''));
+        $parsedPort = parse_url($url, PHP_URL_PORT);
+        $port = is_int($parsedPort) ? $parsedPort : ($scheme === 'https' ? 443 : 80);
+
+        self::assertNotNumericEncoding($host);
+
+        foreach (self::BLOCKED_HOSTS as $blocked) {
+            if ($host === $blocked || str_starts_with($host, $blocked)) {
+                throw new ToolException(
+                    "Requests to '{$host}' are blocked (private/internal address)."
+                );
+            }
+        }
+
+        if (str_contains($host, ':')) {
+            self::assertResolvedIpv6($host, $host);
+
+            return ['host' => $host, 'port' => $port, 'ips' => [$host]];
+        }
+
+        if (filter_var($host, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4) !== false) {
+            self::assertBlockedIpv4($host, $host);
+
+            return ['host' => $host, 'port' => $port, 'ips' => [$host]];
+        }
+
+        $ipv4Addresses = @gethostbynamel($host);
+        $ipv6Records = @dns_get_record($host, DNS_AAAA);
+        $ipv4Addresses = is_array($ipv4Addresses) ? $ipv4Addresses : [];
+        $ipv6Records = is_array($ipv6Records) ? $ipv6Records : [];
+
+        if ($ipv4Addresses === [] && $ipv6Records === []) {
+            throw new ToolException(
+                "Could not resolve host '{$host}': unresolvable hosts are blocked."
+            );
+        }
+
+        $ips = [];
+
+        foreach ($ipv4Addresses as $ipv4) {
+            self::assertBlockedIpv4($ipv4, $host);
+            $ips[] = $ipv4;
+        }
+
+        foreach ($ipv6Records as $record) {
+            $ipv6 = strtolower((string) ($record['ipv6'] ?? ''));
+            if ($ipv6 !== '') {
+                self::assertResolvedIpv6($ipv6, $host);
+                $ips[] = $ipv6;
+            }
+        }
+
+        return ['host' => $host, 'port' => $port, 'ips' => $ips];
+    }
+
+    /**
+     * Assert that the URL's host resolves only to public addresses.
+     *
+     * @param  string  $url  Full URL to validate.
+     * @return void
+     *
+     * @throws ToolException When the host is empty, uses non-standard numeric encoding, or resolves to a private/internal address.
+     */
+    public static function assertPublicHost(string $url): void
+    {
+        self::resolveValidated($url);
+    }
+
+    /**
+     * Non-throwing wrapper for callers that skip rather than abort (webhooks).
+     *
+     * @param  string  $url  Full URL to validate.
+     * @return bool True when the host is public; false when blocked or unparseable.
+     */
+    public static function isPublicHost(string $url): bool
+    {
+        try {
+            self::assertPublicHost($url);
+
+            return true;
+        } catch (\Throwable) {
+            return false;
+        }
+    }
+
+    /**
+     * Build a CURLOPT_RESOLVE pin entry from a validated address set, or return null when the host is already an IP literal. Returns "host:port:ip1,ip2,..." for DNS hostnames, handed directly to CURLOPT_RESOLVE. Returns null for IPv4 literals (filter_var detects them) or IPv6 literals (host contains ':'), because IP-literal URLs cannot be DNS-rebind attacked, the address is already fixed by the URL itself.
+     *
+     * @param  array{host: string, port: int, ips: list<string>}  $resolved  Output of resolveValidated().
+     * @return string|null Pin entry string, or null for IP-literal hosts.
+     */
+    public static function pinEntry(array $resolved): ?string
+    {
+        $host = (string) ($resolved['host'] ?? '');
+        $port = (int) ($resolved['port'] ?? 443);
+        $ips = (array) ($resolved['ips'] ?? []);
+
+        if (filter_var($host, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4) !== false || str_contains($host, ':')) {
+            return null;
+        }
+
+        if ($ips === []) {
+            return null;
+        }
+
+        return $host.':'.$port.':'.implode(',', $ips);
+    }
+
+    /**
+     * Throw when the host uses non-standard numeric IP encoding.
+     *
+     * @param  string  $host  Host string extracted from the URL.
+     * @return void
+     *
+     * @throws ToolException When the host matches a decimal, hex, dotted-hex, or dotted-octal pattern.
+     */
+    private static function assertNotNumericEncoding(string $host): void
+    {
+        if (preg_match('/^[0-9]+$/', $host)) {
+            throw new ToolException(
+                "Requests to '{$host}' are blocked (non-standard IP encoding)."
+            );
+        }
+
+        if (preg_match('/^0x[0-9a-f]+$/i', $host)) {
+            throw new ToolException(
+                "Requests to '{$host}' are blocked (non-standard IP encoding)."
+            );
+        }
+
+        if (str_contains($host, '.')) {
+            foreach (explode('.', $host) as $part) {
+                if (preg_match('/^0x[0-9a-f]+$/i', $part) || preg_match('/^0[0-7]+$/', $part)) {
+                    throw new ToolException(
+                        "Requests to '{$host}' are blocked (non-standard IP encoding)."
+                    );
+                }
+            }
+        }
+    }
+
+    /**
+     * Validate an IPv4 address against all blocked ranges using filter flags and an explicit CGNAT check.
+     *
+     * @param  string  $ip  Resolved IPv4 address (or IPv6 string when called from IPv4-mapped context).
+     * @param  string  $host  Original host name (used in the error message).
+     * @return void
+     *
+     * @throws ToolException When the address falls outside a public IPv4 range.
+     */
+    private static function assertBlockedIpv4(string $ip, string $host): void
+    {
+        $long = ip2long($ip);
+
+        if ($long === false) {
+            self::assertResolvedIpv6($ip, $host);
+
+            return;
+        }
+
+        if ($long >= self::CGNAT_START && $long <= self::CGNAT_END) {
+            throw new ToolException(
+                "Requests to '{$host}' are blocked (resolves to CGNAT address {$ip})."
+            );
+        }
+
+        if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4 | FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE) === false) {
+            throw new ToolException(
+                "Requests to '{$host}' are blocked (resolves to private IP {$ip})."
+            );
+        }
+    }
+
+    /**
+     * Validate an IPv6 address against all blocked ranges.
+     *
+     * @param  string  $ip  IPv6 literal or AAAA result.
+     * @param  string  $host  Original host name (used in the error message).
+     * @return void
+     *
+     * @throws ToolException When the address is loopback, ULA, link-local, or IPv4-mapped to a blocked range.
+     */
+    private static function assertResolvedIpv6(string $ip, string $host): void
+    {
+        $packed = inet_pton($ip);
+
+        if ($packed === false || strlen($packed) !== 16) {
+            return;
+        }
+
+        $b0 = ord($packed[0]);
+        $b1 = ord($packed[1]);
+
+        if ($packed === "\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x01") {
+            throw new ToolException(
+                "Requests to '{$host}' are blocked (resolves to IPv6 loopback)."
+            );
+        }
+
+        if (($b0 & 0xFE) === 0xFC) {
+            throw new ToolException(
+                "Requests to '{$host}' are blocked (resolves to private IPv6 address {$ip})."
+            );
+        }
+
+        if ($b0 === 0xFE && ($b1 & 0xC0) === 0x80) {
+            throw new ToolException(
+                "Requests to '{$host}' are blocked (resolves to link-local IPv6 address {$ip})."
+            );
+        }
+
+        if (substr($packed, 0, 12) === "\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\xff\xff") {
+            $ipv4 = inet_ntop(substr($packed, 12));
+            if ($ipv4 !== false) {
+                foreach (self::BLOCKED_HOSTS as $blocked) {
+                    if (str_starts_with($ipv4, $blocked)) {
+                        throw new ToolException(
+                            "Requests to '{$host}' are blocked (IPv4-mapped IPv6 {$ip} is private)."
+                        );
+                    }
+                }
+                self::assertBlockedIpv4($ipv4, $host);
+            }
+        }
+    }
+}

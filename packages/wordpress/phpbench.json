@@ -1,0 +1,17 @@
+{
+    "$schema": "./vendor/phpbench/phpbench/phpbench.schema.json",
+    "runner.bootstrap": "vendor/autoload.php",
+    "runner.path": "benchmarks",
+    "runner.file_pattern": "*Bench.php",
+    "runner.iterations": 3,
+    "runner.revs": 50,
+    "runner.warmup": 1,
+    "runner.timeout": 60,
+    "report.outputs": {
+        "console": {
+            "renderer": "console"
+        }
+    },
+    "storage.driver": "xml",
+    "storage.xml_storage_path": ".phpbench/storage"
+}

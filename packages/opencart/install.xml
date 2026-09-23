@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    phpClaw AI Agent: OCMOD modification record.
+    install.json is the manifest both OpenCart 3.x and 4.x read to register the extension.
+    OpenCart 3 also records this file under Extensions > Modifications; phpClaw patches no
+    core file, so it declares no <file> operations.
+
+    Install via:
+      Admin → Extensions → Extension Installer → Upload the phpClaw ZIP file
+      Admin → Extensions → Modules → phpClaw AI Agent → Install → Enable
+-->
+<modification>
+    <name>phpClaw AI Agent</name>
+    <code>phpclaw</code>
+    <version>1.0.0</version>
+    <author>phpClaw</author>
+    <link>https://phpclaw.ai</link>
+</modification>

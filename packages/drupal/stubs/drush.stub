@@ -1,0 +1,55 @@
+<?php
+
+/**
+ * PHPStan stubs for drush/drush, declaring the symbols we depend on so PHPStan
+ * can resolve them without requiring drush in vendor (drush is injected at runtime
+ * by the site's Drupal installation, not by this package).
+ */
+
+namespace Drush\Commands;
+
+abstract class DrushCommands
+{
+    public function __construct() {}
+
+    /**
+     * @return \Symfony\Component\Console\Style\SymfonyStyle
+     */
+    protected function io(): \Symfony\Component\Console\Style\SymfonyStyle {}
+
+    /**
+     * @return \Symfony\Component\Console\Output\OutputInterface
+     */
+    protected function output(): \Symfony\Component\Console\Output\OutputInterface {}
+
+    /**
+     * @return \Psr\Log\LoggerInterface|null
+     */
+    public function logger(): ?\Psr\Log\LoggerInterface {}
+}
+
+namespace Drush\Attributes;
+
+#[\Attribute(\Attribute::TARGET_METHOD)]
+class Command
+{
+    public function __construct(string $name = '', array $aliases = []) {}
+}
+
+#[\Attribute(\Attribute::TARGET_METHOD | \Attribute::IS_REPEATABLE)]
+class Argument
+{
+    public function __construct(string $name = '', string $description = '') {}
+}
+
+#[\Attribute(\Attribute::TARGET_METHOD | \Attribute::IS_REPEATABLE)]
+class Option
+{
+    public function __construct(string $name = '', string $description = '') {}
+}
+
+#[\Attribute(\Attribute::TARGET_METHOD | \Attribute::IS_REPEATABLE)]
+class Usage
+{
+    public function __construct(string $name = '', string $description = '') {}
+}

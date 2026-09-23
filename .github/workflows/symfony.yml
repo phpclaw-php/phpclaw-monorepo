@@ -1,0 +1,178 @@
+name: Symfony
+
+on:
+  push:
+    branches: [0.x]
+    paths:
+      - 'packages/symfony/**'
+      - '!packages/symfony/**.md'
+      - '.github/workflows/symfony.yml'
+      - '.github/workflows/_adapter-quality.yml'
+  pull_request:
+    paths:
+      - 'packages/symfony/**'
+      - '!packages/symfony/**.md'
+      - '.github/workflows/symfony.yml'
+      - '.github/workflows/_adapter-quality.yml'
+
+
+concurrency:
+  group: symfony-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    uses: ./.github/workflows/_adapter-quality.yml
+    with:
+      adapter: symfony
+      is_cms: false
+      # This job's install is unconstrained (no explicit symfony/* version pin), and our
+      # own require allows ^6.4|^7.0|^8.0 — composer always resolves the newest allowed
+      # major (8.x), which needs PHP 8.4. On 8.1/8.2/8.3 this floats to a broken mix of
+      # Symfony 8.x console/http-kernel against an older actual PHP, causing real fatals
+      # (pre-existing, not introduced by adding ^8.0 support — verified the same break
+      # already happens on 8.2/8.3 today). PHP 8.4 is the only version safe for this
+      # generic path; the `test` job below is what actually proves 8.1-8.4 compatibility.
+      # coverage_php must match for the same reason — it's used by _adapter-quality.yml's
+      # separate coverage/static-analysis/benchmarks jobs, not just the tests matrix.
+      php_versions: '["8.4"]'
+      coverage_php: '8.4'
+
+  test:
+    name: PHP ${{ matrix.php }} / Symfony ${{ matrix.symfony }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # symfony/framework-bundle's own composer.json php floor per major:
+          # 6.4 -> >=8.1, 7.x -> >=8.2, 8.x -> >=8.4 (verified against real tags).
+          - php: '8.1'
+            symfony: '^6.4'
+          - php: '8.2'
+            symfony: '^6.4'
+          - php: '8.2'
+            symfony: '^7.0'
+          - php: '8.3'
+            symfony: '^6.4'
+          - php: '8.3'
+            symfony: '^7.0'
+          - php: '8.4'
+            symfony: '^6.4'
+          - php: '8.4'
+            symfony: '^7.0'
+          - php: '8.4'
+            symfony: '^8.0'
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up PHP ${{ matrix.php }}
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          extensions: curl, json, pdo, pdo_sqlite
+          coverage: none
+
+      # framework-bundle/console/dependency-injection/config are the only symfony/*
+      # packages we directly require, so composer is free to let everything else
+      # (var-exporter, http-kernel, cache, etc.) float to whatever's newest within
+      # its own allowed range — producing a broken hybrid (e.g. symfony/http-kernel
+      # 8.x paired with framework-bundle 7.x) that doesn't represent any real,
+      # valid Symfony install. var-exporter and http-kernel are pinned explicitly
+      # here because their version-mismatch is what actually breaks the compiled
+      # DI container (ReflectionClass::isReadOnly() / parse errors) — verified the
+      # other transitive symfony/* packages (yaml, cache, etc.) don't affect test
+      # outcomes even when they drift.
+      - name: Require Symfony ${{ matrix.symfony }}
+        working-directory: packages/symfony
+        run: |
+          composer require \
+            "symfony/framework-bundle:${{ matrix.symfony }}" \
+            "symfony/console:${{ matrix.symfony }}" \
+            "symfony/dependency-injection:${{ matrix.symfony }}" \
+            "symfony/config:${{ matrix.symfony }}" \
+            "symfony/var-exporter:${{ matrix.symfony }}" \
+            "symfony/http-kernel:${{ matrix.symfony }}" \
+            --no-update --no-interaction
+
+      - name: Install dependencies
+        working-directory: packages/symfony
+        run: composer install --prefer-dist --no-progress --no-interaction --ignore-platform-req=php
+
+      - name: Run unit tests
+        working-directory: packages/symfony
+        run: vendor/bin/phpunit --testsuite=Unit --testdox
+
+      - name: Run feature tests (optional — requires API key)
+        working-directory: packages/symfony
+        run: vendor/bin/phpunit --testsuite=Feature --testdox
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          OPENAI_API_KEY:    ${{ secrets.OPENAI_API_KEY }}
+          GROQ_API_KEY:      ${{ secrets.GROQ_API_KEY }}
+        continue-on-error: true
+
+  coverage:
+    name: Coverage (PHP 8.4 / Symfony ^8.0)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: test
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up PHP 8.4 with Xdebug
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: curl, json, pdo, pdo_sqlite, xdebug
+          coverage: xdebug
+
+      - name: Require Symfony ^8.0
+        working-directory: packages/symfony
+        run: |
+          composer require \
+            "symfony/framework-bundle:^8.0" \
+            "symfony/console:^8.0" \
+            "symfony/dependency-injection:^8.0" \
+            "symfony/config:^8.0" \
+            "symfony/var-exporter:^8.0" \
+            "symfony/http-kernel:^8.0" \
+            --no-update --no-interaction
+
+      - name: Install dependencies
+        working-directory: packages/symfony
+        run: composer install --prefer-dist --no-progress --no-interaction --ignore-platform-req=php
+
+      - name: Run tests with coverage
+        working-directory: packages/symfony
+        run: |
+          vendor/bin/phpunit --testsuite=Unit \
+            --coverage-text \
+            --coverage-clover=coverage.xml
+
+      - name: Check coverage threshold (80%)
+        working-directory: packages/symfony
+        continue-on-error: true
+        run: |
+          php -r "
+            \$xml = simplexml_load_file('coverage.xml');
+            \$metrics = \$xml->project->metrics;
+            \$covered = (int)\$metrics['coveredstatements'];
+            \$total   = (int)\$metrics['statements'];
+            if (\$total === 0) { echo 'No statements found'; exit(0); }
+            \$pct = (\$covered / \$total) * 100;
+            echo number_format(\$pct, 1) . '% coverage' . PHP_EOL;
+            if (\$pct < 80) { echo 'Coverage below 80%'; exit(1); }
+          "
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v7
+        with:
+          files: packages/symfony/coverage.xml
+          flags: symfony
+          fail_ci_if_error: false
+        continue-on-error: true

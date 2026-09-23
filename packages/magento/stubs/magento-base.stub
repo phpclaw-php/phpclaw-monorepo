@@ -1,0 +1,494 @@
+<?php
+
+/**
+ * PHPStan stubs for Magento framework symbols used by this module.
+ *
+ * Declares every Magento class, interface, and global function the module
+ * references so PHPStan can resolve them without a full Magento installation.
+ * Method bodies are intentionally empty; only signatures matter for analysis.
+ */
+
+namespace Magento\Framework {
+    class Phrase implements \Stringable
+    {
+        public function __construct(string $text, array $arguments = []) {}
+
+        public function __toString(): string
+        {
+            return '';
+        }
+    }
+
+    class DataObject
+    {
+        public function __construct(array $data = []) {}
+
+        public function getData(string $key = ''): mixed
+        {
+            return null;
+        }
+
+        public function setData(string $key, mixed $value): void {}
+    }
+
+    class DataObjectFactory
+    {
+        public function create(array $data = []): \Magento\Framework\DataObject
+        {
+            return new \Magento\Framework\DataObject();
+        }
+    }
+
+    interface AuthorizationInterface
+    {
+        public function isAllowed(string $resource, mixed $privilege = null): bool;
+    }
+}
+
+namespace Magento\Framework\Data {
+    interface OptionSourceInterface
+    {
+        public function toOptionArray(): array;
+    }
+}
+
+namespace Magento\Framework\Message {
+    interface ManagerInterface
+    {
+        public function addSuccessMessage(string $message, string $group = ''): static;
+        public function addErrorMessage(string $message, string $group = ''): static;
+        public function addWarningMessage(string $message, string $group = ''): static;
+        public function addNoticeMessage(string $message, string $group = ''): static;
+    }
+}
+
+namespace Magento\Framework\App {
+    interface RequestInterface
+    {
+        public function getParam(string $key, mixed $defaultValue = null): mixed;
+        public function setParam(string $key, mixed $value): static;
+        public function getContent(): string|false;
+        public function getMethod(): string;
+        public function has(string $key): bool;
+    }
+
+    interface ResponseInterface {}
+
+    interface CacheInterface
+    {
+        public function load(string $identifier): string|false;
+        public function save(string $data, string $identifier, array $tags = [], ?int $lifeTime = null): bool;
+        public function remove(string $identifier): bool;
+        public function clean(array $tags = []): bool;
+    }
+
+    class ResourceConnection
+    {
+        public function getConnection(string $resourceName = 'default'): \Magento\Framework\DB\Adapter\AdapterInterface
+        {
+            return new class implements \Magento\Framework\DB\Adapter\AdapterInterface {};
+        }
+
+        public function getTableName(string $modelEntity): string
+        {
+            return $modelEntity;
+        }
+    }
+
+    class State
+    {
+        public function getAreaCode(): ?string
+        {
+            return null;
+        }
+    }
+
+    class Area
+    {
+        public const AREA_ADMINHTML = 'adminhtml';
+
+        public const AREA_WEBAPI_REST = 'webapi_rest';
+    }
+}
+
+namespace Magento\Framework\App\Cache {
+    interface TypeListInterface
+    {
+        public function cleanType(string $typeCode): void;
+        public function invalidate(string|array $typeCode): void;
+        /** @return \Magento\Framework\DataObject[] */
+        public function getTypes(): array;
+        /** @return \Magento\Framework\DataObject[] */
+        public function getInvalidated(): array;
+    }
+}
+
+namespace Magento\Framework\App\Config {
+    interface ScopeConfigInterface
+    {
+        public function getValue(
+            string $path,
+            string $scopeType = 'default',
+            mixed $scopeCode = null,
+        ): mixed;
+
+        public function isSetFlag(
+            string $path,
+            string $scopeType = 'default',
+            mixed $scopeCode = null,
+        ): bool;
+    }
+}
+
+namespace Magento\Framework\App\Config\Storage {
+    interface WriterInterface
+    {
+        public function save(string $path, mixed $value, string $scope = 'default', int $scopeId = 0): void;
+        public function delete(string $path, string $scope = 'default', int $scopeId = 0): void;
+    }
+}
+
+namespace Magento\Framework\Console {
+    class Cli
+    {
+        public const RETURN_SUCCESS = 0;
+        public const RETURN_FAILURE = 1;
+    }
+}
+
+namespace Magento\Framework\Controller {
+    interface ResultInterface {}
+}
+
+namespace Magento\Framework\Controller\Result {
+    class Json implements \Magento\Framework\Controller\ResultInterface
+    {
+        public function setData(array $data): static
+        {
+            return $this;
+        }
+
+        public function setHttpResponseCode(int $code): static
+        {
+            return $this;
+        }
+    }
+
+    class JsonFactory
+    {
+        public function create(): \Magento\Framework\Controller\Result\Json
+        {
+            return new \Magento\Framework\Controller\Result\Json();
+        }
+    }
+
+    class Redirect implements \Magento\Framework\Controller\ResultInterface
+    {
+        public function setPath(string $path, array $params = []): static
+        {
+            return $this;
+        }
+
+        public function setUrl(string $url): static
+        {
+            return $this;
+        }
+    }
+
+    class RedirectFactory
+    {
+        public function create(): \Magento\Framework\Controller\Result\Redirect
+        {
+            return new \Magento\Framework\Controller\Result\Redirect();
+        }
+    }
+}
+
+namespace Magento\Framework\DB\Adapter {
+    interface AdapterInterface
+    {
+        public function fetchOne(string $sql, array $bind = []): string|false;
+        public function fetchRow(string $sql, array $bind = [], mixed $fetchMode = null): array|false;
+        public function fetchAll(string $sql, array $bind = [], mixed $fetchMode = null): array;
+        public function fetchPairs(string $sql, array $bind = []): array;
+        public function insert(string $table, array $bind): int;
+        public function update(string $table, array $bind, mixed $where = ''): int;
+        public function insertOnDuplicate(string $table, array $data, array $fields = []): int;
+        public function delete(string $table, mixed $where = ''): int;
+        public function quoteInto(string $text, mixed $value, mixed $type = null, mixed $count = null): string;
+        public function isTableExists(string $table, ?string $schemaName = null): bool;
+        public function dropTable(string $tableName, ?string $schemaName = null): bool;
+        public function beginTransaction(): static;
+        public function commit(): static;
+        public function rollBack(): static;
+    }
+}
+
+namespace Magento\Framework\Encryption {
+    interface EncryptorInterface
+    {
+        public function encrypt(string $data): string;
+        public function decrypt(string $data): string;
+        public function hash(string $data, mixed $version = false): string;
+        public function isValidHash(string $password, string $hash): bool;
+    }
+}
+
+namespace Magento\Framework\Event {
+    interface ManagerInterface
+    {
+        public function dispatch(string $eventName, array $data = []): void;
+    }
+}
+
+namespace Magento\Framework\Exception {
+    class LocalizedException extends \RuntimeException
+    {
+        public function __construct(\Magento\Framework\Phrase $phrase, ?\Throwable $cause = null, string $code = '')
+        {
+            parent::__construct((string) $phrase, 0, $cause);
+        }
+    }
+
+    class InputException extends \Magento\Framework\Exception\LocalizedException {}
+}
+
+namespace Magento\Framework\Setup {
+    interface ModuleContextInterface
+    {
+        public function getVersion(): string;
+    }
+
+    interface ModuleDataSetupInterface
+    {
+        public function getConnection(string $resourceName = 'default'): \Magento\Framework\DB\Adapter\AdapterInterface;
+        public function getTable(string $tableName, string $resourceName = 'default'): string;
+    }
+
+    interface SchemaSetupInterface
+    {
+        public function startSetup(): static;
+        public function endSetup(): static;
+        public function getConnection(string $resourceName = 'default'): \Magento\Framework\DB\Adapter\AdapterInterface;
+        public function getTable(string $tableName, string $resourceName = 'default'): string;
+        public function tableExists(string $table): bool;
+    }
+
+    interface UninstallInterface
+    {
+        public function uninstall(
+            \Magento\Framework\Setup\SchemaSetupInterface $setup,
+            \Magento\Framework\Setup\ModuleContextInterface $context,
+        ): void;
+    }
+}
+
+namespace Magento\Framework\Setup\Patch {
+    interface DataPatchInterface
+    {
+        public function apply(): mixed;
+        public static function getDependencies(): array;
+        public function getAliases(): array;
+    }
+}
+
+namespace Magento\Framework\View\Page {
+    class Config
+    {
+        public function getTitle(): \Magento\Framework\View\Page\Title
+        {
+            return new \Magento\Framework\View\Page\Title();
+        }
+    }
+
+    class Title
+    {
+        public function prepend(string|\Magento\Framework\Phrase $title): static
+        {
+            return $this;
+        }
+    }
+}
+
+namespace Magento\Framework\View\Result {
+    class Page implements \Magento\Framework\Controller\ResultInterface
+    {
+        public function getConfig(): \Magento\Framework\View\Page\Config
+        {
+            return new \Magento\Framework\View\Page\Config();
+        }
+    }
+
+    class PageFactory
+    {
+        public function create(): \Magento\Framework\View\Result\Page
+        {
+            return new \Magento\Framework\View\Result\Page();
+        }
+    }
+}
+
+namespace Magento\Framework\Webapi {
+    class Exception extends \RuntimeException
+    {
+        public const HTTP_BAD_REQUEST = 400;
+        public const HTTP_UNAUTHORIZED = 401;
+        public const HTTP_FORBIDDEN = 403;
+        public const HTTP_NOT_FOUND = 404;
+        public const HTTP_INTERNAL_ERROR = 500;
+
+        public function __construct(\Magento\Framework\Phrase $phrase, int $code = 0, int $httpCode = 400)
+        {
+            parent::__construct((string) $phrase, $code);
+        }
+
+        public function getHttpCode(): int
+        {
+            return 0;
+        }
+    }
+}
+
+namespace Magento\User\Model {
+    class User
+    {
+        public function getId(): ?int { return null; }
+    }
+}
+
+namespace Magento\Backend\Model\Auth {
+    class Session
+    {
+        public function getUser(): ?\Magento\User\Model\User { return null; }
+    }
+}
+
+namespace Magento\Authorization\Model {
+    interface UserContextInterface
+    {
+        public const USER_TYPE_INTEGRATION = 1;
+        public const USER_TYPE_ADMIN = 2;
+        public const USER_TYPE_CUSTOMER = 3;
+        public const USER_TYPE_GUEST = 4;
+        public function getUserId(): ?int;
+        public function getUserType(): ?int;
+    }
+}
+
+namespace Magento\Backend\App\Action {
+    class Context
+    {
+        public function getRequest(): \Magento\Framework\App\RequestInterface
+        {
+            return new class implements \Magento\Framework\App\RequestInterface {
+                public function getParam(string $key, mixed $defaultValue = null): mixed { return $defaultValue; }
+                public function setParam(string $key, mixed $value): static { return $this; }
+                public function getContent(): string|false { return ''; }
+                public function getMethod(): string { return 'GET'; }
+                public function has(string $key): bool { return false; }
+            };
+        }
+    }
+}
+
+namespace Magento\Backend\App {
+    class Action
+    {
+        protected \Magento\Framework\Message\ManagerInterface $messageManager;
+
+        public function __construct(\Magento\Backend\App\Action\Context $context)
+        {
+            $this->messageManager = new class implements \Magento\Framework\Message\ManagerInterface {
+                public function addSuccessMessage(string $message, string $group = ''): static { return $this; }
+                public function addErrorMessage(string $message, string $group = ''): static { return $this; }
+                public function addWarningMessage(string $message, string $group = ''): static { return $this; }
+                public function addNoticeMessage(string $message, string $group = ''): static { return $this; }
+            };
+        }
+
+        protected function _isAllowed(): bool
+        {
+            return true;
+        }
+
+        public function getUrl(string $route = '', array $params = []): string
+        {
+            return '';
+        }
+
+        public function getRequest(): \Magento\Framework\App\RequestInterface
+        {
+            return new class implements \Magento\Framework\App\RequestInterface {
+                public function getParam(string $key, mixed $defaultValue = null): mixed { return $defaultValue; }
+                public function setParam(string $key, mixed $value): static { return $this; }
+                public function getContent(): string|false { return ''; }
+                public function getMethod(): string { return 'GET'; }
+                public function has(string $key): bool { return false; }
+            };
+        }
+
+        public function getResponse(): \Magento\Framework\App\ResponseInterface
+        {
+            return new class implements \Magento\Framework\App\ResponseInterface {};
+        }
+
+        public function _processUrlKeys(): bool
+        {
+            return true;
+        }
+
+        public function _redirect(string $path, array $arguments = []): void {}
+    }
+}
+
+namespace Magento\Backend\Block\Template {
+    class Context {}
+}
+
+namespace Magento\Backend\Block {
+    class Template
+    {
+        public function __construct(
+            \Magento\Backend\Block\Template\Context $context,
+            array $data = [],
+        ) {}
+
+        public function getUrl(string $route = '', array $params = []): string
+        {
+            return '';
+        }
+
+        public function getRequest(): \Magento\Framework\App\RequestInterface
+        {
+            return new class implements \Magento\Framework\App\RequestInterface {
+                public function getParam(string $key, mixed $defaultValue = null): mixed { return $defaultValue; }
+                public function setParam(string $key, mixed $value): static { return $this; }
+                public function getContent(): string|false { return ''; }
+                public function getMethod(): string { return 'GET'; }
+                public function has(string $key): bool { return false; }
+            };
+        }
+
+        public function escapeHtml(mixed $data): string
+        {
+            return '';
+        }
+
+        public function escapeUrl(mixed $data): string
+        {
+            return (string) $data;
+        }
+
+        public function escapeHtmlAttr(mixed $data): string
+        {
+            return '';
+        }
+    }
+}
+
+namespace {
+    function __(string $str, mixed ...$args): \Magento\Framework\Phrase
+    {
+        return new \Magento\Framework\Phrase($str);
+    }
+}

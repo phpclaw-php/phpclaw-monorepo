@@ -1,0 +1,9 @@
+phpclaw_send:
+    path: /phpclaw/send
+    controller: PhpClaw\Symfony\Http\ApiController::send
+    methods: [POST]
+
+phpclaw_chat_stream:
+    path: /phpclaw/chat/stream
+    controller: PhpClaw\Symfony\Http\ApiController::stream
+    methods: [POST]

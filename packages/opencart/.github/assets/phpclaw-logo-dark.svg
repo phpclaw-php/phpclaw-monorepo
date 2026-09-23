@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 135 48" height="120" role="img" aria-label="phpClaw">
+  <text x="10" y="34"
+        font-family="'Inter', 'Inter Variable', system-ui, -apple-system, sans-serif"
+        font-size="28" letter-spacing="-0.01em">
+    <tspan fill="#f5f5f5" font-weight="700">php</tspan><tspan fill="#c11f3a" font-weight="700">Claw</tspan>
+  </text>
+</svg>

@@ -1,0 +1,35 @@
+name: Pull request title
+
+# The release notes are built from the pull request TITLE, and GitHub auto-titles a pull request from
+# the branch name ("Chore/tidy joomla changelog"), which matches no prefix and ships as a Changed entry.
+
+on:
+  pull_request:
+    types: [opened, edited, reopened, synchronize]
+
+concurrency:
+  group: pr-title-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    if: ${{ !startsWith(github.event.pull_request.head.ref, 'release/') && github.event.pull_request.state != 'closed' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: The title must start with a known prefix
+        env:
+          TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          if echo "$TITLE" | grep -qE '^(feat|fix|security|chore|docs|test|ci|build|style|release)(\([^)]+\))?!?: .+'; then
+            echo "Title accepted: $TITLE"
+            exit 0
+          fi
+          echo "::error::The pull request title does not start with a known prefix: $TITLE"
+          echo "Use one of: feat: fix: security: chore: docs: test: ci: build: style: release:"
+          echo "The release notes are generated from this title, so an auto-generated one"
+          echo "such as \"Chore/my branch name\" would be published to users."
+          exit 1

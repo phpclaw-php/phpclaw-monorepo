@@ -1,0 +1,50 @@
+parameters:
+    env(PHPCLAW_PROVIDER): ''
+    env(PHPCLAW_MODEL): ''
+    env(PHPCLAW_BASE_URL): ''
+    env(PHPCLAW_API_ENABLED): 'true'
+    env(PHPCLAW_STORE_MESSAGES): 'true'
+    env(PHPCLAW_MAX_ITERATIONS): 20
+    env(PHPCLAW_MAX_TOKENS): 0
+    env(PHPCLAW_MEMORY_DRIVER): doctrine
+    env(PHPCLAW_SYSTEM_PROMPT): ''
+    env(PHPCLAW_REMOTE_SKILL_URLS): ''
+    env(PHPCLAW_CLOUD_KEY): ''
+    env(PHPCLAW_CLOUD_SIGNING_SECRET): ''
+
+phpclaw:
+    # api_key: '%env(ANTHROPIC_API_KEY)%'  # Auto-detected from env if not set
+    provider: '%env(PHPCLAW_PROVIDER)%'         # Auto-detect: anthropic -> openai -> groq -> gemini
+    model: '%env(PHPCLAW_MODEL)%'               # Default model for detected provider
+    base_url: '%env(PHPCLAW_BASE_URL)%'         # Custom OpenAI-compatible endpoint, used when provider is custom
+    api:
+        enabled: '%env(bool:PHPCLAW_API_ENABLED)%'
+    store_messages: '%env(bool:PHPCLAW_STORE_MESSAGES)%'   # Local mode (no cloud_key): zero data sent. Cloud mode: prompt+reply sent only when true.
+    max_iterations: '%env(int:PHPCLAW_MAX_ITERATIONS)%'
+    max_tokens: '%env(int:PHPCLAW_MAX_TOKENS)%'            # Output token cap, 0 uses the provider default
+    memory_driver: '%env(PHPCLAW_MEMORY_DRIVER)%'   # doctrine | doctrine_kv | doctrine_conversation | cache | file | array
+    system_prompt: '%env(PHPCLAW_SYSTEM_PROMPT)%'          # Prepended to every request
+    remote_skill_urls: '%env(PHPCLAW_REMOTE_SKILL_URLS)%'  # Comma-separated HTTPS skill URLs, keyword-matched per message
+    # false: any authenticated user reaches the chat tools. true: they must hold ROLE_PHPCLAW_CHAT.
+    # Raw SQL is never covered by this flag; db_query always requires ROLE_PHPCLAW_MANAGE_ALL.
+    require_chat_role: false
+    # Extra console commands to treat as queue workers, on top of the messenger:* set. A worker
+    # never receives the console exemption, so it cannot reach tools without an identity.
+    worker_commands: []
+    workspace_root: '%kernel.project_dir%/var/phpclaw'
+    # File-reading commands (cat/head/tail/grep) are intentionally excluded: they let a
+    # prompt-injected agent exfiltrate arbitrary files. Add them back only if you accept that risk.
+    shell_allowlist:
+        - ls
+        - pwd
+        - df
+        - wc
+        - date
+        - uptime
+        - hostname
+        - whoami
+    # Symfony cannot feed an env var into a prototyped array node, so this one stays YAML-only.
+    tool_deny: []   # Tool names or group references to exclude from the registry, the MCP server and the phpclaw:guide listing.
+    cloud_key: '%env(PHPCLAW_CLOUD_KEY)%'
+    cloud_signing_secret: '%env(PHPCLAW_CLOUD_SIGNING_SECRET)%' # verify signed cloud scan responses; copy from your phpClaw Cloud dashboard (empty = skip verification)
+    cloud_disable: []

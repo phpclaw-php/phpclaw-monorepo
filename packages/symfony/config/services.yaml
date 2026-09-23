@@ -1,0 +1,152 @@
+services:
+    _defaults:
+        autowire: true
+        autoconfigure: true
+        public: false
+
+    # Auto-register all classes in src/ (commands, tools, memory drivers, HTTP)
+    PhpClaw\Symfony\:
+        resource: '../src/'
+        exclude:
+            - '../src/DependencyInjection/'
+            - '../src/PhpClawBundle.php'
+            - '../src/PhpClawFactory.php'
+            - '../src/helpers.php'
+
+    # Extensions bag, populated during PhpClawBundle::boot() via phpclaw.booting event
+    PhpClaw\Symfony\Extension\PhpClawExtensions:
+        public: true
+
+    # Factory, resolves tools + params into a PhpClaw instance
+    PhpClaw\Symfony\PhpClawFactory:
+        arguments:
+            $apiKey:            '%phpclaw.api_key%'
+            $provider:          '%phpclaw.provider%'
+            $model:             '%phpclaw.model%'
+            $storeMessages:     '%phpclaw.store_messages%'
+            $maxIterations:     '%phpclaw.max_iterations%'
+            $shellAllowlist:    '%phpclaw.shell_allowlist%'
+            $tools:             '%phpclaw.tools%'
+            $workspaceRoot:     '%phpclaw.workspace_root%'
+            $systemPrompt:      '%phpclaw.system_prompt%'
+            $maxTokens:         '%phpclaw.max_tokens%'
+            $promptCache:       '%phpclaw.prompt_cache%'
+            $thinkingBudget:    '%phpclaw.thinking_budget%'
+            $skills:            '%phpclaw.skills%'
+            $baseUrl:           '%phpclaw.base_url%'
+            $toolDeny:          '%phpclaw.tool_deny%'
+            $remoteSkillUrls:   '%phpclaw.remote_skill_urls%'
+            $extensions:        '@PhpClaw\Symfony\Extension\PhpClawExtensions'
+            $connection:        '@?Doctrine\DBAL\Connection'
+            $consoleContext:    '@PhpClaw\Symfony\Console\ConsoleContext'
+            $identity:          '@PhpClaw\Symfony\SymfonyIdentityResolver'
+            $requireChatRole:   '%phpclaw.require_chat_role%'
+            $projectRoot:       '%kernel.project_dir%'
+
+    # Stream bridge: the controller and the boot-time hook registration must share one instance,
+    # so the per-stream emitter set by the controller is the one the hook listener reads.
+    PhpClaw\Symfony\Http\StreamEventBridge:
+        public: true
+
+    # Console context: one boolean marked by the subscriber for an interactive command.
+    # A queue worker shares the CLI entrypoint but must never inherit the console exemption.
+    PhpClaw\Symfony\Console\ConsoleContext:
+        public: true
+
+    PhpClaw\Symfony\EventSubscriber\ConsoleContextSubscriber:
+        arguments:
+            $context:        '@PhpClaw\Symfony\Console\ConsoleContext'
+            $workerCommands: '%phpclaw.worker_commands%'
+        tags:
+            - { name: kernel.event_subscriber }
+
+    # Engine singleton, built by the factory
+    PhpClaw\Claw:
+        factory: ['@PhpClaw\Symfony\PhpClawFactory', 'create']
+        public: true
+
+    # Interface alias, autowire ClawInterface into any service/controller
+    PhpClaw\Contracts\ClawInterface:
+        alias: PhpClaw\Claw
+
+    # ToolRegistry, the resolved tool set, consumed by the MCP server command
+    PhpClaw\Tools\ToolRegistry:
+        factory: ['@PhpClaw\Symfony\PhpClawFactory', 'createToolRegistry']
+        public: true
+
+    # Memory driver, default FileMemory; PhpClawBundle::boot() replaces this
+    # public service with the configured driver (doctrine/cache) at runtime.
+    PhpClaw\Memory\Contracts\MemoryInterface:
+        alias: PhpClaw\Memory\FileMemory
+        public: true
+
+    PhpClaw\Memory\FileMemory:
+        arguments:
+            $storageDir: '%phpclaw.workspace_root%'
+
+    # DoctrineMemory and DoctrineConversationMemory are registered here as
+    # public so PhpClawBundle::boot() can fetch them. When Doctrine DBAL is
+    # not installed these definitions cause autowiring failures, so they are
+    # removed by PhpClawBundle::build() via a compiler pass when the class
+    # Doctrine\DBAL\Connection is absent.
+    PhpClaw\Symfony\Memory\DoctrineMemory:
+        public: true
+
+    PhpClaw\Symfony\Memory\DoctrineConversationMemory:
+        arguments:
+            $storeMessages: '%phpclaw.store_messages%'
+            $identity:      '@PhpClaw\Symfony\SymfonyIdentityResolver'
+        public: true
+
+    # Web Profiler data collector, only active in dev/test environments.
+    PhpClaw\Symfony\Profiler\PhpClawDataCollector:
+        tags:
+            - { name: data_collector, template: '@PhpClaw/Collector/phpclaw.html.twig', id: phpclaw, priority: 255 }
+
+    # Identity resolver; security services are optional: '@?' yields null when the host
+    # app has no security bundle, which is the same path a console run takes.
+    PhpClaw\Symfony\SymfonyIdentityResolver:
+        arguments:
+            $tokenStorage:          '@?security.token_storage'
+            $authorizationChecker:  '@?security.authorization_checker'
+        public: true
+
+    # GuideCommand, --live reads the configured remote skill URLs
+    PhpClaw\Symfony\Command\GuideCommand:
+        arguments:
+            $remoteSkillUrls: '%phpclaw.remote_skill_urls%'
+            $hooks: '%phpclaw.hooks%'
+        tags:
+            - { name: console.command }
+
+    # AboutCommand, receives container params directly
+    PhpClaw\Symfony\Command\AboutCommand:
+        arguments:
+            $phpClaw:   '@PhpClaw\Contracts\ClawInterface'
+            $provider:  '%phpclaw.provider%'
+            $model:     '%phpclaw.model%'
+            $storeMsg:  '%phpclaw.store_messages%'
+            $maxIter:   '%phpclaw.max_iterations%'
+            $memDriver: '%phpclaw.memory_driver%'
+            $cloudKey:  '%phpclaw.cloud_key%'
+            $memory:    '@?PhpClaw\Memory\Contracts\MemoryInterface'
+        tags:
+            - { name: console.command }
+
+    # StatsCommand, receives Doctrine connection if available
+    PhpClaw\Symfony\Command\StatsCommand:
+        arguments:
+            $memoryDriver: '%phpclaw.memory_driver%'
+            $connection:   '@?Doctrine\DBAL\Connection'
+        tags:
+            - { name: console.command }
+
+    # TokenAuthListener, REST API auth, rate limit and conversation-ownership gate
+    PhpClaw\Symfony\Http\TokenAuthListener:
+        arguments:
+            $apiEnabled:    '%phpclaw.api.enabled%'
+            $identity:      '@PhpClaw\Symfony\SymfonyIdentityResolver'
+            $cache:         '@?cache.app'
+            $conversations: '@?PhpClaw\Symfony\Memory\DoctrineConversationMemory'
+        tags:
+            - { name: kernel.event_subscriber }

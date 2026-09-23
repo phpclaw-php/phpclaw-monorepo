@@ -1,0 +1,38 @@
+<div class="phpclaw-admin-page">
+
+  <div class="phpclaw-stats-grid">
+    <div class="phpclaw-stat-card">
+      <div class="phpclaw-stat-value">{{ stats.conversations }}</div>
+      <div class="phpclaw-stat-label">Conversations</div>
+    </div>
+    <div class="phpclaw-stat-card">
+      <div class="phpclaw-stat-value">{{ stats.messages }}</div>
+      <div class="phpclaw-stat-label">Messages</div>
+    </div>
+    <div class="phpclaw-stat-card">
+      <div class="phpclaw-stat-value">{{ stats.active_24h }}</div>
+      <div class="phpclaw-stat-label">Active 24h</div>
+    </div>
+  </div>
+
+  <div class="phpclaw-note">
+    <p><strong>Note:</strong> {% if manage_all %}Analytics reflect all agent interactions recorded on this site.{% else %}Analytics reflect your own agent interactions. Conversations belonging to other users are not counted.{% endif %}</p>
+  </div>
+
+  <div class="phpclaw-community">
+    <div class="phpclaw-community-inner">
+      <h4 class="phpclaw-community-title">Built for the PHP community</h4>
+      <p class="phpclaw-community-text">phpClaw is open source under the MIT license.</p>
+      <p class="phpclaw-community-text">One engine for the entire PHP ecosystem.</p>
+      <div class="phpclaw-community-buttons">
+        <a href="https://github.com/phpclaw-php/phpclaw" target="_blank" rel="noopener" class="phpclaw-btn-github">&#9733; Star on GitHub</a>
+        <a href="https://packagist.org/packages/phpclaw/phpclaw" target="_blank" rel="noopener" class="phpclaw-btn-packagist">&#128230; View on Packagist</a>
+      </div>
+      <div class="phpclaw-community-footer">
+        <span>Need custom AI tools for your project?</span>
+        <a href="https://phpclaw.ai/enterprise" target="_blank" rel="noopener">&rarr; phpclaw.ai/enterprise</a>
+      </div>
+    </div>
+  </div>
+
+</div>

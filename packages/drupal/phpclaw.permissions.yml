@@ -1,0 +1,14 @@
+use phpclaw chat:
+  title: 'Use the PhpClaw AI agent'
+  description: 'Grants every PhpClaw tool, including raw database queries, configuration writes, cache operations, module install and uninstall, and role and permission changes. Administrator equivalent in effect: a holder can grant themselves any permission on this site. Conversations stay scoped to the holder unless they also hold "Read every user PhpClaw conversation". To reach PhpClaw from the administration menu a role also needs the core permissions "Use the administration pages", which opens the whole administration configuration overview, and "View the administration theme".'
+  restrict access: true
+
+manage all phpclaw conversations:
+  title: 'Read every user PhpClaw conversation'
+  description: 'Allows reading and counting every user conversation on the Chat and Analytics pages, not only the holder''s own. Does not grant access to settings.'
+  restrict access: true
+
+administer phpclaw:
+  title: 'Administer PhpClaw settings'
+  description: 'Allows changing PhpClaw configuration including API keys.'
+  restrict access: true

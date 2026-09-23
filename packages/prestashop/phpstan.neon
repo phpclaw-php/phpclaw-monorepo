@@ -1,0 +1,12 @@
+parameters:
+    level: 5
+    phpVersion: 80100
+    paths:
+        - upload/modules/phpclaw/src
+        - upload/modules/phpclaw/controllers
+        - upload/modules/phpclaw/cli
+        - upload/modules/phpclaw/config
+        - upload/modules/phpclaw/phpclaw.php
+    scanFiles:
+        - upload/modules/phpclaw/stubs/prestashop.stub
+    treatPhpDocTypesAsCertain: false

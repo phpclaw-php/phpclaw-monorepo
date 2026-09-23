@@ -1,0 +1,19 @@
+<?xml version="1.0"?>
+<page xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xsi:noNamespaceSchemaLocation="urn:magento:framework:View/Layout/etc/page_configuration.xsd">
+    <head>
+        <css src="PhpClaw_Magento::css/phpclaw.css"/>
+    </head>
+    <body>
+        <referenceContainer name="content">
+            <block class="PhpClaw\Magento\Block\Adminhtml\Settings"
+                   name="phpclaw_settings"
+                   template="PhpClaw_Magento::settings.phtml">
+                <block class="Magento\Backend\Block\Template"
+                       name="phpclaw_footer"
+                       as="phpclaw_footer"
+                       template="PhpClaw_Magento::footer.phtml"/>
+            </block>
+        </referenceContainer>
+    </body>
+</page>

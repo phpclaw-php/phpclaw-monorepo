@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:noNamespaceSchemaLocation="https://schema.phpunit.de/9.5/phpunit.xsd"
+         bootstrap="tests/bootstrap.php"
+         colors="true"
+         failOnWarning="false"
+         failOnRisky="false">
+
+    <testsuites>
+        <testsuite name="Unit">
+            <directory>tests/Unit</directory>
+        </testsuite>
+    </testsuites>
+
+    <coverage>
+        <include>
+            <directory suffix=".php">Api</directory>
+            <directory suffix=".php">Block</directory>
+            <directory suffix=".php">Console</directory>
+            <directory suffix=".php">Controller</directory>
+            <directory suffix=".php">Factory</directory>
+            <directory suffix=".php">Memory</directory>
+            <directory suffix=".php">Model</directory>
+            <directory suffix=".php">Registry</directory>
+            <directory suffix=".php">Service</directory>
+            <directory suffix=".php">Setup</directory>
+            <directory suffix=".php">Tools</directory>
+        </include>
+        <exclude>
+            <directory>vendor</directory>
+            <directory>tests</directory>
+            <directory>examples</directory>
+            <file>registration.php</file>
+        </exclude>
+    </coverage>
+
+</phpunit>

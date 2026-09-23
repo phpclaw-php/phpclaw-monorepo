@@ -1,0 +1,26 @@
+tests/               export-ignore
+upload/modules/phpclaw/stubs/ export-ignore
+examples/            export-ignore
+harness/             export-ignore
+storage/             export-ignore
+benchmarks/          export-ignore
+.phan/               export-ignore
+.phpbench/           export-ignore
+coverage/            export-ignore
+.phpunit.result.cache export-ignore
+.editorconfig        export-ignore
+.gitattributes       export-ignore
+phpunit.xml          export-ignore
+phpstan.neon         export-ignore
+pint.json            export-ignore
+phpbench.json        export-ignore
+composer.lock        export-ignore
+
+# Normalise line endings
+* text=auto eol=lf
+*.php text eol=lf
+*.sql text eol=lf
+*.tpl text eol=lf
+*.json text eol=lf
+*.yml text eol=lf
+*.md text eol=lf

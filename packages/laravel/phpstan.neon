@@ -1,0 +1,13 @@
+includes:
+    - vendor/larastan/larastan/extension.neon
+
+parameters:
+    level: 5
+    phpVersion: 80100
+    paths:
+        - src
+        - routes
+        - database
+    scanFiles:
+        - stubs/framework.stub
+    treatPhpDocTypesAsCertain: false

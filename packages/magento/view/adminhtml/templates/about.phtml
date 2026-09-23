@@ -1,0 +1,100 @@
+<?php
+/**
+ * PhpClaw About page: product/marketing only. No architecture leaks.
+ * @var \PhpClaw\Magento\Block\Adminhtml\About $block
+ */
+declare(strict_types=1);
+$version = $block->getVersion();
+?>
+<div class="phpclaw-admin-page">
+
+  <div class="phpclaw-about-hero">
+    <h1 class="phpclaw-about-hero-title">phpClaw</h1>
+    <p class="phpclaw-about-hero-subtitle">Universal AI agent engine for Magento</p>
+    <p class="phpclaw-about-hero-version">Version <?= $block->escapeHtml($version) ?></p>
+    <div class="phpclaw-about-hero-buttons">
+      <a href="https://phpclaw.ai" target="_blank" rel="noopener" class="phpclaw-btn-hero-primary">phpclaw.ai</a>
+      <a href="https://phpclaw.ai/docs" target="_blank" rel="noopener" class="phpclaw-btn-hero-ghost">Documentation</a>
+      <a href="https://github.com/phpclaw-php/phpclaw" target="_blank" rel="noopener" class="phpclaw-btn-hero-ghost">GitHub</a>
+    </div>
+  </div>
+
+  <div class="phpclaw-content-panel">
+    <h2 class="phpclaw-section-title">What is phpClaw?</h2>
+    <p class="phpclaw-body-text">phpClaw is an AI assistant that lives inside your Magento admin. Connect any AI provider, whether Anthropic Claude, OpenAI GPT, Groq, Google Gemini, Mistral, DeepSeek, Ollama (local), then ask questions about your store in plain English.</p>
+    <p class="phpclaw-body-text">No SQL to write. No dashboards to learn. Just ask: <em>"Which products are low on stock?"</em>, <em>"Revenue this month?"</em>, <em>"Show pending orders"</em>, and get real answers from real store data.</p>
+    <p class="phpclaw-body-text">Part of the phpClaw ecosystem, the same AI engine available for Laravel, WordPress, Drupal, Joomla, and other PHP frameworks and CMS platforms.</p>
+  </div>
+
+  <h2 class="phpclaw-section-title phpclaw-section-title--inset">Built-in features</h2>
+  <div class="phpclaw-feature-grid">
+    <?php
+    $features = [
+        ['icon' => '&#129302;', 'title' => '8 AI Providers', 'text' => 'Anthropic Claude, OpenAI GPT, Groq, Google Gemini, Mistral, DeepSeek, Ollama (local), Custom (any OpenAI-compatible endpoint). Switch from Settings with zero code changes.'],
+        ['icon' => '&#128736;', 'title' => '10 Magento tools + core utilities', 'text' => 'Products, Orders, Customers, Categories, Inventory, Stores, Reports, Cache, Database (read-only SQL), Log viewer, plus HTTP, Shell, and more from core.'],
+        ['icon' => '&#128172;', 'title' => 'Chat UI', 'text' => 'Chat-style interface in the admin panel. Multi-turn conversation history, searchable sidebar. Ask anything.'],
+        ['icon' => '&#128268;', 'title' => 'REST API', 'text' => 'POST /V1/phpclaw/send and POST /V1/phpclaw/chat/stream: integrate the AI agent into any frontend or external service.'],
+        ['icon' => '&#128421;', 'title' => 'Magento CLI', 'text' => 'bin/magento phpclaw:run "your prompt" sends prompts from the terminal. Script automations, run in cron, or pipe output.'],
+        ['icon' => '&#128274;', 'title' => 'Enterprise-Grade Security', 'text' => 'Multi-layered protection against prompt injection, unsafe commands, and data leakage. Your data stays safe.'],
+    ];
+    foreach ($features as $f): ?>
+    <div class="phpclaw-feature-card">
+      <div class="phpclaw-feature-icon"><?= $f['icon'] ?></div>
+      <strong class="phpclaw-feature-title"><?= $block->escapeHtml($f['title']) ?></strong>
+      <p class="phpclaw-feature-text"><?= $block->escapeHtml($f['text']) ?></p>
+    </div>
+    <?php endforeach; ?>
+  </div>
+
+  <div class="phpclaw-content-panel">
+    <h2 class="phpclaw-section-title">Installable packages</h2>
+    <p class="phpclaw-body-text">MIT-licensed. Available as Composer packages:</p>
+    <table class="phpclaw-table">
+      <thead>
+        <tr><th class="phpclaw-th-pkg">Package</th><th>Status</th><th>What it adds</th></tr>
+      </thead>
+      <tbody>
+        <?php
+        $packages = [
+            ['phpclaw/phpclaw',         'PhpClaw\\Claw',                      true,  'Core AI agent engine: providers, tools, guards, hooks, memory, skills all included. Powers every phpClaw adapter.'],
+            ['phpclaw/phpclaw-magento', 'PhpClaw\\Magento\\Factory\\PhpClawFactory', true,  'This module.'],
+            ['phpclaw/phpclaw-cloud',   'PhpClaw\\Cloud\\CloudManager',        true,  'Cloud transport: forwards lifecycle events to the phpClaw Cloud service. Bundled; stays fully inactive until a Cloud Key is set.'],
+            ['phpclaw/phpclaw-mcp',     'PhpClaw\\Mcp\\PhpClawMcpServer',      false, 'MCP server: expose your tools to Claude Desktop, Cursor, and other MCP clients.'],
+        ];
+        foreach ($packages as [$pkg, $sentinel, $required, $desc]):
+            $installed = class_exists($sentinel);
+            $status    = $installed
+                ? '&#10003; Installed'.($required ? ' (required)' : '')
+                : '&ndash; Not installed'.($required ? ' (required)' : '');
+        ?>
+        <tr>
+          <td><code><?= $block->escapeHtml($pkg) ?></code></td>
+          <td><?= $status ?></td>
+          <td><?= $block->escapeHtml($desc) ?></td>
+        </tr>
+        <?php endforeach; ?>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="phpclaw-content-panel">
+    <h2 class="phpclaw-section-title">Need more? phpClaw Enterprise</h2>
+    <p class="phpclaw-body-text">An optional hosted service at <a href="https://phpclaw.ai" target="_blank" rel="noopener">phpclaw.ai</a> is available for teams who want managed features. Self-hosted users never need it; everything works without it.</p>
+    <p class="phpclaw-body-text">Need custom AI tools for your CRM, ERP, payment systems, or internal workflows? <a href="https://phpclaw.ai/enterprise" target="_blank" rel="noopener">phpclaw.ai/enterprise</a></p>
+  </div>
+
+  <div class="pc-about-card pc-footer-card">
+    <h2>Built for the PHP community</h2>
+    <p>phpClaw is open source under the MIT license.</p>
+    <p>One engine for the entire PHP ecosystem.</p>
+    <div class="pc-about-cta-btns">
+      <a href="https://github.com/phpclaw-php/phpclaw" target="_blank" rel="noopener" class="pc-about-cta-btn pc-about-cta-btn--dark">
+        &#11088; Star on GitHub
+      </a>
+      <a href="https://packagist.org/packages/phpclaw/phpclaw" target="_blank" rel="noopener" class="pc-about-cta-btn pc-about-cta-btn--orange">
+        &#128230; View on Packagist
+      </a>
+    </div>
+  </div>
+
+</div>

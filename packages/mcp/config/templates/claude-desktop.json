@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "phpclaw": {
+      "command": "php",
+      "args": ["vendor/bin/phpclaw-mcp", "--transport=stdio"]
+    }
+  }
+}

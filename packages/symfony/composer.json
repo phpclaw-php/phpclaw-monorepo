@@ -1,0 +1,130 @@
+{
+    "name": "phpclaw/phpclaw-symfony",
+    "description": "phpClaw bundle for Symfony. AI agent engine for PHP.",
+    "homepage": "https://phpclaw.ai",
+    "type": "symfony-bundle",
+    "license": "MIT",
+    "keywords": [
+        "ai",
+        "agent",
+        "llm",
+        "symfony",
+        "bundle",
+        "anthropic",
+        "openai",
+        "phpclaw"
+    ],
+    "authors": [
+        {
+            "name": "Akash Patel",
+            "email": "er.akashpatel1908@gmail.com"
+        }
+    ],
+    "require": {
+        "php": "^8.1",
+        "phpclaw/phpclaw": "^0.1",
+        "phpclaw/phpclaw-cloud": "^0.1",
+        "phpclaw/phpclaw-mcp": "^0.1",
+        "symfony/framework-bundle": "^6.4|^7.0|^8.0",
+        "symfony/console": "^6.4|^7.0|^8.0",
+        "symfony/dependency-injection": "^6.4|^7.0|^8.0",
+        "symfony/config": "^6.4|^7.0|^8.0"
+    },
+    "support": {
+        "issues": "https://github.com/phpclaw-php/phpclaw-monorepo/issues",
+        "source": "https://github.com/phpclaw-php/phpclaw-monorepo",
+        "docs": "https://phpclaw.ai/docs"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^10.5",
+        "laravel/pint": "^1.0",
+        "symfony/test-pack": "^1.0",
+        "doctrine/dbal": "^3.0",
+        "doctrine/migrations": "^3.5",
+        "phpbench/phpbench": "^1.6",
+        "symfony/yaml": "^6.4|^7.0|^8.0",
+        "symfony/messenger": "^6.4|^7.0|^8.0",
+        "phpstan/phpstan": "^1.0 || ^2.0"
+    },
+    "scripts": {
+        "test": "phpunit",
+        "lint": "pint",
+        "analyse": "phpstan analyse",
+        "sync-core": "composer reinstall phpclaw/phpclaw phpclaw/phpclaw-cloud phpclaw/phpclaw-mcp"
+    },
+    "archive": {
+        "exclude": [
+            "/vendor",
+            "/tests",
+            "/storage",
+            "/phpunit.xml",
+            "/benchmarks",
+            "/phpbench.json",
+            "/.phpbench",
+            "/composer.lock",
+            "/.gitignore",
+            "/.phpunit.result.cache",
+            "/pint.json",
+            "/phpstan.neon",
+            "/stubs"
+        ]
+    },
+    "autoload": {
+        "psr-4": {
+            "PhpClaw\\Symfony\\": "src/"
+        },
+        "files": [
+            "src/helpers.php"
+        ]
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "PhpClaw\\Symfony\\Tests\\": "tests/"
+        }
+    },
+    "minimum-stability": "stable",
+    "repositories": [
+        {
+            "type": "path",
+            "url": "../core",
+            "options": {
+                "symlink": false,
+                "versions": {
+                    "phpclaw/phpclaw": "0.1.0"
+                }
+            }
+        },
+        {
+            "type": "path",
+            "url": "../cloud",
+            "options": {
+                "symlink": false,
+                "versions": {
+                    "phpclaw/phpclaw-cloud": "0.1.0"
+                }
+            }
+        },
+        {
+            "type": "path",
+            "url": "../mcp",
+            "options": {
+                "symlink": false,
+                "versions": {
+                    "phpclaw/phpclaw-mcp": "0.1.0"
+                }
+            }
+        }
+    ],
+    "prefer-stable": true,
+    "suggest": {
+        "symfony/security-bundle": "Required by the REST endpoints: without it no request resolves to a user and every call answers 401.",
+        "doctrine/dbal": "Required by the default memory_driver (doctrine) and by phpclaw:stats. Without it memory falls back to files on disk.",
+        "doctrine/migrations": "Provides doctrine:migrations:migrate, which creates the three phpClaw tables.",
+        "symfony/messenger": "Required by the queue: phpclaw:jobs:list, phpclaw:jobs:status and QueueManager::dispatchSend()."
+    },
+    "config": {
+        "platform": {
+            "php": "8.3"
+        }
+    }
+}

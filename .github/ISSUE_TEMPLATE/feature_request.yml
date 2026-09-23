@@ -1,0 +1,66 @@
+name: Feature Request
+description: Suggest a new feature or an improvement for phpClaw or one of its adapters
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for suggesting an improvement. Please search the existing issues first to check it has not already been requested.
+  - type: dropdown
+    id: package
+    attributes:
+      label: Package
+      description: Which phpClaw package would this change?
+      options:
+        - core (phpclaw/phpclaw)
+        - cloud (phpclaw/phpclaw-cloud)
+        - mcp (phpclaw/phpclaw-mcp)
+        - wordpress (phpclaw/phpclaw-wordpress)
+        - joomla (phpclaw/phpclaw-joomla)
+        - drupal (phpclaw/phpclaw-drupal)
+        - magento (phpclaw/phpclaw-magento)
+        - opencart (phpclaw/phpclaw-opencart)
+        - prestashop (phpclaw/phpclaw-prestashop)
+        - laravel (phpclaw/phpclaw-laravel)
+        - symfony (phpclaw/phpclaw-symfony)
+        - Several packages
+        - Not sure
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What are you trying to do, and what stops you today?
+      placeholder: "I want to ... but currently ..."
+    validations:
+      required: true
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed Solution
+      description: How you would like it to work. Include example code, a CLI command or a settings field if it helps.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives Considered
+      description: Any workaround you use now, or other approaches you thought about.
+    validations:
+      required: false
+  - type: checkboxes
+    id: contribution
+    attributes:
+      label: Contribution
+      options:
+        - label: I am willing to open a pull request for this feature.
+          required: false
+  - type: textarea
+    id: notes
+    attributes:
+      label: Notes
+      description: Anything else that might be relevant.
+    validations:
+      required: false

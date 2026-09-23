@@ -1,0 +1,150 @@
+{% extends '@WebProfiler/Profiler/layout.html.twig' %}
+
+{% block toolbar %}
+    {% set runs   = collector.runCount %}
+    {% set tokens = collector.totalTokens %}
+    {% set blocks = collector.guardBlocks|length %}
+
+    {% set icon %}
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="var(--color-text)">
+            <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
+        </svg>
+    {% endset %}
+
+    {% set text %}
+        <div class="sf-toolbar-info-piece">
+            <b>Runs</b>
+            <span class="sf-toolbar-status {{ runs > 0 ? 'sf-toolbar-status-green' : '' }}">{{ runs }}</span>
+        </div>
+        {% if tokens > 0 %}
+        <div class="sf-toolbar-info-piece">
+            <b>Tokens</b>
+            <span>{{ tokens|number_format }}</span>
+        </div>
+        {% endif %}
+        {% if blocks > 0 %}
+        <div class="sf-toolbar-info-piece">
+            <b>Blocked</b>
+            <span class="sf-toolbar-status sf-toolbar-status-red">{{ blocks }}</span>
+        </div>
+        {% endif %}
+    {% endset %}
+
+    {{ include('@WebProfiler/Profiler/toolbar_item.html.twig', { link: true }) }}
+{% endblock %}
+
+{% block menu %}
+    <span class="label {{ collector.guardBlocks|length > 0 ? 'label-status-error' : '' }}">
+        <span class="icon">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+                <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
+            </svg>
+        </span>
+        <strong>phpClaw</strong>
+        {% if collector.runCount > 0 %}
+            <span class="count"><strong>{{ collector.runCount }}</strong></span>
+        {% endif %}
+    </span>
+{% endblock %}
+
+{% block panel %}
+<h2>phpClaw Agent Activity</h2>
+
+<h3>Agent Runs ({{ collector.agentRuns|length }})</h3>
+
+{% if collector.agentRuns is empty %}
+    <div class="empty">
+        <p>No agent runs recorded for this request.</p>
+    </div>
+{% else %}
+    <table>
+        <thead>
+            <tr>
+                <th>Provider</th>
+                <th>Model</th>
+                <th>Iterations</th>
+                <th>Tokens in</th>
+                <th>Tokens out</th>
+                <th>Total tokens</th>
+                <th>Duration</th>
+                <th>Tools called</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for run in collector.agentRuns %}
+            <tr>
+                <td>{{ run.provider ?? '-' }}</td>
+                <td><code>{{ run.model ?? '-' }}</code></td>
+                <td>{{ run.iterations ?? '-' }}</td>
+                <td>{{ run.input_tokens ?? 0 }}</td>
+                <td>{{ run.output_tokens ?? 0 }}</td>
+                <td><strong>{{ run.total_tokens ?? 0 }}</strong></td>
+                <td>{{ run.duration_ms is not null ? run.duration_ms ~ ' ms' : '-' }}</td>
+                <td>
+                    {% if run.tools_called is not empty %}
+                        {% for t in run.tools_called %}<code>{{ t }}</code>{% if not loop.last %}, {% endif %}{% endfor %}
+                    {% else %}
+                        -
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+{% endif %}
+
+<h3>Tool Calls ({{ collector.toolCalls|length }})</h3>
+
+{% if collector.toolCalls is empty %}
+    <div class="empty">
+        <p>No tool calls recorded.</p>
+    </div>
+{% else %}
+    <table>
+        <thead>
+            <tr>
+                <th>Tool</th>
+                <th>Iteration</th>
+                <th>Input</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for call in collector.toolCalls %}
+            <tr>
+                <td><code>{{ call.tool_name ?? '-' }}</code></td>
+                <td>{{ call.iteration ?? '-' }}</td>
+                <td>
+                    {% if call.tool_input is iterable %}
+                        <pre>{{ call.tool_input|json_encode(constant('JSON_PRETTY_PRINT')) }}</pre>
+                    {% else %}
+                        <code>{{ call.tool_input ?? '-' }}</code>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+{% endif %}
+
+<h3>Guard Blocks ({{ collector.guardBlocks|length }})</h3>
+
+{% if collector.guardBlocks is empty %}
+    <div class="empty">
+        <p>No injection attempts blocked for this request.</p>
+    </div>
+{% else %}
+    <table>
+        <thead>
+            <tr><th>Reason</th></tr>
+        </thead>
+        <tbody>
+            {% for block in collector.guardBlocks %}
+            <tr>
+                <td class="font-normal text-small text-error">{{ block.reason ?? '-' }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+{% endif %}
+
+{% endblock %}

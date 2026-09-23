@@ -1,0 +1,118 @@
+name: Prepare release PR
+
+# After every merge into a line branch (1.x), keep ONE open pull request (branch release/<line>, e.g.
+# release/1.x) that lists everything merged since the last release, grouped by PR title prefix into
+# each adapter's CHANGELOG.md.
+# Merging that pull request is what releases (release.yml). Merging anything else releases nothing.
+
+on:
+  push:
+    branches: [0.x]
+    paths:
+      - 'packages/**'
+
+# A newer merge makes an in-flight run obsolete: the next run rebuilds the release PR from scratch.
+concurrency:
+  group: release-pr-${{ github.ref_name }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REPO: ${{ github.repository }}
+      RELEASE_LINE: ${{ github.ref_name }}
+      RELEASE_PACKAGES: all
+    steps:
+      - name: Skip the release PR's own merge
+        id: gate
+        run: |
+          REF=$(gh api "repos/$REPO/commits/${{ github.sha }}/pulls" \
+            --jq '.[0].head.ref // ""' 2>/dev/null || true)
+          if [ "$REF" = "release/$RELEASE_LINE" ]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "This push is the release PR's merge; release.yml handles it."
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Checkout OSS source into phpclaw/
+        if: steps.gate.outputs.skip != 'true'
+        uses: actions/checkout@v7
+        with:
+          path: phpclaw
+          fetch-depth: 0
+
+      - name: Checkout private build scripts into scripts/
+        if: steps.gate.outputs.skip != 'true'
+        uses: actions/checkout@v7
+        with:
+          repository: erakashpatel/clawscripts
+          token: ${{ secrets.BUILD_TOKEN }}
+          path: scripts
+
+      - name: Set up PHP
+        if: steps.gate.outputs.skip != 'true'
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+
+      - name: Collect changes since the last release
+        if: steps.gate.outputs.skip != 'true'
+        env:
+          HEAD_SHA: ${{ github.sha }}
+        run: php scripts/release-notes.php collect "${{ runner.temp }}/commits.json"
+
+      - name: Compute versions and write the changelogs
+        id: notes
+        if: steps.gate.outputs.skip != 'true'
+        env:
+          COMMITS_FILE: ${{ runner.temp }}/commits.json
+          RELEASE_TITLE_FILE: ${{ runner.temp }}/release-title.txt
+          RELEASE_BODY_FILE: ${{ runner.temp }}/release-body.md
+        run: |
+          tag() { git -C phpclaw tag -l "$1-v*" | sed "s/^$1-v//" | sort -V | tail -1; }
+          for pkg in core cloud mcp joomla wordpress prestashop opencart laravel symfony drupal magento; do
+            export "CURRENT_$(echo "$pkg" | tr '[:lower:]' '[:upper:]')=$(tag "$pkg")"
+          done
+          FILES=$(php scripts/release-notes.php files)
+          # One level per package, from the commits that reach it since its own last release.
+          LEVELS=$(php scripts/release-notes.php levels)
+          echo "Levels: $LEVELS"
+          CHANGED_FILES="$FILES" BUMP_LEVELS="$LEVELS" php scripts/auto-bump.php
+          CHANGED_FILES="$FILES" BUMP_LEVELS="$LEVELS" \
+            BUMP_PACKAGES='core,cloud,mcp,laravel,symfony,magento,drupal' POLICY_A=off \
+            php scripts/auto-bump.php
+          php scripts/release-notes.php write | tee -a "$GITHUB_OUTPUT"
+
+      - name: Nothing to release, close the release PR
+        if: steps.gate.outputs.skip != 'true' && steps.notes.outputs.bumped == ''
+        run: |
+          for pr in $(gh pr list --repo "$REPO" --head "release/$RELEASE_LINE" --state open --json number --jq '.[].number'); do
+            gh pr close "$pr" --repo "$REPO" --comment "Nothing left to release."
+          done
+
+      - name: Push the release branch and open or update the release PR
+        if: steps.gate.outputs.skip != 'true' && steps.notes.outputs.bumped != ''
+        run: |
+          TITLE=$(cat "${{ runner.temp }}/release-title.txt")
+          git -C phpclaw config user.name "phpclaw-release-bot"
+          git -C phpclaw config user.email "release-bot@phpclaw.ai"
+          git -C phpclaw checkout -B "release/$RELEASE_LINE"
+          git -C phpclaw add packages/*/CHANGELOG.md
+          git -C phpclaw commit -m "$TITLE"
+          git -C phpclaw push --force origin "release/$RELEASE_LINE"
+          PR=$(gh pr list --repo "$REPO" --head "release/$RELEASE_LINE" --state open --json number --jq '.[0].number // empty')
+          if [ -n "$PR" ]; then
+            gh pr edit "$PR" --repo "$REPO" --title "$TITLE" --body-file "${{ runner.temp }}/release-body.md"
+            echo "Updated release PR #$PR: $TITLE"
+          else
+            gh pr create --repo "$REPO" --base "$RELEASE_LINE" --head "release/$RELEASE_LINE" \
+              --title "$TITLE" --body-file "${{ runner.temp }}/release-body.md"
+          fi

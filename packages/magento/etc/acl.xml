@@ -1,0 +1,17 @@
+<?xml version="1.0"?>
+<config xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:noNamespaceSchemaLocation="urn:magento:framework:Acl/etc/acl.xsd">
+    <acl>
+        <resources>
+            <resource id="Magento_Backend::admin">
+                <resource id="PhpClaw_Magento::phpclaw" title="phpClaw" sortOrder="100">
+                    <resource id="PhpClaw_Magento::phpclaw_settings"    title="Settings"      sortOrder="10"/>
+                    <resource id="PhpClaw_Magento::phpclaw_chat"        title="Chat"          sortOrder="20"/>
+                    <resource id="PhpClaw_Magento::phpclaw_analytics"   title="Analytics"     sortOrder="30"/>
+                    <resource id="PhpClaw_Magento::phpclaw_guide"       title="Guide"         sortOrder="40"/>
+                    <resource id="PhpClaw_Magento::phpclaw_about"       title="About"         sortOrder="50"/>
+                </resource>
+            </resource>
+        </resources>
+    </acl>
+</config>

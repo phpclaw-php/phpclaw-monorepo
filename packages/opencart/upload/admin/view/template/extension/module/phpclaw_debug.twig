@@ -1,0 +1,870 @@
+{{ header }}{{ column_left }}
+<div id="content">
+  <div class="page-header pc-page-header">
+    <div class="container-fluid">
+      <div class="pc-debug-header-bar">
+        <h1 class="pc-page-title">🤖 phpClaw</h1>
+        {% if engine_error %}
+          <span class="pc-engine-error">⚠ Engine error.
+            {% if can_manage_all %}<a href="{{ url_settings }}">Configure</a>{% endif %}
+          </span>
+        {% else %}
+          <span class="pc-engine-status">
+            <span class="pc-status-dot">●</span>
+            {{ provider ?: 'Not configured' }} · {{ model ?: 'default' }}
+          </span>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <div class="container-fluid pc-subnav-wrap">
+    <div class="pc-subnav">
+      <a href="{{ url_debug }}"     class="btn btn-sm btn-primary">💬 Chat</a>
+      <a href="{{ url_analytics }}" class="btn btn-sm btn-default">📊 Analytics</a>
+      <a href="{{ url_guide }}"     class="btn btn-sm btn-default">📖 Guide</a>
+      {% if can_manage_all %}<a href="{{ url_settings }}"  class="btn btn-sm btn-default">⚙ Settings</a>{% endif %}
+      <a href="{{ url_about }}"     class="btn btn-sm btn-default">ℹ️ About</a>
+    </div>
+  </div>
+
+  {% if engine_error %}
+  <div class="container-fluid pc-debug-container">
+    <div class="pc-warning-box">
+      Engine configuration error. See PHP error_log.
+    </div>
+  </div>
+  {% endif %}
+
+  <div class="container-fluid pc-debug-container">
+    <div id="phpclaw-chat-wrap">
+
+      <div id="phpclaw-sidebar">
+        <div id="phpclaw-sidebar-top">
+          <button id="phpclaw-new-chat" class="btn btn-primary btn-sm w-100">+ New Chat</button>
+          <input id="phpclaw-conv-search" type="search" placeholder="Search conversations…" />
+        </div>
+        <div id="phpclaw-conv-list" tabindex="0" role="region" aria-label="Conversations">
+          {% if convs is empty %}
+            <p id="phpclaw-empty-sidebar">No conversations yet.<br>Send a message to start.</p>
+          {% else %}
+            {% for cid, conv in convs %}
+            <div class="phpclaw-conv-item {% if cid == init_conv_id %}active{% endif %}"
+                 data-conv-id="{{ cid }}"
+                 data-title="{{ conv.title|lower }}">
+              <div class="phpclaw-conv-item-title">{{ conv.title ?: 'New conversation' }}</div>
+              <div class="phpclaw-conv-item-time">{{ conv.when }}</div>
+            </div>
+            {% endfor %}
+          {% endif %}
+        </div>
+      </div>
+
+      <div id="phpclaw-chat-area">
+        <div id="phpclaw-chat-header">
+          {% if init_conv_id %}
+            {{ init_title ?: 'Conversation' }}
+          {% else %}
+            New Chat
+          {% endif %}
+        </div>
+
+        <div id="phpclaw-messages" tabindex="0" role="log" aria-live="polite" aria-label="Chat history">
+          {% if init_conv_id == '' %}
+            <div id="phpclaw-welcome">
+              <h2>What can I help you with?</h2>
+              <p>Ask anything about your OpenCart store: orders, products, customers, and more.</p>
+            </div>
+          {% elseif init_messages is empty %}
+            <div id="phpclaw-welcome">
+              <h2>Conversation started</h2>
+              <p>No messages stored yet. Send a message below to continue.</p>
+            </div>
+          {% else %}
+            {% for msg in init_messages %}
+              {% if msg.role == 'user' %}
+              <div class="phpclaw-bubble-wrap user">
+                <div class="phpclaw-bubble user">{{ msg.content }}</div>
+              </div>
+              {% else %}
+              <div class="phpclaw-bubble-wrap assistant">
+                <div class="phpclaw-avatar">🤖</div>
+                <div class="phpclaw-bubble assistant">{{ msg.content }}</div>
+              </div>
+              {% endif %}
+            {% endfor %}
+          {% endif %}
+        </div>
+
+        <div id="phpclaw-input-area">
+          <div id="phpclaw-input-row">
+            <textarea id="phpclaw-message" rows="2"
+              placeholder="Message phpClaw… (Enter to send, Shift+Enter for new line)"
+              {% if engine_error %}disabled{% endif %}></textarea>
+            <button id="phpclaw-send-btn" title="Send (Enter)" {% if engine_error %}disabled{% endif %}>
+              <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <path d="M12 4l-1.41 1.41L16.17 11H4v2h12.17l-5.58 5.59L12 20l8-8z"/>
+              </svg>
+            </button>
+          </div>
+          <div id="phpclaw-input-meta">
+            {{ provider ?: 'Not configured' }} · {{ model ?: 'default' }} · Responses are AI-generated. Verify before acting.
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <div class="pc-community">
+      <div class="pc-community-inner">
+        <h4 class="pc-community-title">
+          Built for the PHP community
+        </h4>
+        <p class="pc-community-text">
+          phpClaw is open source under the MIT license.
+        </p>
+        <p class="pc-community-text-last">
+          One engine for the entire PHP ecosystem.
+        </p>
+        <div class="pc-community-buttons">
+          <a href="https://github.com/phpclaw-php/phpclaw-monorepo" target="_blank" rel="noopener" class="pc-btn-github">
+            &#9733; Star on GitHub
+          </a>
+          <a href="https://packagist.org/packages/phpclaw/phpclaw" target="_blank" rel="noopener" class="pc-btn-packagist">
+            &#128230; View on Packagist
+          </a>
+        </div>
+        <div class="pc-community-footer">
+          <span class="pc-community-cta">Need more? phpClaw Enterprise</span>
+          <a href="https://phpclaw.ai/enterprise" target="_blank" rel="noopener" class="pc-community-link">&rarr; phpclaw.ai/enterprise</a>
+          <span class="pc-community-license">MIT License, Open Source</span>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+
+<script>
+(function () {
+  var currentConvId = {{ init_conv_id|json_encode|raw }};
+  var sendUrl       = {{ url_send|json_encode|raw }};
+  var streamUrl     = sendUrl.replace('/phpclaw/send', '/phpclaw/stream').replace('/phpclaw.send', '/phpclaw.stream');
+  var loadUrl       = {{ url_load_conversation|json_encode|raw }};
+  var settingsUrl   = {{ url_settings|json_encode|raw }};
+  var canManageAll  = {{ can_manage_all ? 'true' : 'false' }};
+  var isSending     = false;
+
+  var msgArea    = document.getElementById('phpclaw-messages');
+  var inputEl    = document.getElementById('phpclaw-message');
+  var sendBtn    = document.getElementById('phpclaw-send-btn');
+  var chatHeader = document.getElementById('phpclaw-chat-header');
+  var convList   = document.getElementById('phpclaw-conv-list');
+  var searchEl   = document.getElementById('phpclaw-conv-search');
+  var newChatBtn = document.getElementById('phpclaw-new-chat');
+  var sidebar    = document.getElementById('phpclaw-sidebar');
+
+  function scrollBottom() { msgArea.scrollTop = msgArea.scrollHeight; }
+
+
+  function phpclawReadJson(r) {
+    var ct = r.headers.get('content-type') || '';
+    if (ct.indexOf('application/json') === -1) {
+      throw new Error('Your session expired or you were signed out. Reload the page and sign in again.');
+    }
+    if (!r.ok && r.status !== 400 && r.status !== 403) {
+      throw new Error('Unexpected server response (HTTP ' + r.status + ').');
+    }
+    return r.json();
+  }
+
+  function renderBubble(role, content) {
+    var wrap = document.createElement('div');
+    wrap.className = 'phpclaw-bubble-wrap ' + role;
+    if (role === 'assistant') {
+      var av = document.createElement('div');
+      av.className = 'phpclaw-avatar';
+      av.textContent = '🤖';
+      wrap.appendChild(av);
+    }
+    var bubble = document.createElement('div');
+    bubble.className = 'phpclaw-bubble ' + role;
+    bubble.textContent = content;
+    wrap.appendChild(bubble);
+    msgArea.appendChild(wrap);
+    return wrap;
+  }
+
+  function escapeHtml(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
+  function shortDate(s) {
+    if (!s) return '';
+    var d = new Date(String(s).replace(' ', 'T'));
+    if (isNaN(d.getTime())) return String(s);
+    return d.toISOString().slice(0, 10);
+  }
+  function extractToken() {
+    var m = sendUrl.match(/user_token=([a-zA-Z0-9]+)/);
+    return m ? m[1] : '';
+  }
+  function adminEntryUrl() {
+    var i = sendUrl.indexOf('index.php');
+    return i === -1 ? sendUrl : sendUrl.slice(0, i + 'index.php'.length);
+  }
+  function adminEditUrl(route, idKey, id) {
+    var token = extractToken();
+    return adminEntryUrl() + '?route=' + route + '&user_token=' + token + '&' + idKey + '=' + encodeURIComponent(id);
+  }
+  function pickRows(data, key) {
+    if (Array.isArray(data)) return data;
+    if (data && Array.isArray(data[key])) return data[key];
+    if (data && data.data && Array.isArray(data.data[key])) return data.data[key];
+    if (data && Array.isArray(data.rows)) return data.rows;
+    if (data && data.data && Array.isArray(data.data.rows)) return data.data.rows;
+    return [];
+  }
+  function buildChip(text) {
+    var c = document.createElement('span');
+    c.className = 'pc-chip';
+    c.textContent = String(text);
+    return c;
+  }
+  function buildBadge(text, cls) {
+    var b = document.createElement('span');
+    b.className = 'pc-badge ' + (cls || 'pc-badge--muted');
+    b.textContent = String(text);
+    return b;
+  }
+  function buildTable(headers) {
+    var tbl = document.createElement('table');
+    tbl.className = 'pc-tool-card__table';
+    var thead = document.createElement('thead');
+    var tr = document.createElement('tr');
+    headers.forEach(function (h) { var th = document.createElement('th'); th.textContent = h; tr.appendChild(th); });
+    thead.appendChild(tr);
+    tbl.appendChild(thead);
+    tbl.appendChild(document.createElement('tbody'));
+    return tbl;
+  }
+  function appendEmpty(container, text) {
+    var p = document.createElement('p');
+    p.className = 'pc-tool-card__empty';
+    p.textContent = text;
+    container.appendChild(p);
+  }
+  function appendStatsLine(container, data, rowCount) {
+    if (!data || typeof data !== 'object') return;
+    var bits = [rowCount + ' row' + (rowCount === 1 ? '' : 's')];
+    if (typeof data.total === 'number' && data.total > rowCount) bits.push(data.total + ' total');
+    if (data.limit  !== undefined) bits.push('limit '  + data.limit);
+    if (data.offset !== undefined && data.offset !== 0) bits.push('offset ' + data.offset);
+    var s = document.createElement('div');
+    s.className = 'pc-tool-card__stats-line';
+    s.textContent = bits.join(' · ');
+    container.appendChild(s);
+  }
+
+  function renderProducts(container, data) {
+    var rows = pickRows(data, 'products');
+    if (rows.length === 0) { return appendEmpty(container, 'No products.'); }
+    var ol = document.createElement('ol');
+    ol.className = 'pc-tool-card__list';
+    rows.forEach(function (p) {
+      var li = document.createElement('li');
+      li.className = 'pc-tool-card__item';
+      var title = document.createElement('div');
+      title.className = 'pc-tool-card__item-title';
+      var name = p.name || ('Product #' + (p.id || p.product_id || '?'));
+      if (p.id || p.product_id) {
+        var a = document.createElement('a');
+        a.href = adminEditUrl('catalog/product/edit', 'product_id', p.id || p.product_id);
+        a.textContent = String(name);
+        a.target = '_blank'; a.rel = 'noopener';
+        title.appendChild(a);
+      } else {
+        title.textContent = String(name);
+      }
+      li.appendChild(title);
+      var meta = document.createElement('div');
+      meta.className = 'pc-tool-card__item-meta';
+      if (p.model)             meta.appendChild(buildChip(p.model));
+      if (p.price !== undefined) meta.appendChild(buildChip('$' + p.price));
+      if (p.quantity !== undefined) meta.appendChild(buildChip(p.quantity + ' in stock'));
+      if (p.status !== undefined)   meta.appendChild(buildBadge(p.status ? 'Enabled' : 'Disabled', p.status ? 'pc-badge--ok' : 'pc-badge--muted'));
+      if (meta.childNodes.length) li.appendChild(meta);
+      ol.appendChild(li);
+    });
+    container.appendChild(ol);
+    appendStatsLine(container, data, rows.length);
+  }
+
+  function renderCustomers(container, data) {
+    var rows = pickRows(data, 'customers');
+    if (rows.length === 0) { return appendEmpty(container, 'No customers.'); }
+    var tbl = buildTable(['Name', 'Email', 'Status', 'Joined']);
+    rows.forEach(function (c) {
+      var tr = document.createElement('tr');
+      var name = (c.firstname || '') + ' ' + (c.lastname || '');
+      if (!name.trim()) name = c.email || ('Customer #' + (c.id || c.customer_id || '?'));
+      var linkHtml = (c.id || c.customer_id)
+        ? '<a href="' + adminEditUrl('customer/customer/edit', 'customer_id', c.id || c.customer_id) + '" target="_blank" rel="noopener">' + escapeHtml(name) + '</a>'
+        : escapeHtml(name);
+      tr.innerHTML =
+          '<td>' + linkHtml + '</td>'
+        + '<td>' + escapeHtml(c.email || '') + '</td>'
+        + '<td>' + (c.status ? '<span class="pc-badge pc-badge--ok">Active</span>' : '<span class="pc-badge pc-badge--muted">Inactive</span>') + '</td>'
+        + '<td>' + escapeHtml(shortDate(c.date_added || '')) + '</td>';
+      tbl.tBodies[0].appendChild(tr);
+    });
+    container.appendChild(tbl);
+    appendStatsLine(container, data, rows.length);
+  }
+
+  function renderCategories(container, data) {
+    var rows = pickRows(data, 'categories');
+    if (rows.length === 0) { return appendEmpty(container, 'No categories.'); }
+    var ol = document.createElement('ol');
+    ol.className = 'pc-tool-card__list';
+    rows.forEach(function (c) {
+      var li = document.createElement('li');
+      li.className = 'pc-tool-card__item';
+      var title = document.createElement('div');
+      title.className = 'pc-tool-card__item-title';
+      var name = c.name || c.path || ('Category #' + (c.id || c.category_id || '?'));
+      if (c.id || c.category_id) {
+        var a = document.createElement('a');
+        a.href = adminEditUrl('catalog/category/edit', 'category_id', c.id || c.category_id);
+        a.textContent = String(name);
+        a.target = '_blank'; a.rel = 'noopener';
+        title.appendChild(a);
+      } else {
+        title.textContent = String(name);
+      }
+      li.appendChild(title);
+      var meta = document.createElement('div');
+      meta.className = 'pc-tool-card__item-meta';
+      if (c.parent_id !== undefined && c.parent_id !== 0) meta.appendChild(buildChip('parent ' + c.parent_id));
+      if (c.status !== undefined) meta.appendChild(buildBadge(c.status ? 'Enabled' : 'Disabled', c.status ? 'pc-badge--ok' : 'pc-badge--muted'));
+      if (meta.childNodes.length) li.appendChild(meta);
+      ol.appendChild(li);
+    });
+    container.appendChild(ol);
+    appendStatsLine(container, data, rows.length);
+  }
+
+  function renderOrders(container, data) {
+    var rows = pickRows(data, 'orders');
+    if (rows.length === 0) { return appendEmpty(container, 'No orders.'); }
+    var tbl = buildTable(['Order #', 'Customer', 'Total', 'Status', 'Date']);
+    rows.forEach(function (o) {
+      var tr = document.createElement('tr');
+      var orderId = o.id || o.order_id || '?';
+      var linkHtml = '<a href="' + adminEditUrl('sale/order/info', 'order_id', orderId) + '" target="_blank" rel="noopener">#' + escapeHtml(String(orderId)) + '</a>';
+      var customer = ((o.firstname || '') + ' ' + (o.lastname || '')).trim() || o.email || '';
+      tr.innerHTML =
+          '<td>' + linkHtml + '</td>'
+        + '<td>' + escapeHtml(customer) + '</td>'
+        + '<td>' + escapeHtml(String(o.total != null ? '$' + o.total : '')) + '</td>'
+        + '<td>' + escapeHtml(o.status || o.order_status || '') + '</td>'
+        + '<td>' + escapeHtml(shortDate(o.date_added || '')) + '</td>';
+      tbl.tBodies[0].appendChild(tr);
+    });
+    container.appendChild(tbl);
+    appendStatsLine(container, data, rows.length);
+  }
+
+  function renderSqlRows(container, data) {
+    var rows = pickRows(data, 'rows');
+    if (rows.length === 0) { return appendEmpty(container, 'No rows.'); }
+    var cols = data && Array.isArray(data.columns) ? data.columns : Object.keys(rows[0] || {});
+    var tbl = buildTable(cols);
+    rows.forEach(function (r) {
+      var tr = document.createElement('tr');
+      cols.forEach(function (k) {
+        var td = document.createElement('td');
+        var v = r[k];
+        td.textContent = (v == null) ? '' : (typeof v === 'object' ? JSON.stringify(v) : String(v));
+        tr.appendChild(td);
+      });
+      tbl.tBodies[0].appendChild(tr);
+    });
+    container.appendChild(tbl);
+    appendStatsLine(container, data, rows.length);
+  }
+
+  function pickAnyRows(data) {
+    if (!data || typeof data !== 'object') { return null; }
+    var box = (data.data && typeof data.data === 'object' && !Array.isArray(data.data)) ? data.data : data;
+    var keys = Object.keys(box);
+    for (var i = 0; i < keys.length; i++) {
+      if (keys[i] === 'columns_returned' || keys[i] === 'warnings') { continue; }
+      if (Array.isArray(box[keys[i]])) { return { key: keys[i], rows: box[keys[i]] }; }
+    }
+    return null;
+  }
+
+  function renderRowTable(container, data, found) {
+    var label = found.key.replace(/_/g, ' ');
+    if (found.rows.length === 0) { appendEmpty(container, 'No ' + label + '.'); return true; }
+    if (typeof found.rows[0] !== 'object' || found.rows[0] === null) { return false; }
+    var cols = Object.keys(found.rows[0]);
+    if (cols.length === 0) { return false; }
+    var tbl = buildTable(cols);
+    found.rows.forEach(function (r) {
+      var tr = document.createElement('tr');
+      cols.forEach(function (k) {
+        var td = document.createElement('td');
+        var v = r[k];
+        td.textContent = (v == null) ? '' : (typeof v === 'object' ? JSON.stringify(v) : String(v));
+        tr.appendChild(td);
+      });
+      tbl.tBodies[0].appendChild(tr);
+    });
+    container.appendChild(tbl);
+    appendStatsLine(container, data, found.rows.length);
+    return true;
+  }
+
+  function renderGeneric(container, data) {
+    if (data == null) { return appendEmpty(container, '(no data)'); }
+    if (typeof data === 'string') {
+      var p = document.createElement('p');
+      p.className = 'pc-tool-card__text';
+      p.textContent = data;
+      container.appendChild(p);
+      return;
+    }
+    if (Array.isArray(data) && data.length === 0) { return appendEmpty(container, '(empty)'); }
+    var found = pickAnyRows(data);
+    if (found && renderRowTable(container, data, found)) { return; }
+    var pre = document.createElement('pre');
+    pre.className = 'pc-tool-card__generic';
+    try { pre.textContent = JSON.stringify(data, null, 2); } catch (_) { pre.textContent = String(data); }
+    container.appendChild(pre);
+  }
+
+  function renderTypedBody(container, toolName, data) {
+    var t = String(toolName || '').toLowerCase();
+    if (t === 'oc_product'      || t.indexOf('_product')  !== -1) return renderProducts(container, data);
+    if (t === 'oc_customer'     || t.indexOf('_customer') !== -1) return renderCustomers(container, data);
+    if (t === 'oc_category'     || t.indexOf('_categor')  !== -1) return renderCategories(container, data);
+    if (t === 'oc_order'        || t.indexOf('_order')    !== -1) return renderOrders(container, data);
+    if (t === 'db_query'        || t.indexOf('_query')    !== -1) return renderSqlRows(container, data);
+    return renderGeneric(container, data);
+  }
+
+  function renderToolCard(toolName, toolInput, toolResultJson) {
+    var wrap = document.createElement('div');
+    wrap.className = 'pc-tool-card';
+
+    var header = document.createElement('div');
+    header.className = 'pc-tool-card__header';
+    var icon = document.createElement('span');
+    icon.className = 'pc-tool-card__icon';
+    icon.textContent = '⚙';
+    header.appendChild(icon);
+    var nameEl = document.createElement('span');
+    nameEl.className = 'pc-tool-card__name';
+    nameEl.textContent = toolName || 'tool';
+    header.appendChild(nameEl);
+    if (toolInput && Object.keys(toolInput).length) {
+      var inputEl = document.createElement('code');
+      inputEl.className = 'pc-tool-card__input';
+      inputEl.textContent = JSON.stringify(toolInput);
+      header.appendChild(inputEl);
+    }
+    wrap.appendChild(header);
+
+    var body = document.createElement('div');
+    body.className = 'pc-tool-card__body';
+
+    var parsed = null;
+    var rawText = '';
+    if (typeof toolResultJson === 'string') {
+      rawText = toolResultJson;
+      try { parsed = JSON.parse(toolResultJson); } catch (_) { parsed = null; }
+    } else if (toolResultJson != null) {
+      parsed = toolResultJson;
+      try { rawText = JSON.stringify(toolResultJson, null, 2); } catch (_) { rawText = String(toolResultJson); }
+    }
+
+    renderTypedBody(body, toolName, parsed != null ? parsed : (rawText || null));
+
+    var details = document.createElement('details');
+    details.className = 'pc-tool-card__raw-toggle';
+    var summary = document.createElement('summary');
+    summary.textContent = 'Show raw JSON';
+    details.appendChild(summary);
+    var pre = document.createElement('pre');
+    pre.className = 'pc-tool-card__raw';
+    pre.textContent = rawText;
+    details.appendChild(pre);
+    body.appendChild(details);
+
+    wrap.appendChild(body);
+    msgArea.appendChild(wrap);
+    return wrap;
+  }
+
+  function showTyping() {
+    var wrap = document.createElement('div');
+    wrap.className = 'phpclaw-bubble-wrap assistant';
+    wrap.id = 'phpclaw-typing';
+    var av = document.createElement('div');
+    av.className = 'phpclaw-avatar';
+    av.textContent = '🤖';
+    wrap.appendChild(av);
+    var bubble = document.createElement('div');
+    bubble.className = 'phpclaw-bubble assistant phpclaw-typing';
+    bubble.innerHTML = '<span></span><span></span><span></span>';
+    wrap.appendChild(bubble);
+    msgArea.appendChild(wrap);
+    scrollBottom();
+  }
+  function removeTyping() { var el = document.getElementById('phpclaw-typing'); if (el) el.remove(); }
+
+  function clearMessages(text) {
+    msgArea.innerHTML = '';
+    if (text) {
+      var w = document.createElement('div');
+      w.id = 'phpclaw-welcome';
+      w.innerHTML = '<h2>New Chat</h2><p>' + escapeHtml(text) + '</p>';
+      msgArea.appendChild(w);
+    }
+  }
+
+  function setActiveConv(convId) {
+    document.querySelectorAll('.phpclaw-conv-item').forEach(function (el) {
+      el.classList.toggle('active', el.dataset.convId === convId);
+    });
+  }
+
+  function prependConvItem(convId, title) {
+    var existing = document.querySelector('[data-conv-id="' + convId + '"]');
+    if (existing) {
+      existing.querySelector('.phpclaw-conv-item-time').textContent = 'just now';
+      convList.insertBefore(existing, convList.firstChild);
+      return;
+    }
+    var emptyEl = document.getElementById('phpclaw-empty-sidebar');
+    if (emptyEl) emptyEl.remove();
+    var item = document.createElement('div');
+    item.className = 'phpclaw-conv-item';
+    item.dataset.convId = convId;
+    item.dataset.title  = (title || '').toLowerCase();
+    item.innerHTML =
+      '<div class="phpclaw-conv-item-title">' + escapeHtml(title || 'New conversation') + '</div>' +
+      '<div class="phpclaw-conv-item-time">just now</div>';
+    item.addEventListener('click', function () { loadConversation(convId); });
+    convList.insertBefore(item, convList.firstChild);
+  }
+
+  function loadConversation(convId, force) {
+    if (isSending) return;
+    if (!force && convId === currentConvId && document.querySelectorAll('.phpclaw-bubble').length > 0) return;
+    currentConvId = convId;
+    setActiveConv(convId);
+    clearMessages('');
+    showTyping();
+    var fd = new FormData();
+    fd.append('conversation_id', convId);
+    fetch(loadUrl, { method: 'POST', body: fd, credentials: 'same-origin' })
+    .then(phpclawReadJson)
+    .then(function (data) {
+      removeTyping();
+      clearMessages('');
+      if (data.success) {
+        chatHeader.textContent = data.title || 'Conversation';
+        if (!data.messages || data.messages.length === 0) {
+          clearMessages('No message history for this conversation.');
+        } else {
+          data.messages.forEach(function (m) {
+            if (m.role === 'tool') {
+              renderToolCard(m.tool_name || '', m.tool_input || {}, m.tool_result || '');
+            } else {
+              renderBubble(m.role, m.content);
+            }
+          });
+        }
+        scrollBottom();
+      } else {
+        clearMessages('Could not load conversation: ' + (data.error || 'Unknown error'));
+      }
+    })
+    .catch(function (err) { removeTyping(); clearMessages('Request failed: ' + err.message); });
+  }
+
+  document.querySelectorAll('.phpclaw-conv-item').forEach(function (item) {
+    item.addEventListener('click', function () { loadConversation(item.dataset.convId); });
+  });
+
+  if (searchEl) {
+    searchEl.addEventListener('input', function () {
+      var q = searchEl.value.toLowerCase().trim();
+      document.querySelectorAll('.phpclaw-conv-item').forEach(function (item) {
+        item.style.display = (!q || (item.dataset.title || '').indexOf(q) !== -1) ? '' : 'none';
+      });
+    });
+  }
+
+  if (newChatBtn) {
+    newChatBtn.addEventListener('click', function () {
+      if (isSending) return;
+      currentConvId = '';
+      setActiveConv('');
+      chatHeader.textContent = 'New Chat';
+      clearMessages('Ask anything about your OpenCart store.');
+      if (inputEl) inputEl.focus();
+    });
+  }
+
+  function renderErrorBubble(errMsg) {
+    var wrap = document.createElement('div');
+    wrap.className = 'phpclaw-bubble-wrap assistant';
+    var av = document.createElement('div');
+    av.className = 'phpclaw-avatar';
+    av.textContent = '🤖';
+    wrap.appendChild(av);
+    var bubble = document.createElement('div');
+    bubble.className = 'phpclaw-bubble assistant';
+    bubble.style.borderColor = '#f8d7da';
+    bubble.style.background  = '#fff5f5';
+    var l = errMsg.toLowerCase();
+    if (l.indexOf('api key') !== -1 || l.indexOf('not configured') !== -1 || l.indexOf('no provider') !== -1) {
+      bubble.innerHTML = canManageAll
+        ? '⚠ phpClaw is not configured. <a href="' + escapeHtml(settingsUrl) + '" class="phpclaw-link">Add your API key in Settings</a>. Then try again.'
+        : '⚠ phpClaw is not configured. Ask an administrator to add an API key.';
+    } else {
+      bubble.textContent = '⚠ ' + errMsg;
+    }
+    wrap.appendChild(bubble);
+    msgArea.appendChild(wrap);
+  }
+
+  function lockUI() {
+    isSending = true;
+    if (sendBtn) { sendBtn.disabled = true; sendBtn.setAttribute('aria-disabled', 'true'); }
+    if (msgArea) { msgArea.setAttribute('aria-busy', 'true'); }
+    if (sidebar) { sidebar.style.pointerEvents = 'none'; sidebar.style.opacity = '0.6'; }
+    if (inputEl) { inputEl.disabled = true; }
+  }
+
+  function unlockUI() {
+    isSending = false;
+    if (sendBtn) { sendBtn.disabled = false; sendBtn.removeAttribute('aria-disabled'); }
+    if (msgArea) { msgArea.removeAttribute('aria-busy'); }
+    if (sidebar) { sidebar.style.pointerEvents = ''; sidebar.style.opacity = ''; }
+    if (inputEl) { inputEl.disabled = false; inputEl.focus(); }
+  }
+
+  function renderPendingToolCard(toolName, toolInput) {
+    var wrap = document.createElement('div');
+    wrap.className = 'pc-tool-card pc-tool-card--pending';
+    var header = document.createElement('div');
+    header.className = 'pc-tool-card__header';
+    var icon = document.createElement('span');
+    icon.className = 'pc-tool-card__icon pc-tool-card__icon--spin';
+    icon.textContent = '◐';
+    header.appendChild(icon);
+    var nameEl = document.createElement('span');
+    nameEl.className = 'pc-tool-card__name';
+    nameEl.textContent = toolName || 'tool';
+    header.appendChild(nameEl);
+    if (toolInput && Object.keys(toolInput).length) {
+      var inputEl2 = document.createElement('code');
+      inputEl2.className = 'pc-tool-card__input';
+      inputEl2.textContent = JSON.stringify(toolInput);
+      header.appendChild(inputEl2);
+    }
+    wrap.appendChild(header);
+    var body = document.createElement('div');
+    body.className = 'pc-tool-card__body';
+    var p = document.createElement('p');
+    p.className = 'pc-tool-card__pending-text';
+    p.textContent = 'Calling…';
+    body.appendChild(p);
+    wrap.appendChild(body);
+    msgArea.appendChild(wrap);
+    return wrap;
+  }
+
+  function parseSseStream(reader, onFrame) {
+    var decoder = new TextDecoder('utf-8');
+    var buffer  = '';
+    function pump() {
+      return reader.read().then(function (res) {
+        if (res.done) {
+          if (buffer.trim()) { dispatchFrame(buffer); }
+          return;
+        }
+        buffer += decoder.decode(res.value, { stream: true });
+        var idx;
+        while ((idx = buffer.indexOf('\n\n')) !== -1) {
+          var frame = buffer.slice(0, idx);
+          buffer = buffer.slice(idx + 2);
+          dispatchFrame(frame);
+        }
+        return pump();
+      });
+    }
+    function dispatchFrame(raw) {
+      var ev = '';
+      var dataLines = [];
+      raw.split('\n').forEach(function (line) {
+        if (line.indexOf('event:') === 0)      { ev = line.slice(6).trim(); }
+        else if (line.indexOf('data:') === 0)  { dataLines.push(line.slice(5).replace(/^ /, '')); }
+      });
+      if (!ev) return;
+      var data = null;
+      try { data = JSON.parse(dataLines.join('\n')); } catch (_) {}
+      onFrame(ev, data);
+    }
+    return pump();
+  }
+
+  function sendMessage() {
+    var msg = inputEl ? inputEl.value.trim() : '';
+    if (!msg || isSending) return;
+    inputEl.value = '';
+    autoResize();
+    var welcome = document.getElementById('phpclaw-welcome');
+    if (welcome) welcome.remove();
+    renderBubble('user', msg);
+    scrollBottom();
+    lockUI();
+    showTyping();
+
+    var fd = new FormData();
+    fd.append('message', msg);
+    fd.append('conversation_id', currentConvId || '');
+
+    var pendingCards    = [];
+    var streamingBubble = null;
+    var streamingText   = '';
+
+    fetch(streamUrl, { method: 'POST', body: fd, credentials: 'same-origin', headers: { Accept: 'text/event-stream' } })
+    .then(function (r) {
+      var ct = r.headers.get('content-type') || '';
+      if (!r.ok || ct.indexOf('text/event-stream') === -1) {
+        throw new Error('Your session expired or you were signed out. Reload the page and sign in again.');
+      }
+      if (!r.body) { throw new Error('Streaming not supported by browser'); }
+      removeTyping();
+      var reader = r.body.getReader();
+      return parseSseStream(reader, function (ev, data) {
+        data = data || {};
+        if (ev === 'tool_before') {
+          var pc = renderPendingToolCard(data.tool_name || '', data.tool_input || {});
+          pendingCards.push(pc);
+          scrollBottom();
+        } else if (ev === 'tool_after') {
+          var ph = pendingCards.shift();
+          if (ph && ph.parentNode) {
+            ph.className = 'pc-tool-card';
+            var hdr = ph.querySelector('.pc-tool-card__header');
+            if (hdr) {
+              var icon = hdr.querySelector('.pc-tool-card__icon');
+              if (icon) { icon.className = 'pc-tool-card__icon'; icon.textContent = '⚙'; }
+            }
+            var oldBody = ph.querySelector('.pc-tool-card__body');
+            if (oldBody) { oldBody.parentNode.removeChild(oldBody); }
+            var body = document.createElement('div');
+            body.className = 'pc-tool-card__body';
+            var parsed = null;
+            var rawText = '';
+            var resultStr = data.tool_result || '';
+            if (typeof resultStr === 'string') {
+              rawText = resultStr;
+              try { parsed = JSON.parse(resultStr); } catch (_) { parsed = null; }
+            } else if (resultStr != null) {
+              parsed = resultStr;
+              try { rawText = JSON.stringify(resultStr, null, 2); } catch (_) { rawText = String(resultStr); }
+            }
+            renderTypedBody(body, data.tool_name || '', parsed != null ? parsed : (rawText || null));
+            var details = document.createElement('details');
+            details.className = 'pc-tool-card__raw-toggle';
+            var summary = document.createElement('summary');
+            summary.textContent = 'Show raw JSON';
+            details.appendChild(summary);
+            var pre = document.createElement('pre');
+            pre.className = 'pc-tool-card__raw';
+            pre.textContent = rawText;
+            details.appendChild(pre);
+            body.appendChild(details);
+            ph.appendChild(body);
+          } else {
+            renderToolCard(data.tool_name || '', data.tool_input || {}, data.tool_result || '');
+          }
+          scrollBottom();
+        } else if (ev === 'chunk') {
+          if (!streamingBubble) { streamingBubble = renderBubble('assistant', ''); }
+          streamingText += (data.text || '');
+          var b = streamingBubble.querySelector('.phpclaw-bubble');
+          if (b) { b.textContent = streamingText; scrollBottom(); }
+        } else if (ev === 'done') {
+          pendingCards.forEach(function (ph) { if (ph.parentNode) ph.parentNode.removeChild(ph); });
+          pendingCards = [];
+          var finalText = data.text || streamingText || '';
+          if (streamingBubble) {
+            var b2 = streamingBubble.querySelector('.phpclaw-bubble');
+            if (b2) { b2.textContent = finalText; }
+          } else {
+            renderBubble('assistant', finalText);
+          }
+          var newId = data.conversation_id || '';
+          if (newId) {
+            currentConvId = newId;
+            var titleText = data.title || (msg.length > 60 ? msg.substring(0, 60) + '…' : msg);
+            if (data.is_new || chatHeader.textContent === 'New Chat') {
+              chatHeader.textContent = titleText;
+              prependConvItem(newId, titleText);
+            } else {
+              prependConvItem(newId, chatHeader.textContent);
+            }
+            setActiveConv(newId);
+          }
+          scrollBottom();
+        } else if (ev === 'error') {
+          pendingCards.forEach(function (ph) { if (ph.parentNode) ph.parentNode.removeChild(ph); });
+          pendingCards = [];
+          renderErrorBubble(data.error || 'Unknown error');
+          scrollBottom();
+        }
+      });
+    })
+    .catch(function (err) {
+      removeTyping();
+      pendingCards.forEach(function (ph) { if (ph.parentNode) ph.parentNode.removeChild(ph); });
+      renderErrorBubble('Request failed: ' + err.message);
+      scrollBottom();
+    })
+    .finally(function () { unlockUI(); });
+  }
+
+  if (sendBtn) sendBtn.addEventListener('click', sendMessage);
+
+  if (inputEl) {
+    inputEl.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+    });
+    inputEl.addEventListener('input', autoResize);
+  }
+
+  function autoResize() {
+    if (!inputEl) return;
+    inputEl.style.height = 'auto';
+    inputEl.style.height = Math.min(inputEl.scrollHeight, 160) + 'px';
+  }
+
+  if (currentConvId) {
+    loadConversation(currentConvId, true);
+  }
+
+  scrollBottom();
+})();
+</script>
+{{ footer }}

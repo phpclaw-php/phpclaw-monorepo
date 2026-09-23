@@ -1,0 +1,113 @@
+<?php
+
+// PHPStan stub file: signatures for the OPTIONAL framework base classes that the
+// Laravel and Symfony MCP bridge commands extend under src/. Neither framework is
+// a runtime dependency of phpclaw-mcp (it stays pure-PHP, zero-dependency). The
+// stubs let PHPStan type-check both bridge files against real signatures without
+// installing Laravel or Symfony. Nothing is excluded and nothing is suppressed.
+namespace Illuminate\Console {
+    class Command
+    {
+        public const SUCCESS = 0;
+
+        public const FAILURE = 1;
+
+        public function option(?string $key = null): mixed {}
+
+        public function info(string $string, int|string|null $verbosity = null): void {}
+
+        public function error(string $string, int|string|null $verbosity = null): void {}
+    }
+}
+
+namespace Illuminate\Contracts\Foundation {
+    interface Application
+    {
+        public function runningInConsole(): bool;
+    }
+}
+
+namespace Illuminate\Support {
+    abstract class ServiceProvider
+    {
+        protected \Illuminate\Contracts\Foundation\Application $app;
+
+        /**
+         * @param class-string[]|string $commands
+         */
+        public function commands($commands): void {}
+    }
+}
+
+namespace Symfony\Component\Console\Output {
+    interface OutputInterface
+    {
+        public function writeln(string|iterable $messages, int $options = 0): void;
+
+        public function write(string|iterable $messages, bool $newline = false, int $options = 0): void;
+    }
+
+    interface ConsoleOutputInterface extends OutputInterface {}
+}
+
+namespace Symfony\Component\Console\Input {
+    interface InputInterface
+    {
+        public function getOption(string $name): mixed;
+
+        public function getArgument(string $name): mixed;
+    }
+
+    class InputOption
+    {
+        public const VALUE_NONE = 1;
+
+        public const VALUE_REQUIRED = 2;
+
+        public const VALUE_OPTIONAL = 4;
+    }
+}
+
+namespace Symfony\Component\Console\Attribute {
+    #[\Attribute]
+    class AsCommand
+    {
+        /**
+         * @param string[] $aliases
+         */
+        public function __construct(
+            string $name,
+            ?string $description = null,
+            array $aliases = [],
+            bool $hidden = false,
+        ) {}
+    }
+}
+
+namespace Symfony\Component\Console\Command {
+    class Command
+    {
+        public const SUCCESS = 0;
+
+        public const FAILURE = 1;
+
+        public const INVALID = 2;
+
+        public function __construct(?string $name = null) {}
+
+        public function setName(string $name): static {}
+
+        public function setDescription(string $description): static {}
+
+        public function addOption(
+            string $name,
+            string|array|null $shortcut = null,
+            ?int $mode = null,
+            string $description = '',
+            mixed $default = null,
+        ): static {}
+
+        protected function configure(): void {}
+    }
+}
+

@@ -1,0 +1,16 @@
+{
+    "_comment": "exclude/notPath cover files written by drupal/core-composer-scaffold, not by phpClaw. Drupal's own generated .gitignore already lists autoload.php, autoload_runtime.php and sites/ as artifacts. Formatting code this package does not own and cannot edit is noise, not a check.",
+    "preset": "laravel",
+    "exclude": [
+        "sites"
+    ],
+    "notPath": [
+        "autoload.php",
+        "autoload_runtime.php"
+    ],
+    "rules": {
+        "no_superfluous_phpdoc_tags": false,
+        "phpdoc_trim": true,
+        "phpdoc_trim_consecutive_blank_line_separation": true
+    }
+}

@@ -1,0 +1,64 @@
+{
+    "name": "phpclaw/phpclaw-cloud",
+    "description": "phpClaw Cloud transport. Wildcard hook listener, payload builder, and HTTP client for the phpClaw Cloud service.",
+    "type": "library",
+    "license": "MIT",
+    "keywords": [
+        "ai",
+        "agent",
+        "cloud",
+        "phpclaw"
+    ],
+    "authors": [
+        {
+            "name": "Akash Patel",
+            "email": "er.akashpatel1908@gmail.com"
+        }
+    ],
+    "repositories": [
+        {
+            "type": "path",
+            "url": "../core",
+            "options": {
+                "symlink": false,
+                "versions": {
+                    "phpclaw/phpclaw": "0.1.0"
+                }
+            }
+        }
+    ],
+    "require": {
+        "php": "^8.1",
+        "ext-curl": "*",
+        "ext-json": "*",
+        "phpclaw/phpclaw": "^0.1"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^10|^11",
+        "laravel/pint": "^1.0",
+        "phpstan/phpstan": "^1.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "PhpClaw\\Cloud\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "PhpClaw\\Cloud\\Tests\\": "tests/"
+        }
+    },
+    "scripts": {
+        "test": "vendor/bin/phpunit --no-coverage",
+        "test:coverage": "XDEBUG_MODE=coverage vendor/bin/phpunit --coverage-text",
+        "lint": "vendor/bin/pint",
+        "analyse": "vendor/bin/phpstan analyse --no-progress"
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true,
+    "config": {
+        "platform": {
+            "php": "8.3"
+        }
+    }
+}

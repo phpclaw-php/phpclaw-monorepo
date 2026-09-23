@@ -1,0 +1,615 @@
+# Copyright (C) 2026 Akash Patel
+# This file is distributed under the MIT.
+msgid ""
+msgstr ""
+"Project-Id-Version: phpClaw\n"
+"Report-Msgid-Bugs-To: https://wordpress.org/support/plugin/wordpress\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"POT-Creation-Date: 2026-08-31T17:37:32+00:00\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"X-Generator: WP-CLI 2.12.0\n"
+"X-Domain: phpclaw\n"
+
+#. Plugin Name of the plugin
+#: phpclaw.php
+msgid "phpClaw"
+msgstr ""
+
+#. Plugin URI of the plugin
+#. Author URI of the plugin
+#: phpclaw.php
+msgid "https://phpclaw.ai"
+msgstr ""
+
+#. Description of the plugin
+#: phpclaw.php
+msgid "Universal AI agent engine for WordPress & WooCommerce. WP-CLI, REST API, and admin settings."
+msgstr ""
+
+#. Author of the plugin
+#: phpclaw.php
+msgid "Akash Patel"
+msgstr ""
+
+#: src/Admin/AboutPage.php:37
+#: src/Admin/AnalyticsPage.php:37
+#: src/Admin/ChatPage.php:39
+#: src/Admin/GuidePage.php:56
+msgid "Insufficient permissions."
+msgstr ""
+
+#: src/Admin/AboutPage.php:60
+msgid "phpClaw links"
+msgstr ""
+
+#: src/Admin/AboutPage.php:78
+msgid "What is phpClaw?"
+msgstr ""
+
+#: src/Admin/AboutPage.php:90
+msgid "Built-in features"
+msgstr ""
+
+#: src/Admin/AboutPage.php:123
+msgid "Installable packages"
+msgstr ""
+
+#: src/Admin/AboutPage.php:128
+msgid "Package"
+msgstr ""
+
+#: src/Admin/AboutPage.php:129
+#: src/Admin/AboutPage.php:144
+msgid "Installed"
+msgstr ""
+
+#: src/Admin/AboutPage.php:130
+msgid "What it adds"
+msgstr ""
+
+#: src/Admin/AboutPage.php:145
+msgid "Not installed"
+msgstr ""
+
+#: src/Admin/AboutPage.php:160
+msgid "Need more? phpClaw Enterprise"
+msgstr ""
+
+#: src/Admin/AboutPage.php:162
+msgid "Looking for custom AI tools tailored to your site? Need to integrate phpClaw with your CRM, ERP, or internal systems? phpClaw Enterprise offers dedicated support, custom tool development, and managed onboarding."
+msgstr ""
+
+#: src/Admin/AboutPage.php:165
+msgid "Learn about phpClaw Enterprise →"
+msgstr ""
+
+#: src/Admin/AdminFooter.php:21
+msgid "Built for the PHP community"
+msgstr ""
+
+#: src/Admin/AdminFooter.php:22
+msgid "phpClaw is open source under the MIT license."
+msgstr ""
+
+#: src/Admin/AdminFooter.php:23
+msgid "One engine for the entire PHP ecosystem."
+msgstr ""
+
+#: src/Admin/AdminFooter.php:26
+msgid "Star on GitHub"
+msgstr ""
+
+#: src/Admin/AdminFooter.php:29
+msgid "View on Packagist"
+msgstr ""
+
+#: src/Admin/AdminFooter.php:33
+msgid "Need custom AI tools for your site?"
+msgstr ""
+
+#: src/Admin/AdminNotice.php:75
+msgid "phpClaw is installed. 3 steps to get started"
+msgstr ""
+
+#: src/Admin/AdminNotice.php:79
+msgid "Dismiss this notice"
+msgstr ""
+
+#: src/Admin/AdminNotice.php:87
+#: src/Admin/GuidePage.php:115
+msgid "Choose a provider"
+msgstr ""
+
+#: src/Admin/AdminNotice.php:90
+msgid "Anthropic Claude, OpenAI GPT, Groq, Google Gemini, Mistral AI, Ollama (local, no API key), and more."
+msgstr ""
+
+#: src/Admin/AdminNotice.php:97
+msgid "Enter your credentials"
+msgstr ""
+
+#: src/Admin/AdminNotice.php:100
+msgid "Paste your API key from your provider's dashboard. No API key needed for Ollama, just select it as your provider."
+msgstr ""
+
+#: src/Admin/AdminNotice.php:107
+msgid "Save & Test Connection"
+msgstr ""
+
+#: src/Admin/AdminNotice.php:110
+msgid "Save your settings, then click Test Connection to confirm everything is working."
+msgstr ""
+
+#: src/Admin/AdminNotice.php:118
+msgid "Open Settings →"
+msgstr ""
+
+#: src/Admin/AdminNotice.php:121
+msgid "Read the docs"
+msgstr ""
+
+#: src/Admin/AnalyticsPage.php:135
+msgid "phpClaw Analytics"
+msgstr ""
+
+#: src/Admin/AnalyticsPage.php:152
+msgid "Note:"
+msgstr ""
+
+#: src/Admin/AnalyticsPage.php:154
+msgid "Analytics reflect all conversations and messages recorded on this site."
+msgstr ""
+
+#: src/Admin/AnalyticsPage.php:155
+msgid "Analytics reflect only your own conversations and messages."
+msgstr ""
+
+#: src/Admin/ChatPage.php:101
+msgid "Configure"
+msgstr ""
+
+#: src/Admin/ChatPage.php:109
+#: src/Admin/DashboardWidget.php:104
+#: src/Admin/GuidePage.php:1086
+#: src/Admin/SettingsPage.php:33
+#: src/Plugin.php:304
+msgid "Settings"
+msgstr ""
+
+#: src/Admin/ChatPage.php:114
+msgid "Engine failed to initialise. Check your API Key and provider settings."
+msgstr ""
+
+#: src/Admin/ChatPage.php:121
+#: src/Admin/DashboardWidget.php:89
+msgid "Conversations"
+msgstr ""
+
+#: src/Admin/ChatPage.php:123
+msgid "Start a new conversation"
+msgstr ""
+
+#: src/Admin/ChatPage.php:124
+msgid "New Chat"
+msgstr ""
+
+#: src/Admin/ChatPage.php:126
+#: src/Admin/ChatPage.php:127
+msgid "Search conversations"
+msgstr ""
+
+#: src/Admin/ChatPage.php:127
+msgid "Search conversations…"
+msgstr ""
+
+#: src/Admin/ChatPage.php:135
+msgid "Conversation list"
+msgstr ""
+
+#: src/Admin/ChatPage.php:166
+msgid "Chat messages"
+msgstr ""
+
+#: src/Admin/ChatPage.php:187
+msgid "Message"
+msgstr ""
+
+#: src/Admin/ChatPage.php:189
+msgid "Message phpClaw… (Enter to send, Shift+Enter for new line)"
+msgstr ""
+
+#: src/Admin/ChatPage.php:190
+msgid "Type a message"
+msgstr ""
+
+#: src/Admin/ChatPage.php:191
+msgid "Send message"
+msgstr ""
+
+#: src/Admin/DashboardWidget.php:41
+msgid "phpClaw AI Agent"
+msgstr ""
+
+#: src/Admin/DashboardWidget.php:70
+msgid "Connected"
+msgstr ""
+
+#: src/Admin/DashboardWidget.php:75
+msgid "Not configured"
+msgstr ""
+
+#: src/Admin/DashboardWidget.php:81
+#: src/Admin/GuidePage.php:529
+#: src/Admin/SettingsPage.php:65
+msgid "Provider"
+msgstr ""
+
+#: src/Admin/DashboardWidget.php:93
+msgid "Messages"
+msgstr ""
+
+#: src/Admin/DashboardWidget.php:100
+msgid "Open AI Chat"
+msgstr ""
+
+#: src/Admin/DashboardWidget.php:104
+msgid "Configure phpClaw →"
+msgstr ""
+
+#: src/Admin/GuidePage.php:67
+msgid "phpClaw Developer Guide"
+msgstr ""
+
+#: src/Admin/GuidePage.php:109
+msgid "Quickstart"
+msgstr ""
+
+#: src/Admin/GuidePage.php:110
+msgid "Get up and running in under 5 minutes."
+msgstr ""
+
+#: src/Admin/GuidePage.php:116
+#: src/Admin/GuidePage.php:122
+#: src/Admin/GuidePage.php:127
+msgid "Administrator only"
+msgstr ""
+
+#: src/Admin/GuidePage.php:118
+msgid "and select Anthropic, OpenAI, Groq, Gemini, Mistral, DeepSeek, Ollama (local), or Custom (any OpenAI-compatible endpoint)."
+msgstr ""
+
+#: src/Admin/GuidePage.php:121
+msgid "Enter your API key"
+msgstr ""
+
+#: src/Admin/GuidePage.php:123
+msgid "paste the API key from your provider dashboard. No key needed for Ollama."
+msgstr ""
+
+#: src/Admin/GuidePage.php:126
+msgid "Save and test"
+msgstr ""
+
+#: src/Admin/GuidePage.php:128
+msgid "click Save Settings, then Test Connection to verify the key works."
+msgstr ""
+
+#: src/Admin/GuidePage.php:131
+msgid "Open Chat"
+msgstr ""
+
+#: src/Admin/GuidePage.php:132
+msgid "go to"
+msgstr ""
+
+#: src/Admin/GuidePage.php:133
+msgid "Chat"
+msgstr ""
+
+#: src/Admin/GuidePage.php:134
+msgid "and send your first message."
+msgstr ""
+
+#: src/Admin/GuidePage.php:139
+msgid "First prompts to try"
+msgstr ""
+
+#: src/Admin/GuidePage.php:143
+msgid "Prompt"
+msgstr ""
+
+#: src/Admin/GuidePage.php:144
+msgid "What it does"
+msgstr ""
+
+#: src/Admin/GuidePage.php:166
+msgid "Common tasks"
+msgstr ""
+
+#: src/Admin/GuidePage.php:170
+msgid "Task"
+msgstr ""
+
+#: src/Admin/GuidePage.php:171
+msgid "How"
+msgstr ""
+
+#: src/Admin/GuidePage.php:519
+msgid "AI Providers"
+msgstr ""
+
+#: src/Admin/GuidePage.php:521
+msgid "phpClaw supports multiple AI providers. Select one in"
+msgstr ""
+
+#: src/Admin/GuidePage.php:523
+msgid "and enter your API key. Switch providers at any time, zero code changes required."
+msgstr ""
+
+#: src/Admin/GuidePage.php:530
+msgid "Popular Models"
+msgstr ""
+
+#: src/Admin/GuidePage.php:531
+msgid "Sign Up"
+msgstr ""
+
+#: src/Admin/GuidePage.php:532
+msgid "Notes"
+msgstr ""
+
+#: src/Admin/GuidePage.php:543
+msgid "Get API key →"
+msgstr ""
+
+#: src/Admin/GuidePage.php:546
+msgid "n/a"
+msgstr ""
+
+#: src/Admin/GuidePage.php:556
+msgid "Tip:"
+msgstr ""
+
+#: src/Admin/GuidePage.php:557
+msgid "After entering your API key, click \"Test Connection\" on the Settings page to verify it works before sending real prompts."
+msgstr ""
+
+#: src/Admin/GuidePage.php:976
+msgid "Every provider streams tool tokens live over this endpoint (Anthropic, OpenAI, Gemini, and all OpenAI-compatible providers including Groq, DeepSeek, Mistral, Ollama, and Custom)."
+msgstr ""
+
+#: src/Admin/GuidePage.php:1022
+msgid "Anyone with shell access can run these commands. Conversations created from WP-CLI are stored with user ID 0, meaning they belong to no WordPress user: only administrators can see them, and the --user flag does not change this."
+msgstr ""
+
+#: src/Admin/SettingsPage.php:32
+msgid "phpClaw Settings"
+msgstr ""
+
+#: src/Admin/SettingsPage.php:66
+msgid "Model"
+msgstr ""
+
+#: src/Admin/SettingsPage.php:67
+msgid "API Key"
+msgstr ""
+
+#: src/Admin/SettingsPage.php:68
+msgid "Base URL"
+msgstr ""
+
+#: src/Admin/SettingsPage.php:69
+msgid "System Prompt"
+msgstr ""
+
+#: src/Admin/SettingsPage.php:70
+msgid "Store Messages"
+msgstr ""
+
+#: src/Admin/SettingsPage.php:71
+msgid "Max Iterations"
+msgstr ""
+
+#: src/Admin/SettingsPage.php:72
+msgid "Remote Skill URLs"
+msgstr ""
+
+#: src/Admin/SettingsPage.php:76
+msgid "Cloud Key"
+msgstr ""
+
+#: src/Admin/SettingsPage.php:77
+msgid "Cloud Signing Secret"
+msgstr ""
+
+#: src/Admin/SettingsPage.php:78
+msgid "Disable Cloud Features"
+msgstr ""
+
+#: src/Admin/SettingsPage.php:118
+msgid "phpClaw AI Agent Engine"
+msgstr ""
+
+#: src/Admin/SettingsPage.php:149
+msgid "Your API key for the selected provider. Leave blank for Ollama (local models), or blank to keep the saved key."
+msgstr ""
+
+#: src/Admin/SettingsPage.php:157
+msgid "For the Custom provider only. The full OpenAI-compatible /chat/completions endpoint URL. Enter your API key above if the endpoint requires one."
+msgstr ""
+
+#: src/Admin/SettingsPage.php:163
+msgid "e.g. You are a helpful assistant for my WordPress blog. Always be concise."
+msgstr ""
+
+#: src/Admin/SettingsPage.php:165
+msgid "Optional. Customise the AI's persona and behaviour for your site."
+msgstr ""
+
+#: src/Admin/SettingsPage.php:172
+msgid "Enable chat history (recommended)"
+msgstr ""
+
+#: src/Admin/SettingsPage.php:173
+msgid "When enabled: prompt and response text is persisted via your configured memory driver, required for multi-turn chat to remember previous messages. When disabled: no message content is ever saved. Each prompt is processed independently with no memory of previous turns."
+msgstr ""
+
+#: src/Admin/SettingsPage.php:180
+msgid "Maximum tool-call iterations per request. Default: 20."
+msgstr ""
+
+#: src/Admin/SettingsPage.php:186
+msgid "phpClaw Cloud API key. Enables cloud guards and webhook features. Leave blank to keep the saved key."
+msgstr ""
+
+#: src/Admin/SettingsPage.php:192
+msgid "Shared secret used to verify signed cloud scan responses. Copy it from your phpClaw Cloud dashboard when you create the API key. Leave blank to keep the saved secret."
+msgstr ""
+
+#: src/Admin/SettingsPage.php:199
+msgid "e.g. guards, webhooks"
+msgstr ""
+
+#: src/Admin/SettingsPage.php:200
+msgid "Comma-separated cloud feature names to disable. Leave empty to enable all features from your plan."
+msgstr ""
+
+#: src/Admin/SettingsPage.php:201
+msgid "Only applies when a Cloud Key is set above."
+msgstr ""
+
+#: src/Admin/SettingsPage.php:209
+msgid "One HTTPS URL per line. Each points to a phpClaw JSON skill collection or a SKILL.md file. Remote skills are inert text injected into prompts, never executed. Fetched with SSRF protection and cached for 24 hours."
+msgstr ""
+
+#: src/Admin/SettingsPage.php:383
+msgid "Save Settings"
+msgstr ""
+
+#: src/Admin/SettingsPage.php:386
+msgid "Test Connection"
+msgstr ""
+
+#: src/Admin/SettingsPage.php:389
+msgid "Save your settings first, then click Test Connection."
+msgstr ""
+
+#: src/Admin/SettingsPage.php:408
+msgid "Saved. Leave blank to keep current value"
+msgstr ""
+
+#: src/Admin/SettingsPage.php:448
+msgid "Select a provider"
+msgstr ""
+
+#: src/Admin/SettingsPage.php:513
+msgid "e.g. llama3.1:8b, gpt-4o, claude-opus-4-8"
+msgstr ""
+
+#: src/Admin/SiteHealth.php:33
+msgid "phpClaw AI Engine"
+msgstr ""
+
+#: src/Admin/SiteHealth.php:58
+msgid "phpClaw is not configured"
+msgstr ""
+
+#: src/Admin/SiteHealth.php:63
+msgid "No API key is set. phpClaw cannot send prompts to any AI provider."
+msgstr ""
+
+#: src/Admin/SiteHealth.php:65
+msgid "Configure phpClaw"
+msgstr ""
+
+#: src/Admin/SiteHealth.php:70
+#: src/Admin/SiteHealth.php:96
+msgid "Open Settings"
+msgstr ""
+
+#: src/Admin/SiteHealth.php:86
+msgid "phpClaw engine failed to initialise"
+msgstr ""
+
+#: src/Admin/SiteHealth.php:91
+msgid "phpClaw is configured but the engine could not start. Check your API Key and provider settings."
+msgstr ""
+
+#: src/Admin/SiteHealth.php:103
+msgid "phpClaw is configured and ready"
+msgstr ""
+
+#: src/Admin/SiteHealth.php:108
+msgid "phpClaw AI agent engine is active and connected."
+msgstr ""
+
+#: src/Plugin.php:310
+msgid "About"
+msgstr ""
+
+#: src/Plugin.php:334
+msgid "View details"
+msgstr ""
+
+#: src/Plugin.php:393
+#: src/Plugin.php:518
+#: src/Plugin.php:555
+#: src/Rest/PhpClawAdminController.php:210
+#: src/Rest/PhpClawRestController.php:133
+msgid "You do not have permission to access this resource."
+msgstr ""
+
+#: src/Plugin.php:396
+#: src/Plugin.php:521
+msgid "Your message was blocked by a security guard. Rephrase your prompt and try again."
+msgstr ""
+
+#: src/Plugin.php:399
+#: src/Plugin.php:524
+#: src/Plugin.php:558
+#: src/Rest/PhpClawAdminController.php:215
+msgid "An internal error occurred. Please try again."
+msgstr ""
+
+#: src/Plugin.php:580
+msgid "No provider selected. Choose a provider and save settings first."
+msgstr ""
+
+#: src/Plugin.php:584
+msgid "API key is missing. Add your API key and save settings first."
+msgstr ""
+
+#: src/Plugin.php:596
+msgid "Connection test failed. Check your API key and provider settings."
+msgstr ""
+
+#: src/Rest/PhpClawAdminController.php:62
+#: src/Rest/PhpClawRestController.php:71
+msgid "You do not have permission to use phpClaw."
+msgstr ""
+
+#: src/Rest/PhpClawAdminController.php:88
+#: src/Rest/PhpClawRestController.php:100
+msgid "Message cannot be empty."
+msgstr ""
+
+#: src/Rest/PhpClawAdminController.php:262
+#: src/Rest/PhpClawRestController.php:90
+msgid "phpClaw is not configured. Set your provider and API key in Settings → phpClaw."
+msgstr ""
+
+#: src/Rest/PhpClawRestController.php:164
+msgid "The prompt to send to the AI agent."
+msgstr ""
+
+#: src/Rest/PhpClawRestController.php:180
+msgid "Existing conversation ID to continue. Omit to start a new conversation."
+msgstr ""
+
+#: src/Rest/PhpClawRestController.php:194
+msgid "Whether to stream the response (not supported via REST)."
+msgstr ""

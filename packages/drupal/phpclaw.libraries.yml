@@ -1,0 +1,41 @@
+admin.system:
+  version: 1.x
+  css:
+    theme:
+      css/admin/phpclaw.css: {}
+
+admin.about:
+  version: 1.x
+  css:
+    theme:
+      css/admin/about.css: {}
+  dependencies:
+    - phpclaw/admin.system
+
+admin.chat:
+  version: 1.x
+  css:
+    theme:
+      css/admin/overview.css: {}
+  js:
+    js/admin/chat.js: {}
+  dependencies:
+    - core/drupal
+    - core/drupalSettings
+    - phpclaw/admin.system
+
+admin.guide:
+  version: 1.x
+  js:
+    js/admin/guide.js: {}
+  dependencies:
+    - phpclaw/admin.system
+    - core/drupalSettings
+
+admin.settings:
+  version: 1.x
+  js:
+    js/admin/settings.js: {}
+  dependencies:
+    - phpclaw/admin.system
+    - core/drupalSettings

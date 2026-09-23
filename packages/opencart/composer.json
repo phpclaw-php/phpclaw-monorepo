@@ -1,0 +1,94 @@
+{
+    "name": "phpclaw/phpclaw-opencart",
+    "description": "phpClaw adapter for OpenCart 3.x and 4.x. Admin panel, 10 e-commerce tools, CLI runner, DB memory, and multi-provider AI support.",
+    "homepage": "https://phpclaw.ai",
+    "type": "library",
+    "license": "MIT",
+    "keywords": [
+        "ai",
+        "agent",
+        "llm",
+        "opencart",
+        "ecommerce",
+        "php"
+    ],
+    "authors": [
+        {
+            "name": "Akash Patel",
+            "email": "er.akashpatel1908@gmail.com"
+        }
+    ],
+    "require": {
+        "php": "^8.1",
+        "phpclaw/phpclaw": "^0.1",
+        "phpclaw/phpclaw-cloud": "^0.1",
+        "phpclaw/phpclaw-mcp": "^0.1"
+    },
+    "support": {
+        "issues": "https://github.com/phpclaw-php/phpclaw-monorepo/issues",
+        "source": "https://github.com/phpclaw-php/phpclaw-monorepo",
+        "docs": "https://phpclaw.ai/docs"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^10.5",
+        "laravel/pint": "^1.0",
+        "phpbench/phpbench": "^1.6",
+        "phpstan/phpstan": "^1.0 || ^2.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "PhpClaw\\OpenCart\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "PhpClaw\\OpenCart\\Tests\\": "tests/"
+        }
+    },
+    "scripts": {
+        "test": "phpunit --configuration phpunit.xml",
+        "test:coverage": "phpunit --configuration phpunit.xml --coverage-text",
+        "lint": "pint",
+        "analyse": "phpstan analyse",
+        "sync-core": "composer reinstall phpclaw/phpclaw phpclaw/phpclaw-cloud phpclaw/phpclaw-mcp"
+    },
+    "repositories": [
+        {
+            "type": "path",
+            "url": "../core",
+            "options": {
+                "symlink": false,
+                "versions": {
+                    "phpclaw/phpclaw": "0.1.0"
+                }
+            }
+        },
+        {
+            "type": "path",
+            "url": "../cloud",
+            "options": {
+                "symlink": false,
+                "versions": {
+                    "phpclaw/phpclaw-cloud": "0.1.0"
+                }
+            }
+        },
+        {
+            "type": "path",
+            "url": "../mcp",
+            "options": {
+                "symlink": false,
+                "versions": {
+                    "phpclaw/phpclaw-mcp": "0.1.0"
+                }
+            }
+        }
+    ],
+    "minimum-stability": "stable",
+    "prefer-stable": true,
+    "config": {
+        "platform": {
+            "php": "8.3"
+        }
+    }
+}

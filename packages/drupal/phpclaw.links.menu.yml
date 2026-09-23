@@ -1,0 +1,36 @@
+phpclaw.admin:
+  title: 'phpClaw AI Agent'
+  description: 'Use and configure the phpClaw AI agent engine.'
+  parent: system.admin_config
+  route_name: phpclaw.admin.chat
+  weight: 50
+
+phpclaw.admin.settings_link:
+  title: 'Settings'
+  parent: phpclaw.admin
+  route_name: phpclaw.admin.settings
+  weight: 10
+
+phpclaw.admin.chat_link:
+  title: 'Chat'
+  parent: phpclaw.admin
+  route_name: phpclaw.admin.chat
+  weight: 20
+
+phpclaw.admin.analytics_link:
+  title: 'Analytics'
+  parent: phpclaw.admin
+  route_name: phpclaw.admin.analytics
+  weight: 30
+
+phpclaw.admin.guide_link:
+  title: 'Guide'
+  parent: phpclaw.admin
+  route_name: phpclaw.admin.guide
+  weight: 40
+
+phpclaw.admin.about_link:
+  title: 'About'
+  parent: phpclaw.admin
+  route_name: phpclaw.admin.about
+  weight: 50

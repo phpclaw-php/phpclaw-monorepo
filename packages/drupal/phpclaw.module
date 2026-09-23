@@ -1,0 +1,62 @@
+<?php
+
+/**
+ * @file
+ * PhpClaw AI Agent module.
+ *
+ * Provides drush phpclaw "message" CLI command, Drupal DI wiring,
+ * admin settings/about UI, and the phpClaw universal AI agent engine.
+ */
+
+declare(strict_types=1);
+
+/**
+ * Implements hook_theme().
+ *
+ * @return array<string, array<string, mixed>> Theme hook definitions keyed by hook name.
+ */
+function phpclaw_theme(): array
+{
+    return [
+        'phpclaw_admin_about' => [
+            'variables' => [
+                'version'   => '',
+                'has_core'  => false,
+                'has_cloud' => false,
+                'has_mcp'   => false,
+            ],
+            'template'  => 'phpclaw-admin-about',
+        ],
+        'phpclaw_admin_guide' => [
+            'variables' => [
+                'tools'              => [],
+                'providers'          => [],
+                'core_tools'         => [],
+                'capability_records' => [],
+                'remote_skill_urls'  => [],
+                'remote_skills'      => [],
+                'manage_all'         => false,
+            ],
+            'template' => 'phpclaw-admin-guide',
+        ],
+        'phpclaw_admin_analytics' => [
+            'variables' => [
+                'stats'              => [],
+                'provider_breakdown' => [],
+                'manage_all'         => false,
+            ],
+            'template' => 'phpclaw-admin-analytics',
+        ],
+        'phpclaw_admin_chat' => [
+            'variables' => [
+                'conversations'      => [],
+                'init_conv_id'       => '',
+                'init_title'         => '',
+                'init_messages_html' => '',
+                'provider'           => '',
+                'model'              => '',
+            ],
+            'template' => 'phpclaw-admin-chat',
+        ],
+    ];
+}

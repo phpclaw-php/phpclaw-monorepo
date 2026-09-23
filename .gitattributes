@@ -1,0 +1,22 @@
+# Exclude dev files from dist installs (composer require --no-dev)
+.editorconfig         export-ignore
+.gitattributes        export-ignore
+.github/              export-ignore
+Makefile              export-ignore
+
+# Per-package dev files
+packages/*/tests/           export-ignore
+packages/*/examples/        export-ignore
+packages/*/phpunit.xml      export-ignore
+packages/*/phpstan.neon     export-ignore
+packages/*/.phpunit.result.cache export-ignore
+
+# Normalise line endings
+*.php                 text eol=lf
+*.md                  text eol=lf
+*.yml                 text eol=lf
+*.yaml                text eol=lf
+*.json                text eol=lf
+*.neon                text eol=lf
+*.xml                 text eol=lf
+Makefile              text eol=lf

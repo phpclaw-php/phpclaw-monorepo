@@ -1,0 +1,68 @@
+<?xml version="1.0"?>
+<config xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:noNamespaceSchemaLocation="urn:magento:framework:ObjectManager/etc/config.xsd">
+
+    <type name="Magento\Framework\Console\CommandListInterface">
+        <arguments>
+            <argument name="commands" xsi:type="array">
+                <item name="phpclaw_run"        xsi:type="object">PhpClaw\Magento\Console\Command\PhpClawRunCommand</item>
+                <item name="phpclaw_mcp_server" xsi:type="object">PhpClaw\Magento\Console\Command\PhpClawMcpServerCommand</item>
+            </argument>
+        </arguments>
+    </type>
+
+    <preference for="PhpClaw\Magento\Factory\PhpClawFactoryInterface"
+                type="PhpClaw\Magento\Factory\PhpClawFactory"/>
+
+    <preference for="PhpClaw\Memory\Contracts\MemoryInterface"
+                type="PhpClaw\Magento\Memory\RouterMemory"/>
+
+    <type name="PhpClaw\Magento\Registry\PhpClawRegistrar">
+        <arguments>
+            <argument name="eventManager" xsi:type="object">Magento\Framework\Event\ManagerInterface</argument>
+            <argument name="logger"       xsi:type="object">Psr\Log\LoggerInterface</argument>
+        </arguments>
+    </type>
+
+    <type name="PhpClaw\Magento\Factory\PhpClawFactory">
+        <arguments>
+            <argument name="cacheTypeList"      xsi:type="object">Magento\Framework\App\Cache\TypeListInterface</argument>
+            <argument name="routerMemory"       xsi:type="object">PhpClaw\Magento\Memory\RouterMemory</argument>
+        </arguments>
+    </type>
+
+    <type name="PhpClaw\Magento\Block\Adminhtml\Analytics">
+        <arguments>
+            <argument name="cache"  xsi:type="object">Magento\Framework\App\CacheInterface</argument>
+            <argument name="logger" xsi:type="object">Psr\Log\LoggerInterface</argument>
+        </arguments>
+    </type>
+
+    <type name="PhpClaw\Magento\Model\IdentityResolver">
+        <arguments>
+            <argument name="authSession" xsi:type="object">Magento\Backend\Model\Auth\Session\Proxy</argument>
+        </arguments>
+    </type>
+
+    <type name="PhpClaw\Magento\Memory\RouterMemory">
+        <arguments>
+            <argument name="conversationMemory" xsi:type="object">PhpClaw\Magento\Memory\ConversationMemory</argument>
+            <argument name="resourceMemory"     xsi:type="object">PhpClaw\Magento\Memory\ResourceMemory</argument>
+        </arguments>
+    </type>
+
+    <preference for="PhpClaw\Magento\Api\SendInterface"
+                type="PhpClaw\Magento\Model\Api\Send"/>
+
+    <preference for="PhpClaw\Magento\Api\StreamInterface"
+                type="PhpClaw\Magento\Model\Api\Stream"/>
+
+
+    <preference for="PhpClaw\Magento\Api\Data\SendResponseInterface"
+                type="PhpClaw\Magento\Model\Api\Data\SendResponse"/>
+
+    <preference for="PhpClaw\Magento\Api\Data\StreamResponseInterface"
+                type="PhpClaw\Magento\Model\Api\Data\StreamResponse"/>
+
+
+</config>

@@ -1,0 +1,14 @@
+
+phpClaw for Drupal
+===================
+
+Requirements: PHP 8.1+, Drupal 10 or 11.
+
+1. composer require phpclaw/phpclaw-drupal
+2. drush en phpclaw -y
+3. Visit Configuration > phpClaw AI Agent > Settings
+   (/admin/config/phpclaw/settings), pick a provider, and add your API key.
+
+Full documentation: https://phpclaw.ai/docs/adapters/drupal
+
+For general Drupal installation instructions, see core/INSTALL.txt.

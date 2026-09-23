@@ -1,0 +1,20 @@
+parameters:
+    level: 5
+    phpVersion: 80100
+    paths:
+        - Api
+        - Block
+        - Console
+        - Controller
+        - Factory
+        - Memory
+        - Model
+        - Registry
+        - Service
+        - Setup
+        - Tools
+        - Exception
+        - registration.php
+    treatPhpDocTypesAsCertain: false
+    scanFiles:
+        - stubs/magento-base.stub

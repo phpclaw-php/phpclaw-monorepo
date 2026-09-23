@@ -1,0 +1,44 @@
+<?php
+
+// PHPStan stub: signatures for the symfony/security-core classes SymfonyIdentityResolver
+// references. security-bundle is a suggested (not required) dependency, absent unless the
+// host app installs it; the resolver takes both services as nullable and the container wires
+// them with ignore_invalid_reference, so they are null when security is not installed.
+// Nothing is suppressed. These give the real signatures so the resolver type-checks.
+
+namespace Symfony\Component\Security\Core\User {
+    interface UserInterface
+    {
+        public function getUserIdentifier(): string;
+
+        /**
+         * @return list<string>
+         */
+        public function getRoles(): array;
+    }
+}
+
+namespace Symfony\Component\Security\Core\Authentication\Token {
+    use Symfony\Component\Security\Core\User\UserInterface;
+
+    interface TokenInterface
+    {
+        public function getUser(): ?UserInterface;
+    }
+}
+
+namespace Symfony\Component\Security\Core\Authentication\Token\Storage {
+    use Symfony\Component\Security\Core\Authentication\Token\TokenInterface;
+
+    interface TokenStorageInterface
+    {
+        public function getToken(): ?TokenInterface;
+    }
+}
+
+namespace Symfony\Component\Security\Core\Authorization {
+    interface AuthorizationCheckerInterface
+    {
+        public function isGranted(mixed $attribute, mixed $subject = null): bool;
+    }
+}

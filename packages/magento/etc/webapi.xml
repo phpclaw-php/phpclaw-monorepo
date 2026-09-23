@@ -1,0 +1,31 @@
+<?xml version="1.0"?>
+<!--
+    REST API routes for PhpClaw_Magento module.
+
+    Both routes require an admin bearer token carrying the PhpClaw_Magento::phpclaw_chat
+    resource. Obtain a token via POST /V1/integration/admin/token. Requests are scoped to
+    the caller's own conversations unless the caller also holds
+    PhpClaw_Magento::phpclaw_settings.
+
+    Routes:
+      POST   /V1/phpclaw/send           synchronous agent execution
+      POST   /V1/phpclaw/chat/stream   SSE streaming chat
+-->
+<routes xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:noNamespaceSchemaLocation="urn:magento:module:Magento_Webapi:etc/webapi.xsd">
+
+    <route url="/V1/phpclaw/send" method="POST">
+        <service class="PhpClaw\Magento\Api\SendInterface" method="send"/>
+        <resources>
+            <resource ref="PhpClaw_Magento::phpclaw_chat"/>
+        </resources>
+    </route>
+
+    <route url="/V1/phpclaw/chat/stream" method="POST">
+        <service class="PhpClaw\Magento\Api\StreamInterface" method="stream"/>
+        <resources>
+            <resource ref="PhpClaw_Magento::phpclaw_chat"/>
+        </resources>
+    </route>
+
+</routes>

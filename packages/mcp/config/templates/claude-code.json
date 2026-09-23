@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "phpclaw": {
+      "command": "php",
+      "args": ["vendor/bin/phpclaw-mcp"],
+      "env": {
+        "ANTHROPIC_API_KEY": "${ANTHROPIC_API_KEY}"
+      }
+    }
+  }
+}

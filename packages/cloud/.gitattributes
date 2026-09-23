@@ -1,0 +1,8 @@
+/vendor                 export-ignore
+/tests                  export-ignore
+/.phan                  export-ignore
+/.phpunit.cache         export-ignore
+/.phpunit.result.cache  export-ignore
+/phpunit.xml            export-ignore
+/composer.lock          export-ignore
+/pint.json              export-ignore

@@ -1,0 +1,16 @@
+parameters:
+    level: 5
+    phpVersion: 80100
+    paths:
+        - plugin/src
+        - plugin/services
+        - plugin/phpclaw.php
+        - component/src
+        - component/api/src
+        - component/services
+        - webservices/src
+        - webservices/services
+        - script.php
+        - component/script.php
+    scanFiles:
+        - stubs/joomla-cms.stub

@@ -1,0 +1,207 @@
+{{ header }}{{ column_left }}
+<div id="content">
+  <div class="page-header">
+    <div class="container-fluid">
+      <div class="float-end">
+        <button type="submit" form="form-phpclaw" id="btn-save" class="btn btn-primary"><i class="fa fa-save"></i> Save</button>
+        <a href="{{ url_debug }}" class="btn btn-secondary"><i class="fa fa-comments"></i> Chat</a>
+        <a href="{{ url_analytics }}" class="btn btn-secondary"><i class="fa fa-bar-chart"></i> Analytics</a>
+        <a href="{{ url_guide }}" class="btn btn-secondary"><i class="fa fa-book"></i> Guide</a>
+        <a href="{{ url_about }}" class="btn btn-secondary"><i class="fa fa-info-circle"></i> About</a>
+      </div>
+      <h1><i class="fa fa-robot"></i> phpClaw AI Agent Engine</h1>
+    </div>
+  </div>
+
+  <div class="container-fluid">
+
+    {% set is_ollama = settings.provider == 'ollama' %}
+    {% set is_connected = settings.api_key is not empty or is_ollama or settings.provider == 'custom' %}
+    <div class="pc-connection-badge">
+      {% if is_connected %}
+        <span class="pc-badge-connected">&#9679; Connected</span>
+        <span class="pc-badge-detail">Provider: <strong>{{ settings.provider ?: 'not set' }}</strong></span>
+        <span class="pc-badge-detail">Model: <strong>{{ settings.model ?: 'provider default' }}</strong></span>
+      {% else %}
+        <span class="pc-badge-disconnected">&#9679; Not configured. Add your API key in Settings</span>
+      {% endif %}
+    </div>
+
+    {% if notice %}
+    <div class="alert alert-warning alert-dismissible">
+      <i class="fa fa-exclamation-triangle"></i> {{ notice.message }}
+      <a href="{{ notice.url }}" class="btn btn-sm btn-warning ms-2">{{ notice.label }}</a>
+      <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+    {% endif %}
+
+    {% if update %}
+    <div class="alert alert-info alert-dismissible">
+      <i class="fa fa-cloud-download"></i>
+      New version available: <strong>{{ update.version }}</strong>
+      {% if update.download_url %}<a href="{{ update.download_url }}" target="_blank" rel="noopener" class="btn btn-sm btn-info ms-2">Download</a>{% endif %}
+      <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+    {% endif %}
+
+    {% if success %}
+    <div class="alert alert-success alert-dismissible">
+      <i class="fa fa-check-circle"></i> {{ success }}
+      <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+    {% endif %}
+
+    {% if errors.warning %}
+    <div class="alert alert-danger alert-dismissible">
+      <i class="fa fa-exclamation-circle"></i> {{ errors.warning }}
+      <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+    {% endif %}
+
+    <div class="pc-content-panel">
+      <div>
+
+        <div id="tab-settings">
+          <form id="form-phpclaw" action="{{ action }}" method="post" enctype="multipart/form-data">
+
+            <div class="row mb-3">
+              <label class="col-sm-2 col-form-label" for="phpclaw-provider">{{ entry_provider }}</label>
+              <div class="col-sm-10">
+                <select name="provider" id="phpclaw-provider" class="form-select">
+                  {% for value, label in providers %}
+                  <option value="{{ value }}" {% if settings.provider == value %}selected{% endif %}>{{ label }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+            </div>
+
+            <div class="row mb-3">
+              <label class="col-sm-2 col-form-label" for="phpclaw-model">{{ entry_model }}</label>
+              <div class="col-sm-10">
+                <input type="text" name="model" id="phpclaw-model" value="{{ settings.model }}"
+                       placeholder="e.g. claude-haiku-4-5-20251001, gpt-4o-mini, qwen2.5:7b"
+                       class="form-control" />
+              </div>
+            </div>
+
+            <div class="row mb-3" id="row-api-key">
+              <label class="col-sm-2 col-form-label" for="phpclaw-api-key">{{ entry_api_key }}</label>
+              <div class="col-sm-10">
+                <input type="password" name="api_key" id="phpclaw-api-key" value="" placeholder="{{ settings.api_key ? 'saved - leave blank to keep' : '' }}"
+                       class="form-control" autocomplete="new-password" />
+                <small class="text-muted">{{ help_api_key }}</small>
+              </div>
+            </div>
+
+            <div class="row mb-3 is-hidden" id="row-base-url">
+              <label class="col-sm-2 col-form-label" for="phpclaw-base-url">{{ entry_base_url }}</label>
+              <div class="col-sm-10">
+                <input type="text" name="base_url" id="phpclaw-base-url" value="{{ settings.base_url }}"
+                       placeholder="https://api.example.com/v1/chat/completions" class="form-control" />
+                <small class="text-muted">{{ help_base_url }}</small>
+              </div>
+            </div>
+
+            <div class="row mb-3">
+              <label class="col-sm-2 col-form-label" for="phpclaw-system-prompt">{{ entry_system_prompt }}</label>
+              <div class="col-sm-10">
+                <textarea name="system_prompt" id="phpclaw-system-prompt" rows="4" class="form-control"
+                          placeholder="e.g. You are a helpful assistant for my OpenCart store. Always be concise.">{{ settings.system_prompt }}</textarea>
+                <small class="text-muted">{{ help_system_prompt }}</small>
+              </div>
+            </div>
+
+            <div class="row mb-3">
+              <label class="col-sm-2 col-form-label" for="phpclaw-store-messages">{{ entry_store_messages }}</label>
+              <div class="col-sm-10">
+                <div class="form-check">
+                  <input type="hidden" name="store_messages" value="0" />
+                  <input type="checkbox" name="store_messages" id="phpclaw-store-messages" value="1" class="form-check-input"
+                         {% if settings.store_messages != '0' %}checked{% endif %} />
+                  <label class="form-check-label" for="phpclaw-store-messages">Enable chat history (recommended)</label>
+                </div>
+                <small class="text-muted">{{ help_store_messages }}</small>
+              </div>
+            </div>
+
+            <div class="row mb-3 {% if errors.max_iterations %}has-error{% endif %}">
+              <label class="col-sm-2 col-form-label" for="phpclaw-max-iterations">{{ entry_max_iterations }}</label>
+              <div class="col-sm-2">
+                <input type="number" name="max_iterations" id="phpclaw-max-iterations"
+                       value="{{ settings.max_iterations ?: 20 }}"
+                       min="1" max="50" class="form-control" />
+              </div>
+              <div class="col-sm-8">
+                <small class="text-muted">{{ help_max_iterations }}</small>
+                {% if errors.max_iterations %}
+                  <div class="text-danger mt-1 pc-text-sm">{{ errors.max_iterations }}</div>
+                {% endif %}
+              </div>
+            </div>
+
+            {% if cloud_installed %}
+            <div class="row mb-3 is-hidden" id="row-cloud-inactive">
+              <div class="col-sm-10 offset-sm-2">
+                <small class="text-muted">{{ help_cloud_inactive }}</small>
+              </div>
+            </div>
+
+            <div class="row mb-3" id="row-cloud-key">
+              <label class="col-sm-2 col-form-label" for="phpclaw-cloud-key">{{ entry_cloud_key }}</label>
+              <div class="col-sm-10">
+                <input type="password" name="cloud_key" id="phpclaw-cloud-key" value="" placeholder="{{ settings.cloud_key ? 'saved - leave blank to keep' : '' }}"
+                       class="form-control" autocomplete="new-password" />
+                <small class="text-muted">{{ help_cloud_key }}</small>
+              </div>
+            </div>
+
+            <div class="row mb-3" id="row-cloud-signing-secret">
+              <label class="col-sm-2 col-form-label" for="phpclaw-cloud-signing-secret">{{ entry_cloud_signing_secret }}</label>
+              <div class="col-sm-10">
+                <input type="password" name="cloud_signing_secret" id="phpclaw-cloud-signing-secret" value="" placeholder="{{ settings.cloud_signing_secret ? 'saved - leave blank to keep' : '' }}"
+                       class="form-control" autocomplete="new-password" />
+                <small class="text-muted">{{ help_cloud_signing_secret }}</small>
+              </div>
+            </div>
+
+            <div class="row mb-3" id="row-cloud-disable">
+              <label class="col-sm-2 col-form-label" for="phpclaw-cloud-disable">{{ entry_cloud_disable }}</label>
+              <div class="col-sm-10">
+                <input type="text" name="cloud_disable" id="phpclaw-cloud-disable" value="{{ settings.cloud_disable|join(',') }}"
+                       placeholder="e.g. guards, webhooks" class="form-control" />
+                <small class="text-muted">{{ help_cloud_disable }}</small>
+              </div>
+            </div>
+            {% endif %}
+
+
+            <div class="row mb-3">
+              <label class="col-sm-2 col-form-label" for="phpclaw-remote-skill-urls">{{ entry_remote_skill_urls }}</label>
+              <div class="col-sm-10">
+                <textarea name="remote_skill_urls" id="phpclaw-remote-skill-urls" rows="3" class="form-control"
+                          placeholder="https://example.com/skills.json">{{ settings.remote_skill_urls|join('\n') }}</textarea>
+                <small class="text-muted">{{ help_remote_skill_urls }}</small>
+              </div>
+            </div>
+
+            <div class="row mb-3">
+              <div class="col-sm-10 offset-sm-2">
+                <button type="button" id="phpclaw-test-conn" class="btn btn-secondary" data-test-url="{{ url_test_connection }}">
+                  <i class="fa fa-plug"></i> Test Connection
+                </button>
+                <span id="phpclaw-test-result" class="pc-test-result"></span>
+              </div>
+            </div>
+
+          </form>
+        </div>
+      </div>
+    </div>
+
+    {% include 'extension/phpclaw/admin/view/template/module/phpclaw_community.twig' %}
+
+  </div>
+</div>
+
+<script src="../extension/phpclaw/admin/view/javascript/phpclaw-admin.js"></script>
+{{ footer }}

@@ -1,0 +1,9 @@
+/vendor/
+/composer.lock
+/.phpbench/
+/.phpunit.result.cache
+/.phpunit.cache/
+/storage/
+/.DS_Store
+/config/reference.php
+/var/

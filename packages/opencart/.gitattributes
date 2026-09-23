@@ -1,0 +1,11 @@
+/vendor                 export-ignore
+/tests                  export-ignore
+/benchmarks             export-ignore
+/.phan                  export-ignore
+/.phpbench              export-ignore
+/.phpunit.result.cache  export-ignore
+/phpunit.xml            export-ignore
+/phpstan.neon           export-ignore
+/phpbench.json          export-ignore
+/pint.json              export-ignore
+/composer.lock          export-ignore

@@ -1,0 +1,114 @@
+name: phpClaw Joomla
+
+on:
+  push:
+    branches: [0.x]
+    paths:
+      - 'packages/joomla/**'
+      - '!packages/joomla/**.md'
+      - '.github/workflows/joomla.yml'
+      - '.github/workflows/_adapter-quality.yml'
+  pull_request:
+    paths:
+      - 'packages/joomla/**'
+      - '!packages/joomla/**.md'
+      - '.github/workflows/joomla.yml'
+      - '.github/workflows/_adapter-quality.yml'
+  workflow_dispatch:
+
+
+concurrency:
+  group: joomla-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    uses: ./.github/workflows/_adapter-quality.yml
+    with:
+      adapter: joomla
+      is_cms: true
+      php_versions: '["8.1","8.2","8.3","8.4"]'
+
+  unit-tests:
+    name: Unit Tests · PHP ${{ matrix.php }} · Joomla CMS ${{ matrix.joomla.cms }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    strategy:
+      fail-fast: false
+      matrix:
+        php: ['8.1', '8.2', '8.3', '8.4']
+        joomla:
+          # Joomla CMS major version -> the joomla/console+database+di framework
+          # version it actually bundles. These do NOT track the CMS version number
+          # (CMS 4.x ships framework 2.x, CMS 5.x ships 3.x, CMS 6.x ships 4.x) —
+          # verified against joomla/joomla-cms's own composer.json per branch/tag.
+          - cms: '4'
+            fw: '^2.0'
+          - cms: '5'
+            fw: '^3.0'
+          - cms: '6'
+            fw: '^4.0'
+
+    defaults:
+      run:
+        working-directory: packages/joomla
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up PHP ${{ matrix.php }}
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          extensions: curl, json, mbstring
+          coverage: none
+
+      # phpbench pins newer transitive deps (e.g. symfony/console, jsonmapper)
+      # that conflict with joomla/console 2.x (Joomla CMS 4's framework version) — this
+      # job only runs phpunit, so drop the analysis-only tools before the version swap.
+      - name: Remove analysis-only dev deps
+        run: composer remove --dev phpbench/phpbench --no-update
+
+      - name: Require Joomla ${{ matrix.joomla.fw }} (CMS ${{ matrix.joomla.cms }})
+        run: |
+          composer require \
+            "joomla/console:${{ matrix.joomla.fw }}" \
+            "joomla/database:${{ matrix.joomla.fw }}" \
+            "joomla/di:${{ matrix.joomla.fw }}" \
+            --no-update
+
+      - name: Install dependencies
+        run: composer install --prefer-dist --no-interaction --ignore-platform-req=php
+
+      - name: Run unit tests
+        run: composer test
+
+  coverage:
+    name: Coverage (PHP 8.3 · Joomla CMS 6)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: unit-tests
+
+    defaults:
+      run:
+        working-directory: packages/joomla
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up PHP 8.3 with Xdebug
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: curl, json, mbstring, xdebug
+          coverage: xdebug
+
+      - name: Require Joomla framework ^4.0 (CMS 6)
+        run: composer require "joomla/console:^4.0" "joomla/database:^4.0" "joomla/di:^4.0" --no-update
+
+      - name: Install dependencies
+        run: composer install --prefer-dist --no-interaction
+
+      - name: Run tests with coverage
+        run: composer test:coverage

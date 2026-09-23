@@ -1,0 +1,92 @@
+services:
+
+  logger.channel.phpclaw:
+    parent: logger.channel_base
+    arguments: ['phpclaw']
+
+  phpclaw.registrar:
+    class: PhpClaw\Drupal\PhpClawRegistrar
+    arguments:
+      - '@config.factory'
+      - '@database'
+      - '@cache.default'
+      - '@datetime.time'
+      - '@service_container'
+      - '@event_dispatcher'
+      - '@logger.channel.phpclaw'
+    calls:
+      - [boot, []]
+    public: true
+
+  phpclaw.agent_context:
+    class: PhpClaw\Drupal\Service\DrupalAgentContext
+    arguments:
+      - '@config.factory'
+      - '@phpclaw.registrar'
+      - '@database'
+      - '@entity_type.manager'
+      - '@module_handler'
+      - '@extension.list.module'
+      - '@state'
+      - '@queue'
+      - '@plugin.manager.queue_worker'
+      - '@datetime.time'
+    public: true
+
+  phpclaw.agent:
+    class: PhpClaw\Claw
+    factory: ['PhpClaw\Drupal\PhpClawServiceFactory', 'create']
+    arguments:
+      - '@phpclaw.agent_context'
+    public: true
+
+  phpclaw.agent.chat:
+    class: PhpClaw\Claw
+    factory: ['PhpClaw\Drupal\PhpClawServiceFactory', 'createChat']
+    arguments:
+      - '@phpclaw.agent_context'
+    public: true
+
+  phpclaw.memory.database:
+    class: PhpClaw\Drupal\Memory\DrupalDbMemory
+    arguments:
+      - '@database'
+      - '@datetime.time'
+      - '@logger.channel.phpclaw'
+    public: true
+
+  phpclaw.memory.conversation:
+    class: PhpClaw\Drupal\Memory\DrupalDbConversationMemory
+    factory: ['PhpClaw\Drupal\Memory\DrupalDbConversationMemory', 'createScoped']
+    arguments:
+      - '@database'
+      - '@config.factory'
+      - '@logger.channel.phpclaw'
+    public: true
+
+  phpclaw.memory.router:
+    class: PhpClaw\Drupal\Memory\DrupalDbRouterMemory
+    arguments:
+      - '@phpclaw.memory.conversation'
+      - '@phpclaw.memory.database'
+    public: true
+
+  phpclaw.memory.cache:
+    class: PhpClaw\Drupal\Memory\CacheMemory
+    arguments:
+      - '@cache.default'
+      - '@datetime.time'
+      - '@lock'
+    public: true
+
+  phpclaw.admin.about_controller:
+    class: PhpClaw\Drupal\Controller\Admin\PhpClawAboutController
+    public: true
+
+
+  phpclaw.api_route_subscriber:
+    class: PhpClaw\Drupal\Routing\PhpClawApiRouteSubscriber
+    arguments:
+      - '@config.factory'
+    tags:
+      - { name: event_subscriber }

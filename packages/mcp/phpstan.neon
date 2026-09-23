@@ -1,0 +1,8 @@
+parameters:
+    level: 5
+    phpVersion: 80100
+    paths:
+        - src
+    scanFiles:
+        - stubs/framework-bridges.stub
+    treatPhpDocTypesAsCertain: false

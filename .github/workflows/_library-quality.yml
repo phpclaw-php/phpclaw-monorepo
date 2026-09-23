@@ -1,0 +1,440 @@
+name: Library Quality (reusable)
+
+# Reusable quality checks for phpClaw libraries (core, cloud, mcp).
+
+on:
+  workflow_call:
+    inputs:
+      library:
+        description: 'Library package folder under packages/ (core, cloud, mcp)'
+        required: true
+        type: string
+      php_versions:
+        description: 'JSON array of PHP versions for the test matrix.'
+        required: false
+        default: '["8.2","8.3","8.4"]'
+        type: string
+      coverage_php:
+        description: 'PHP version used for coverage / scans.'
+        required: false
+        default: '8.3'
+        type: string
+      coverage_min:
+        description: 'Minimum line-coverage percentage.'
+        required: false
+        default: 80
+        type: number
+
+permissions:
+  contents: read
+
+
+jobs:
+  # =========================================================================
+  # 1) Unit tests
+  # =========================================================================
+  tests:
+    name: Unit Tests · PHP ${{ matrix.php }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        php: ${{ fromJSON(inputs.php_versions) }}
+    defaults:
+      run:
+        working-directory: packages/${{ inputs.library }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Set up PHP ${{ matrix.php }}
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          extensions: curl, json, mbstring
+          coverage: none
+      - name: Install dependencies
+        run: composer install --prefer-dist --no-interaction --no-progress --ignore-platform-req=php+
+      - name: Run unit tests
+        run: |
+          if grep -qs 'testsuite name="Unit"' phpunit.xml phpunit.xml.dist; then
+            vendor/bin/phpunit --testsuite=Unit --no-coverage
+          else
+            composer test
+          fi
+
+  # =========================================================================
+  # 2) Coverage (report-only)
+  # =========================================================================
+  coverage:
+    name: Coverage (>= ${{ inputs.coverage_min }}%)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: tests
+    defaults:
+      run:
+        working-directory: packages/${{ inputs.library }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Set up PHP ${{ inputs.coverage_php }} + Xdebug
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ inputs.coverage_php }}
+          extensions: curl, json, mbstring, xdebug
+          coverage: xdebug
+      - name: Install dependencies
+        run: composer install --prefer-dist --no-interaction --no-progress --ignore-platform-req=php+
+      - name: Run tests with coverage
+        run: |
+          if [ ! -f phpunit.xml ] && [ ! -f phpunit.xml.dist ]; then
+            echo "No phpunit config — skipping coverage."; exit 0
+          fi
+          vendor/bin/phpunit --testsuite=Unit --coverage-clover=coverage.xml || \
+            vendor/bin/phpunit --coverage-clover=coverage.xml
+      - name: Enforce coverage threshold (report-only)
+        continue-on-error: true
+        run: |
+          [ -f coverage.xml ] || { echo "No coverage.xml produced — skipping."; exit 0; }
+          MIN=${{ inputs.coverage_min }}
+          php -r '
+            $min = (float) $argv[1];
+            $xml = simplexml_load_file("coverage.xml");
+            $m = $xml->project->metrics;
+            $cov = (int) $m["coveredstatements"];
+            $tot = (int) $m["statements"];
+            if ($tot === 0) { echo "No statements found\n"; exit(0); }
+            $pct = $cov / $tot * 100;
+            printf("%.1f%% coverage (min %.0f%%)\n", $pct, $min);
+            if ($pct < $min) { echo "FAIL: below threshold\n"; exit(1); }
+          ' "$MIN"
+
+  # =========================================================================
+  # 3) Static analysis — PHPStan / composer audit (report-only)
+  # =========================================================================
+  static-analysis:
+    name: Static Analysis
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: tests
+    defaults:
+      run:
+        working-directory: packages/${{ inputs.library }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ inputs.coverage_php }}
+          extensions: curl, json, mbstring
+          coverage: none
+      - name: Install dependencies
+        run: composer install --prefer-dist --no-interaction --no-progress --ignore-platform-req=php+
+      - name: PHPStan
+        run: |
+          if [ -f phpstan.neon ] || [ -f phpstan.neon.dist ]; then
+            vendor/bin/phpstan analyse --no-progress
+          else
+            echo "No phpstan config — skipping."
+          fi
+      - name: Code style (Pint)
+        run: vendor/bin/pint --test
+
+      - name: composer audit (report-only)
+        continue-on-error: true
+        run: composer audit || echo "composer audit reported advisories — triage prod vs dev-only."
+
+  # =========================================================================
+  # 4) Docblock on every function (named functions/methods; closures + attributes handled)
+  # =========================================================================
+  docblocks:
+    name: Docblock on every function
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ inputs.coverage_php }}
+          coverage: none
+      - name: Scan
+        env:
+          LIB: ${{ inputs.library }}
+        run: |
+          php -r '
+            $root="packages/".getenv("LIB");
+            if(!is_dir($root)){ fwrite(STDERR,"::error::package $root not found\n"); exit(1); }
+            $it=new RecursiveIteratorIterator(new RecursiveDirectoryIterator($root,FilesystemIterator::SKIP_DOTS));
+            $out=[];
+            foreach($it as $fi){
+              if($fi->getExtension()!=="php") continue;
+              $p=$fi->getPathname();
+              if(strpos($p,"/vendor/")!==false) continue;
+              if(preg_match("#/(tests?|Tests|benchmarks)/#",$p)) continue;
+              $toks=token_get_all(file_get_contents($p));
+              $ld=false; $n=count($toks);
+              for($i=0;$i<$n;$i++){
+                $t=$toks[$i];
+                if(is_array($t)){
+                  if($t[0]===T_DOC_COMMENT){$ld=true;continue;}
+                  if($t[0]===T_ATTRIBUTE){ $depth=1;$i++; while($i<$n && $depth>0){ $s=is_array($toks[$i])?$toks[$i][1]:$toks[$i]; $depth+=substr_count($s,"[")-substr_count($s,"]"); $i++; } $i--; continue; }
+                  if(in_array($t[0],[T_WHITESPACE,T_PUBLIC,T_PROTECTED,T_PRIVATE,T_STATIC,T_FINAL,T_ABSTRACT])) continue;
+                  if($t[0]===T_FUNCTION){
+                    $j=$i+1; while(isset($toks[$j])&&is_array($toks[$j])&&$toks[$j][0]===T_WHITESPACE)$j++;
+                    $named=isset($toks[$j])&&is_array($toks[$j])&&$toks[$j][0]===T_STRING;
+                    if($named&&!$ld) $out[]=str_replace($root."/","",$p).":".$t[2]."  ".$toks[$j][1]."()";
+                    $ld=false; continue;
+                  }
+                  $ld=false;
+                } else { $ld=false; }
+              }
+            }
+            if($out){ fwrite(STDERR,"::error::".count($out)." function(s) missing a docblock:\n"); foreach($out as $o) fwrite(STDERR,"    $o\n"); exit(1); }
+            echo "OK — every named function has a docblock\n";
+          '
+
+      - name: Docblock tags complete
+        env:
+          PKGDIR: packages/${{ inputs.library }}
+        run: |
+          OUT="$(php -r '
+            $root=getenv("PKGDIR");
+            if(!is_dir($root)) exit(0);
+            $it=new RecursiveIteratorIterator(new RecursiveDirectoryIterator($root,FilesystemIterator::SKIP_DOTS));
+            foreach($it as $fi){
+              $p=$fi->getPathname();
+              if($fi->getExtension()!=="php") continue;
+              if(strpos($p,"/vendor/")!==false) continue;
+              if(preg_match("#/(tests?|Tests|benchmarks)/#",$p)) continue;
+              $toks=token_get_all(file_get_contents($p)); $n=count($toks); $doc=null; $dl=0;
+              for($i=0;$i<$n;$i++){
+                $t=$toks[$i];
+                if(is_array($t)&&$t[0]===T_DOC_COMMENT){ $doc=$t[1]; $dl=$t[2]; continue; }
+                if(is_array($t)&&in_array($t[0],[T_WHITESPACE,T_PUBLIC,T_PROTECTED,T_PRIVATE,T_STATIC,T_FINAL,T_ABSTRACT,T_COMMENT])) continue;
+                if(is_array($t)&&$t[0]===T_FUNCTION){
+                  $j=$i+1; while(isset($toks[$j])&&is_array($toks[$j])&&$toks[$j][0]===T_WHITESPACE)$j++;
+                  if(!(isset($toks[$j])&&is_array($toks[$j])&&$toks[$j][0]===T_STRING)){ $doc=null; continue; }
+                  $fn=$toks[$j][1];
+                  if($fn==="__construct"||$fn==="__destruct"){ $doc=null; continue; }
+                  $d=0; $sig=[];
+                  for($k=$j;$k<$n;$k++){ $x=$toks[$k]; $s=is_array($x)?$x[1]:$x;
+                    if($s==="("){ $d++; continue; } if($s===")"){ $d--; if($d===0) break; continue; }
+                    if($d===1&&is_array($x)&&$x[0]===T_VARIABLE) $sig[]=ltrim($x[1],chr(36)); }
+                  if($doc!==null){
+                    $tag=[];
+                    foreach(preg_split("/\R/",$doc) as $ln){
+                      $c=ltrim(trim($ln),"* ");
+                      if(strpos($c,"@param")!==0) continue;
+                      $dp=strpos($c,chr(36)); if($dp===false) continue;
+                      $rest=substr($c,$dp+1); $nm="";
+                      for($z=0;$z<strlen($rest);$z++){ $ch=$rest[$z]; if(ctype_alnum($ch)||$ch==="_"){ $nm.=$ch; } else { break; } }
+                      if($nm!=="") $tag[]=$nm;
+                    }
+                    $miss=array_diff($sig,$tag); $extra=array_diff($tag,$sig);
+                    $noret=strpos($doc,"@return")===false;
+                    if($miss) printf("%s:%d %s() missing @param: %s\n",$p,$dl,$fn,implode(", ",$miss));
+                    if($extra) printf("%s:%d %s() @param names a parameter that does not exist: %s\n",$p,$dl,$fn,implode(", ",$extra));
+                    if($noret) printf("%s:%d %s() missing @return\n",$p,$dl,$fn);
+                  }
+                  $doc=null; continue;
+                }
+                if(is_array($t)||!in_array($t,["{","}"])) $doc=null;
+              }
+            }
+          ')"
+          if [ -n "$OUT" ]; then
+            echo "::error::$(echo "$OUT" | wc -l | tr -d " ") docblock(s) with incomplete tags:"
+            echo "$OUT" | sed "s/^/    /"
+            exit 1
+          fi
+          echo "OK: every documented function tags all of its parameters and declares a return"
+
+  # =========================================================================
+  # 5) Static checks — deterministic code-standard greps (library-safe subset)
+  # =========================================================================
+  static-checks:
+    name: Static Checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - name: Set up PHP (for docblock scanner)
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ inputs.coverage_php }}
+          coverage: none
+      - name: Run static checks
+        env:
+          LIB: ${{ inputs.library }}
+        run: |
+          set -uo pipefail
+          PKG="packages/$LIB"
+          [ -d "$PKG" ] || { echo "::error::package $PKG not found"; exit 1; }
+          HARD=0; WARN=0
+          record() {
+            local sev="$1" id="$2" msg="$3" hits="$4"
+            if [ -n "$hits" ]; then
+              if [ "$sev" = "fail" ]; then echo "::error::[$id] $msg"; HARD=$((HARD+1)); else echo "::warning::[$id] $msg"; WARN=$((WARN+1)); fi
+              echo "$hits" | sed 's/^/    /'
+            else echo "  ✓ $id"; fi
+          }
+          SRC_PHP=(--include='*.php')
+          EXCL="--exclude-dir=vendor --exclude-dir=.git --exclude-dir=.github --exclude-dir=coverage --exclude-dir=node_modules --exclude-dir=tests --exclude-dir=Tests --exclude-dir=testing --exclude-dir=benchmarks --exclude=composer.lock --exclude=CHANGELOG.md --exclude=KNOWN_ISSUES.md --exclude=UPGRADING.md --exclude=SECURITY.md"
+
+          echo "== code standards =="
+          # no decorative comment bars (the mechanically detectable slice of the
+          # project's comment-hygiene rule; the rest is caught in review)
+          record fail ascii-divider "decorative comment bar" \
+            "$(grep -rnE "(//|#|--|/\*+|\{#|<!--)[[:space:]]*([-=#*_~]{10,}|──|══|━━)" "$PKG" $EXCL 2>/dev/null)"
+          # commented-out code left behind
+          record fail commented-code "commented-out code" \
+            "$(grep -rnE "^[[:space:]]*//[[:space:]]*(\\\$[a-zA-Z_]|return |if \(|foreach |[A-Z][A-Za-z]*::|use |public |private |protected )" "$PKG" $EXCL "${SRC_PHP[@]}" 2>/dev/null)"
+          # version / history notes belong in the CHANGELOG, not in source
+          record fail history-note "version or history note in a comment" \
+            "$(grep -rniE "^[[:space:]]*//.*(changed in|was previously|used to be|as of v|since v[0-9]|deprecated in|renamed from|formerly|prior to v|TODO|FIXME|HACK|XXX)" "$PKG" $EXCL "${SRC_PHP[@]}" 2>/dev/null)"
+          # consecutive // lines forming a paragraph (published config templates exempt)
+          COMMENT_PARA_HITS="$(php -r '
+            $root=$argv[1];
+            if(!is_dir($root)) exit(0);
+            $it=new RecursiveIteratorIterator(new RecursiveDirectoryIterator($root,FilesystemIterator::SKIP_DOTS));
+            foreach($it as $fi){
+              $p=$fi->getPathname();
+              if($fi->getExtension()!=="php") continue;
+              if(strpos($p,"/vendor/")!==false) continue;
+              if(preg_match("#/(tests?|Tests|benchmarks|config)/#",$p)) continue;
+              $prev=-2;
+              foreach(token_get_all(file_get_contents($p)) as $t){
+                if(!is_array($t)||$t[0]!==T_COMMENT) continue;
+                $txt=trim($t[1]);
+                if(strpos($txt,"//")!==0) continue;
+                $line=$t[2];
+                if($line===$prev+1) printf("%s:%d consecutive // lines forming a paragraph\n",$p,$prev);
+                $prev=$line;
+              }
+            }
+          ' "$PKG")"
+          record fail comment-paragraph "consecutive // lines forming a paragraph" "$COMMENT_PARA_HITS"
+          record fail codecov-ignore "@codeCoverageIgnore annotation" \
+            "$(grep -rn "@codeCoverageIgnore" "$PKG" $EXCL 2>/dev/null)"
+          record fail switch-stmt "switch() found (use match)" \
+            "$(grep -rnE "(^|[[:space:]{};])switch[[:space:]]*\(" "$PKG" $EXCL "${SRC_PHP[@]}" 2>/dev/null | grep -E '^[^:]+\.php:[0-9]')"
+          MISSING_STRICT=""
+          while IFS= read -r f; do
+            grep -q "declare(strict_types=1)" "$f" || MISSING_STRICT="${MISSING_STRICT}${f}\n"
+          done < <(find "$PKG" -name '*.php' \
+            -not -path '*/vendor/*' -not -path '*/tests/*' -not -path '*/Tests/*' -not -path '*/testing/*' -not -path '*/benchmarks/*' 2>/dev/null)
+          record fail strict-types "missing declare(strict_types=1)" "$(printf "%b" "$MISSING_STRICT")"
+          record warn final-class "non-final class (review: abstract/base/interface are exempt)" \
+            "$(grep -rnE "^(abstract )?class " "$PKG" $EXCL "${SRC_PHP[@]}" 2>/dev/null | grep -vE "abstract class")"
+
+          echo "== security =="
+          # echo-form only. The adapter file also flags "'key' => $e->getMessage()",
+          # which libraries legitimately use to hand a controlled ToolException /
+          # GuardException message to the model and to HookRegistry::fire payloads.
+          record fail exception-leak "\$e->getMessage() echoed to user output" \
+            "$(grep -rnE "echo[^;]*->getMessage\(\)" "$PKG" $EXCL "${SRC_PHP[@]}" 2>/dev/null | grep -vE -- '->(error|warning|info|debug|notice|critical|log|alert|emergency)\(' | grep -E '^[^:]+\.php:[0-9]')"
+          # no eval() - exclude quoted string literals (e.g. a forbidden-calls denylist
+          # entry like 'eval(') which reference the text but never invoke it
+          record fail eval-call "eval() call" \
+            "$(grep -rnE "\beval\s*\(" "$PKG" $EXCL "${SRC_PHP[@]}" 2>/dev/null | grep -vE 'Stub\.php:' | grep -vE "['\"]eval\(" | grep -E '^[^:]+\.php:[0-9]')"
+
+          echo "== dependencies / docs =="
+          record fail no-guzzle "Guzzle dependency (use core RawHttpClient)" \
+            "$(grep -i "guzzle" "$PKG/composer.json" 2>/dev/null)"
+
+          echo "== docblock hygiene =="
+          DOCBLOCK_SUMMARY_HITS="$(php -r '
+            $root=$argv[1];
+            if(!is_dir($root)) exit(0);
+            $it=new RecursiveIteratorIterator(new RecursiveDirectoryIterator($root,FilesystemIterator::SKIP_DOTS));
+            foreach($it as $fi){
+              $p=$fi->getPathname();
+              if($fi->getExtension()!=="php") continue;
+              if(strpos($p,"/vendor/")!==false) continue;
+              if(preg_match("#/(tests?|Tests)/#",$p)) continue;
+              foreach(token_get_all(file_get_contents($p)) as $t){
+                if(!is_array($t)||$t[0]!==T_DOC_COMMENT) continue;
+                $desc=[];
+                foreach(preg_split("/\R/",$t[1]) as $ln){
+                  $c=trim(preg_replace("#^/?\*+/?#","",trim($ln)));
+                  if($c==="") continue;
+                  if($c[0]==="@") break;
+                  $desc[]=$c;
+                }
+                $hdr=0; $cli=false;
+                foreach($desc as $c){
+                  if(strpos($c,"## ")===0) $cli=true;
+                  if(preg_match("#^[A-Z][A-Za-z0-9 /.]*:#",$c)) $hdr++;
+                }
+                if($cli||$hdr>=3) continue;
+                if(count($desc)>2) printf("%s:%d (%d desc lines)\n",$p,$t[2],count($desc));
+              }
+            }
+          ' "$PKG")"
+          record fail docblock-summary "docblock has >2 description lines before first @tag" "$DOCBLOCK_SUMMARY_HITS"
+
+          echo ""
+          echo "==================================================="
+          echo "Static checks: HARD failures=$HARD  WARN=$WARN"
+          echo "==================================================="
+          [ "$HARD" -eq 0 ] || { echo "::error::Static checks gate failed ($HARD hard findings)"; exit 1; }
+
+  # =========================================================================
+  # 6) Packaging — dist cleanliness
+  # =========================================================================
+  packaging:
+    name: Packaging / Dist Cleanliness
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - name: Verify dist cleanliness
+        env:
+          LIB: ${{ inputs.library }}
+        run: |
+          set -uo pipefail
+          PKG="packages/$LIB"
+          [ -d "$PKG" ] || { echo "::error::package $PKG not found"; exit 1; }
+          FAIL=0
+          echo "== dev-junk / OS cruft must not ship =="
+          JUNK="$(find "$PKG" -not -path '*/vendor/*' \( -name '.DS_Store' -o -name 'Thumbs.db' -o -name '*.bak' -o -name '*.orig' -o -name '*.swp' \) 2>/dev/null)"
+          if [ -n "$JUNK" ]; then echo "::error::OS/editor junk in package:"; echo "$JUNK"; FAIL=1; else echo "  ✓ no OS junk"; fi
+          echo "== every *Exception avoids extending a bare PHP built-in (should route through PhpClawException) =="
+          # SqlGuard is intentionally exempt: it's a zero-dependency module designed to ship
+          # standalone as phpclaw/sql-guard (see tests/Unit/SqlGuard/GuardBoundaryTest.php),
+          # so its exception may not import PhpClawException from outside its own namespace.
+          BADEXC="$(grep -rlE "class\s+\w*Exception\b" "$PKG" --exclude-dir=vendor --exclude-dir=tests --exclude-dir=Tests --exclude-dir=SqlGuard --include='*.php' 2>/dev/null \
+            | xargs -r grep -lE "extends\s+\\\\?(Exception|Error|RuntimeException|LogicException|InvalidArgumentException|OutOfBoundsException|OutOfRangeException|DomainException|RangeException|UnexpectedValueException|LengthException|OverflowException|UnderflowException|ErrorException|TypeError|ValueError|JsonException)\b" 2>/dev/null \
+            | grep -v 'PhpClawException\.php$' || true)"
+          if [ -n "$BADEXC" ]; then echo "::warning::Exception class extends a bare PHP built-in instead of the phpClaw hierarchy (review):"; echo "$BADEXC"; fi
+          [ "$FAIL" -eq 0 ] || { echo "::error::packaging gate failed"; exit 1; }
+
+  # =========================================================================
+  # 7) Benchmarks — PHPBench (guarded: only if benchmarks/ exists)
+  # =========================================================================
+  benchmarks:
+    name: Benchmarks (PHPBench)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: tests
+    defaults:
+      run:
+        working-directory: packages/${{ inputs.library }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ inputs.coverage_php }}
+          coverage: none
+      - name: Run benchmarks if present
+        run: |
+          if [ ! -d benchmarks ]; then
+            echo "No benchmarks/ folder — skipping."
+            exit 0
+          fi
+          composer install --prefer-dist --no-interaction --no-progress --ignore-platform-req=php+
+          if [ -x vendor/bin/phpbench ]; then
+            vendor/bin/phpbench run benchmarks --report=default
+          else
+            echo "phpbench not installed as a dev dep — skipping."
+          fi

@@ -1,0 +1,14 @@
+includes:
+    - vendor/mglaman/phpstan-drupal/extension.neon
+
+parameters:
+    level: 5
+    phpVersion: 80100
+    paths:
+        - src
+        - phpclaw.module
+        - phpclaw.install
+    treatPhpDocTypesAsCertain: false
+    scanFiles:
+        - stubs/drush.stub
+        - stubs/drupal_entities.stub

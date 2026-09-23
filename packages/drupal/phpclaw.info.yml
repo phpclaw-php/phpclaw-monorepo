@@ -1,0 +1,7 @@
+name: 'phpClaw AI Agent'
+type: module
+description: 'Universal AI agent engine for Drupal via phpClaw. Run AI agents with drush phpclaw:run "your message".'
+core_version_requirement: ^10 || ^11
+package: 'AI Tools'
+dependencies:
+  - drupal:system (>=10.0)

@@ -1,0 +1,72 @@
+{{ header }}{{ column_left }}
+<div id="content">
+  <div class="page-header pc-page-header">
+    <div class="container-fluid">
+      <h1 class="pc-page-title">🤖 phpClaw</h1>
+    </div>
+  </div>
+
+  <div class="container-fluid pc-subnav-wrap">
+    <div class="pc-subnav">
+      <a href="{{ url_debug }}"     class="btn btn-sm btn-default">💬 Chat</a>
+      <a href="{{ url_analytics }}" class="btn btn-sm btn-primary">📊 Analytics</a>
+      <a href="{{ url_guide }}"     class="btn btn-sm btn-default">📖 Guide</a>
+      {% if can_manage_all %}<a href="{{ url_settings }}"  class="btn btn-sm btn-default">⚙ Settings</a>{% endif %}
+      <a href="{{ url_about }}"     class="btn btn-sm btn-default">ℹ️ About</a>
+    </div>
+  </div>
+
+  <div class="container-fluid">
+
+    <div class="pc-analytics-grid">
+
+      <div class="pc-analytics-card">
+        <div class="pc-analytics-value pc-analytics-value-blue">{{ stats.conversations }}</div>
+        <div class="pc-analytics-label">Conversations</div>
+        <div class="pc-analytics-detail">{% if can_manage_all %}Total stored{% else %}Yours, stored{% endif %}</div>
+      </div>
+
+      <div class="pc-analytics-card">
+        <div class="pc-analytics-value pc-analytics-value-green">{{ stats.messages }}</div>
+        <div class="pc-analytics-label">Messages</div>
+        <div class="pc-analytics-detail">{% if can_manage_all %}All{% else %}Yours{% endif %}, incl. tool-call rows</div>
+      </div>
+
+      <div class="pc-analytics-card">
+        <div class="pc-analytics-value pc-analytics-value-purple">{{ stats.active_24h }}</div>
+        <div class="pc-analytics-label">Active 24h</div>
+        <div class="pc-analytics-detail">{% if can_manage_all %}Conversations{% else %}Your conversations{% endif %} updated in last 24 hours</div>
+      </div>
+
+    </div>
+
+    <div class="pc-community">
+      <div class="pc-community-inner">
+        <h4 class="pc-community-title">
+          Built for the PHP community
+        </h4>
+        <p class="pc-community-text">
+          phpClaw is open source under the MIT license.
+        </p>
+        <p class="pc-community-text-last">
+          One engine for the entire PHP ecosystem.
+        </p>
+        <div class="pc-community-buttons">
+          <a href="https://github.com/phpclaw-php/phpclaw-monorepo" target="_blank" rel="noopener" class="pc-btn-github">
+            &#9733; Star on GitHub
+          </a>
+          <a href="https://packagist.org/packages/phpclaw/phpclaw" target="_blank" rel="noopener" class="pc-btn-packagist">
+            &#128230; View on Packagist
+          </a>
+        </div>
+        <div class="pc-community-footer">
+          <span class="pc-community-cta">Need more? phpClaw Enterprise</span>
+          <a href="https://phpclaw.ai/enterprise" target="_blank" rel="noopener" class="pc-community-link">&rarr; phpclaw.ai/enterprise</a>
+          <span class="pc-community-license">MIT License, Open Source</span>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+{{ footer }}

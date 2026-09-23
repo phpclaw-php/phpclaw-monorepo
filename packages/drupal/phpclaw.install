@@ -1,0 +1,323 @@
+<?php
+
+/**
+ * @file
+ * Install, update, and uninstall functions for the phpclaw module.
+ */
+
+declare(strict_types=1);
+
+/**
+ * Implements hook_uninstall().
+ *
+ * @return void
+ */
+function phpclaw_uninstall(): void
+{
+    \Drupal::queue('phpclaw_agent')->deleteQueue();
+
+    $fileStorage = DRUPAL_ROOT . '/../storage/phpclaw';
+    if (is_dir($fileStorage)) {
+        \Drupal::service('file_system')->deleteRecursive($fileStorage);
+    }
+}
+
+/**
+ * Implements hook_schema().
+ *
+ * @return array<string, array<string, mixed>> Table definitions keyed by table name.
+ */
+function phpclaw_schema(): array
+{
+    return [
+        'phpclaw_conversations' => [
+            'description' => 'PhpClaw conversation records.',
+            'fields'      => [
+                'id'         => ['type' => 'char',    'length' => 26,  'not null' => true],
+                'namespace'  => ['type' => 'varchar', 'length' => 100, 'not null' => true, 'default' => 'default'],
+                'user_id'    => ['type' => 'int', 'unsigned' => true, 'not null' => true, 'default' => 0, 'description' => 'Owning Drupal user ID. 0 means no logged-in user, e.g. a Drush run.'],
+                'title'      => ['type' => 'varchar', 'length' => 255, 'not null' => false],
+                'metadata'   => ['type' => 'text',    'size' => 'big', 'not null' => false],
+                'created_at' => ['type' => 'int', 'unsigned' => true, 'not null' => true],
+                'updated_at' => ['type' => 'int', 'unsigned' => true, 'not null' => true],
+            ],
+            'primary key' => ['id'],
+            'indexes'     => [
+                'namespace_created'      => ['namespace', 'created_at'],
+                'user_namespace_updated' => ['user_id', 'namespace', 'updated_at'],
+            ],
+        ],
+        'phpclaw_messages' => [
+            'description' => 'PhpClaw message records.',
+            'fields'      => [
+                'id'              => ['type' => 'char',    'length' => 26,   'not null' => true],
+                'conversation_id' => ['type' => 'char',    'length' => 26,   'not null' => true],
+                'role'            => ['type' => 'varchar', 'length' => 20,   'not null' => true],
+                'content'         => ['type' => 'text',    'size' => 'big',  'not null' => false],
+                'tool_name'       => ['type' => 'varchar', 'length' => 255,  'not null' => false],
+                'tool_input'      => ['type' => 'text',    'size' => 'big',  'not null' => false],
+                'created_at'      => ['type' => 'int',     'unsigned' => true, 'not null' => true],
+            ],
+            'primary key' => ['id'],
+            'indexes'     => [
+                'conv_created' => ['conversation_id', 'created_at'],
+            ],
+        ],
+        'phpclaw_memory' => [
+            'description' => 'PhpClaw persistent memory store.',
+            'fields'      => [
+                'id'         => ['type' => 'char',    'length' => 26,  'not null' => true],
+                'namespace'  => ['type' => 'varchar', 'length' => 100, 'not null' => true, 'default' => 'default'],
+                'lookup_key' => ['type' => 'varchar', 'length' => 255, 'not null' => true],
+                'value'      => ['type' => 'text',    'size' => 'big', 'not null' => true],
+                'expires_at' => ['type' => 'int',     'unsigned' => true, 'not null' => false],
+                'created_at' => ['type' => 'int',     'unsigned' => true, 'not null' => true],
+                'updated_at' => ['type' => 'int',     'unsigned' => true, 'not null' => true],
+            ],
+            'primary key' => ['id'],
+            'unique keys' => [
+                'namespace_key' => ['namespace', 'lookup_key'],
+            ],
+            'indexes' => [
+                'namespace_expires' => ['namespace', 'expires_at'],
+            ],
+        ],
+    ];
+}
+
+/**
+ * Migrates cloud_disable config from legacy string to sequence.
+ *
+ * @return string
+ */
+function phpclaw_update_8001(): string
+{
+    $config = \Drupal::configFactory()->getEditable('phpclaw.settings');
+    $val    = $config->get('cloud_disable');
+
+    if (is_string($val)) {
+        $trimmed = trim($val);
+        $items   = $trimmed !== ''
+            ? array_values(array_filter(array_map('trim', explode(',', $trimmed))))
+            : [];
+        $config->set('cloud_disable', $items)->save(true);
+    }
+
+    return 'Migrated phpclaw.settings cloud_disable from string to sequence.';
+}
+
+/**
+ * Replaces a pre-hardening shell_allowlist (containing php or composer) with core's canonical default.
+ *
+ * @return string
+ */
+function phpclaw_update_8002(): string
+{
+    $config = \Drupal::configFactory()->getEditable('phpclaw.settings');
+    $val    = $config->get('shell_allowlist');
+
+    if (is_array($val) && (in_array('php', $val, true) || in_array('composer', $val, true))) {
+        $config->set('shell_allowlist', \PhpClaw\Config\ToolConfig::DEFAULT_SHELL_ALLOWLIST)->save(true);
+
+        return 'Migrated phpclaw.settings shell_allowlist off the pre-hardening php/composer entries to the core canonical default.';
+    }
+
+    return 'No migration needed: shell_allowlist does not contain php or composer.';
+}
+
+/**
+ * Migrates date columns from VARCHAR(20) strings to INT UNSIGNED Unix timestamps.
+ *
+ * @return string
+ */
+function phpclaw_update_8003(): string
+{
+    $db     = \Drupal::database();
+    $schema = $db->schema();
+
+    $schema->addField('phpclaw_conversations', 'created_at_int', [
+        'type' => 'int', 'unsigned' => true, 'not null' => true, 'default' => 0,
+    ]);
+    $rows = $db->query('SELECT id, created_at FROM {phpclaw_conversations}')->fetchAll();
+    foreach ($rows as $row) {
+        $ts = ($row->created_at !== null && $row->created_at !== '')
+            ? max(0, (int) strtotime((string) $row->created_at))
+            : 0;
+        $db->update('phpclaw_conversations')
+            ->fields(['created_at_int' => $ts])
+            ->condition('id', $row->id)
+            ->execute();
+    }
+
+    $schema->addField('phpclaw_conversations', 'updated_at_int', [
+        'type' => 'int', 'unsigned' => true, 'not null' => true, 'default' => 0,
+    ]);
+    $rows = $db->query('SELECT id, updated_at FROM {phpclaw_conversations}')->fetchAll();
+    foreach ($rows as $row) {
+        $ts = ($row->updated_at !== null && $row->updated_at !== '')
+            ? max(0, (int) strtotime((string) $row->updated_at))
+            : 0;
+        $db->update('phpclaw_conversations')
+            ->fields(['updated_at_int' => $ts])
+            ->condition('id', $row->id)
+            ->execute();
+    }
+
+    $schema->dropIndex('phpclaw_conversations', 'namespace_created');
+    $schema->dropField('phpclaw_conversations', 'created_at');
+    $schema->dropField('phpclaw_conversations', 'updated_at');
+    $schema->changeField('phpclaw_conversations', 'created_at_int', 'created_at', [
+        'type' => 'int', 'unsigned' => true, 'not null' => true,
+    ]);
+    $schema->changeField('phpclaw_conversations', 'updated_at_int', 'updated_at', [
+        'type' => 'int', 'unsigned' => true, 'not null' => true,
+    ]);
+    $schema->addIndex('phpclaw_conversations', 'namespace_created', ['namespace', 'created_at'], [
+        'fields' => [
+            'namespace'  => ['type' => 'varchar', 'length' => 100, 'not null' => true],
+            'created_at' => ['type' => 'int',     'unsigned' => true, 'not null' => true],
+        ],
+    ]);
+
+    $schema->addField('phpclaw_messages', 'created_at_int', [
+        'type' => 'int', 'unsigned' => true, 'not null' => true, 'default' => 0,
+    ]);
+    $rows = $db->query('SELECT id, created_at FROM {phpclaw_messages}')->fetchAll();
+    foreach ($rows as $row) {
+        $ts = ($row->created_at !== null && $row->created_at !== '')
+            ? max(0, (int) strtotime((string) $row->created_at))
+            : 0;
+        $db->update('phpclaw_messages')
+            ->fields(['created_at_int' => $ts])
+            ->condition('id', $row->id)
+            ->execute();
+    }
+
+    $schema->dropIndex('phpclaw_messages', 'conv_created');
+    $schema->dropField('phpclaw_messages', 'created_at');
+    $schema->changeField('phpclaw_messages', 'created_at_int', 'created_at', [
+        'type' => 'int', 'unsigned' => true, 'not null' => true,
+    ]);
+    $schema->addIndex('phpclaw_messages', 'conv_created', ['conversation_id', 'created_at'], [
+        'fields' => [
+            'conversation_id' => ['type' => 'char', 'length' => 26, 'not null' => true],
+            'created_at'      => ['type' => 'int',  'unsigned' => true, 'not null' => true],
+        ],
+    ]);
+
+    $schema->addField('phpclaw_memory', 'created_at_int', [
+        'type' => 'int', 'unsigned' => true, 'not null' => true, 'default' => 0,
+    ]);
+    $rows = $db->query('SELECT id, created_at FROM {phpclaw_memory}')->fetchAll();
+    foreach ($rows as $row) {
+        $ts = ($row->created_at !== null && $row->created_at !== '')
+            ? max(0, (int) strtotime((string) $row->created_at))
+            : 0;
+        $db->update('phpclaw_memory')
+            ->fields(['created_at_int' => $ts])
+            ->condition('id', $row->id)
+            ->execute();
+    }
+
+    $schema->dropField('phpclaw_memory', 'created_at');
+    $schema->changeField('phpclaw_memory', 'created_at_int', 'created_at', [
+        'type' => 'int', 'unsigned' => true, 'not null' => true,
+    ]);
+
+    $schema->addField('phpclaw_memory', 'updated_at_int', [
+        'type' => 'int', 'unsigned' => true, 'not null' => true, 'default' => 0,
+    ]);
+    $rows = $db->query('SELECT id, updated_at FROM {phpclaw_memory}')->fetchAll();
+    foreach ($rows as $row) {
+        $ts = ($row->updated_at !== null && $row->updated_at !== '')
+            ? max(0, (int) strtotime((string) $row->updated_at))
+            : 0;
+        $db->update('phpclaw_memory')
+            ->fields(['updated_at_int' => $ts])
+            ->condition('id', $row->id)
+            ->execute();
+    }
+
+    $schema->dropField('phpclaw_memory', 'updated_at');
+    $schema->changeField('phpclaw_memory', 'updated_at_int', 'updated_at', [
+        'type' => 'int', 'unsigned' => true, 'not null' => true,
+    ]);
+
+    $schema->addField('phpclaw_memory', 'expires_at_int', [
+        'type' => 'int', 'unsigned' => true, 'not null' => false,
+    ]);
+    $rows = $db->query('SELECT id, expires_at FROM {phpclaw_memory}')->fetchAll();
+    foreach ($rows as $row) {
+        if ($row->expires_at === null || $row->expires_at === '') {
+            continue;
+        }
+        $ts = (int) strtotime((string) $row->expires_at);
+        if ($ts > 0) {
+            $db->update('phpclaw_memory')
+                ->fields(['expires_at_int' => $ts])
+                ->condition('id', $row->id)
+                ->execute();
+        }
+    }
+
+    $schema->dropIndex('phpclaw_memory', 'namespace_expires');
+    $schema->dropField('phpclaw_memory', 'expires_at');
+    $schema->changeField('phpclaw_memory', 'expires_at_int', 'expires_at', [
+        'type' => 'int', 'unsigned' => true, 'not null' => false,
+    ]);
+    $schema->addIndex('phpclaw_memory', 'namespace_expires', ['namespace', 'expires_at'], [
+        'fields' => [
+            'namespace'  => ['type' => 'varchar', 'length' => 100, 'not null' => true],
+            'expires_at' => ['type' => 'int',     'unsigned' => true, 'not null' => false],
+        ],
+    ]);
+
+    return 'Migrated phpclaw date columns from VARCHAR(20) to INT UNSIGNED Unix timestamps across phpclaw_conversations, phpclaw_messages, and phpclaw_memory.';
+}
+
+/**
+ * Adds the conversation ownership column, defaulting existing rows to the unowned sentinel 0.
+ *
+ * @return string
+ */
+function phpclaw_update_8004(): string
+{
+    $schema = \Drupal::database()->schema();
+
+    $fieldSpec = [
+        'type' => 'int',
+        'unsigned' => true,
+        'not null' => true,
+        'default' => 0,
+        'description' => 'Owning Drupal user ID. 0 means no logged-in user, e.g. a Drush run.',
+    ];
+
+    $added = false;
+
+    if (! $schema->fieldExists('phpclaw_conversations', 'user_id')) {
+        $schema->addField('phpclaw_conversations', 'user_id', $fieldSpec);
+        $added = true;
+    }
+
+    if (! $schema->indexExists('phpclaw_conversations', 'user_namespace_updated')) {
+        $schema->addIndex(
+            'phpclaw_conversations',
+            'user_namespace_updated',
+            ['user_id', 'namespace', 'updated_at'],
+            [
+                'fields' => [
+                    'user_id' => $fieldSpec,
+                    'namespace' => ['type' => 'varchar', 'length' => 100, 'not null' => true],
+                    'updated_at' => ['type' => 'int', 'unsigned' => true, 'not null' => true],
+                ],
+            ],
+        );
+        $added = true;
+    }
+
+    if (! $added) {
+        return 'phpclaw_conversations.user_id and its index are already present, nothing to do.';
+    }
+
+    return 'Added phpclaw_conversations.user_id (default 0) and the user_namespace_updated index.';
+}

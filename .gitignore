@@ -1,0 +1,37 @@
+# Composer
+/vendor/
+/packages/*/vendor/
+/packages/*/composer.lock
+
+# PHPUnit
+/packages/*/.phpunit.cache/
+/packages/*/.phpunit.result.cache
+/.phpunit.cache/
+coverage/
+
+# IDE
+/.idea/
+/.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# phpClaw runtime storage
+/storage/phpclaw/
+/packages/*/storage/
+
+# Logs
+*.log
+
+# Env / secrets
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+
+# Internal adapter templates (not for OSS consumers)
+/packages/core/templates/

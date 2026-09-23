@@ -1,0 +1,10 @@
+{
+    "name": "phpClaw AI Agent",
+    "description": "Universal AI agent engine for OpenCart. 10 built-in tools (8 e-commerce, plus database and log), admin panel, CLI runner, and multi-provider AI support. PERMISSIONS: any user group granted access to the phpClaw module can, through the agent, read products, categories, manufacturers, customers, orders, coupons, reviews and shipping configuration. That is broader than what those groups can reach in the OpenCart admin UI, because the tools do not re-check each subject's own route. Treat the phpClaw grant as equivalent to read access across the store, and review which groups hold it.",
+    "code": "phpclaw",
+    "version": "1.0.0",
+    "author": "phpClaw",
+    "link": "https://phpclaw.ai",
+    "extension_id": "",
+    "extension_download_id": ""
+}

@@ -1,0 +1,66 @@
+#!/usr/bin/env php
+<?php
+
+declare(strict_types=1);
+
+/**
+ * phpclaw-discover: eagerly build phpClaw's attribute-discovery cache.
+ */
+
+$args = array_slice($argv, 1);
+
+if (in_array('--help', $args, true) || in_array('-h', $args, true)) {
+    fwrite(STDOUT, "Usage: phpclaw-discover [-v|--verbose]\n");
+    fwrite(STDOUT, "Rebuilds vendor/composer/phpclaw-discovery.php from PhpClaw\\* classes.\n");
+    exit(0);
+}
+
+$verbose = in_array('-v', $args, true) || in_array('--verbose', $args, true);
+
+$autoloadCandidates = [
+    __DIR__ . '/../vendor/autoload.php',
+    __DIR__ . '/../../../autoload.php',
+    __DIR__ . '/../../../../autoload.php',
+];
+
+$autoload = null;
+foreach ($autoloadCandidates as $path) {
+    if (is_file($path)) {
+        $autoload = $path;
+        break;
+    }
+}
+
+if ($autoload === null) {
+    fwrite(STDERR, "phpclaw-discover: cannot locate vendor/autoload.php\n");
+    fwrite(STDERR, "Run `composer install` in your project root before invoking this script.\n");
+    exit(2);
+}
+
+require $autoload;
+
+if (!class_exists(\PhpClaw\AutoDiscovery\DiscoveryCache::class)) {
+    fwrite(STDERR, "phpclaw-discover: PhpClaw\\AutoDiscovery\\DiscoveryCache not autoloadable.\n");
+    exit(2);
+}
+
+$cachePath = \PhpClaw\AutoDiscovery\DiscoveryCache::defaultPath();
+
+if ($cachePath === '') {
+    fwrite(STDERR, "phpclaw-discover: cannot locate vendor/composer/ directory for the cache.\n");
+    exit(2);
+}
+
+$start = microtime(true);
+$scan  = \PhpClaw\AutoDiscovery\DiscoveryCache::rebuild($cachePath);
+$ms    = (int) round((microtime(true) - $start) * 1000);
+
+if ($verbose) {
+    fwrite(STDOUT, "phpclaw-discover: cache written to {$cachePath}\n");
+    foreach ($scan as $bucket => $entries) {
+        fwrite(STDOUT, sprintf("  %-10s %d entries\n", $bucket, count($entries)));
+    }
+    fwrite(STDOUT, "Scan completed in {$ms}ms.\n");
+}
+
+exit(0);

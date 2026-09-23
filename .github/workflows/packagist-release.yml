@@ -1,0 +1,257 @@
+name: Publish Composer Packages (Packagist)
+
+# Framework/composer adapters (Laravel, Symfony, Magento, Drupal) + their deps (core, cloud)
+# publish to Packagist via read-only split mirrors under phpclaw-php/*.
+# COMPLETELY SEPARATE from the CMS release.yml (ZIP pipeline) — CMS is untouched.
+
+on:
+  push:
+    branches: [0.x]
+    paths:
+      - 'packages/**'
+
+# Serialize so concurrent pushes never race on the mirror repos.
+concurrency:
+  group: packagist-release
+  cancel-in-progress: false
+
+# contents:write is used ONLY to push the `<pkg>-v<ver>` namespaced tags to the
+# monorepo (auto-bump's source of truth). Master is never committed to.
+permissions:
+  contents: write
+  pull-requests: read
+
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      # Only the tags this workflow writes, so the CMS run's tags on the same commit
+      # can never be mistaken for the last Composer release.
+      RELEASE_PACKAGES: core,cloud,mcp,laravel,symfony,drupal,magento
+    steps:
+      - name: Publish only when the release pull request is merged
+        id: gate
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          for attempt in 1 2 3 4 5; do
+            REF=$(gh api "repos/${{ github.repository }}/commits/${{ github.sha }}/pulls" \
+              --jq '.[0].head.ref // ""' 2>/dev/null || true)
+            [ -n "$REF" ] && break
+            echo "No pull request linked to this commit yet (attempt $attempt); waiting."
+            sleep 5
+          done
+          echo "Pushed commit comes from branch: ${REF:-none (direct push)}"
+          if [ "$REF" = "release/${{ github.ref_name }}" ]; then
+            echo "release=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "release=false" >> "$GITHUB_OUTPUT"
+            echo "Not the release pull request: the Composer packages publish when it is merged."
+          fi
+
+      - name: Checkout monorepo into phpclaw/
+        if: steps.gate.outputs.release == 'true'
+        uses: actions/checkout@v7
+        with:
+          path: phpclaw
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Checkout private build scripts into scripts/
+        if: steps.gate.outputs.release == 'true'
+        uses: actions/checkout@v7
+        with:
+          repository: erakashpatel/clawscripts
+          token: ${{ secrets.BUILD_TOKEN }}
+          path: scripts
+
+      - name: Set up PHP
+        if: steps.gate.outputs.release == 'true'
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          tools: composer
+
+      - name: Plan — changed packages + bump level
+        if: steps.gate.outputs.release == 'true'
+        id: plan
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          HEAD_SHA: ${{ github.sha }}
+          RELEASE_LINE: ${{ github.ref_name }}
+        run: |
+          tag() { git -C phpclaw tag -l "$1-v*" | sed "s/^$1-v//" | sort -V | tail -1; }
+          for pkg in core cloud mcp joomla wordpress prestashop opencart laravel symfony drupal magento; do
+            export "CURRENT_$(echo "$pkg" | tr '[:lower:]' '[:upper:]')=$(tag "$pkg")"
+          done
+          php scripts/release-notes.php collect "${{ runner.temp }}/commits.json"
+          export COMMITS_FILE="${{ runner.temp }}/commits.json"
+          FILES=$(php scripts/release-notes.php files)
+          LEVEL=$(php scripts/release-notes.php level)
+          # One level per package, from the commits that reach it since its own last release.
+          # LEVEL stays for the line guards below, which are about the whole run, not one package.
+          LEVELS=$(php scripts/release-notes.php levels)
+          LABELS="range"
+          echo "Range files: $(echo "$FILES" | wc -l | tr -d ' ') path(s), level=$LEVEL"
+          if [ "$LEVEL" != patch ] && [ "$GITHUB_REF_NAME" = "0.x" ]; then
+            echo "::error::release:$LEVEL is not allowed on 0.x: the 0.x line ships patches only."
+            echo "Below 1.0 a minor is a breaking change, so all eleven packages would have to move together."
+            echo "Features land as patches until 1.0.0. Remove the label, then re-run this workflow."
+            exit 1
+          fi
+          if [ "$LEVEL" = major ] && ! echo "$FILES" | grep -q '^packages/core/'; then
+            echo "::error::release:major is only allowed for changes to packages/core/."
+            echo "This change touches only: $(echo "$FILES" | sed -n 's#^packages/\([^/]*\)/.*#\1#p' | sort -u | tr '\n' ' ')"
+            echo "Remove the release:major label from that PR, then re-run this workflow."
+            echo "Adapter, cloud and mcp versions never change their first number on their own."
+            exit 1
+          fi
+          if [ "$LEVEL" = major ]; then
+            LINE="${GITHUB_REF_NAME%.x}"
+            CORE_NOW=$(git -C phpclaw tag -l 'core-v*' | sed 's/^core-v//' | sort -V | tail -1)
+            CORE_MAJOR="${CORE_NOW%%.*}"
+            if ! [[ "$LINE" =~ ^[0-9]+$ ]] || [ "${CORE_MAJOR:-0}" -ge "$LINE" ]; then
+              echo "::error::release:major is not allowed on $GITHUB_REF_NAME: majors go on a new line."
+              echo "A maintainer opens the $(( ${CORE_MAJOR:-0} + 1 )).x line from $GITHUB_REF_NAME and moves all eleven packages to that major in its first pull request."
+              echo "Remove the release:major label from that PR, then re-run this workflow."
+              exit 1
+            fi
+          fi
+          CHANGED=""
+          for pkg in core cloud mcp laravel symfony magento drupal; do
+            echo "$FILES" | grep -q "^packages/$pkg/" && CHANGED="$CHANGED $pkg"
+          done
+          CHANGED=$(echo $CHANGED | xargs)
+          printf '%s' "$FILES" > /tmp/changed_files.txt
+          echo "changed=$CHANGED" >> "$GITHUB_OUTPUT"
+          echo "level=$LEVEL"     >> "$GITHUB_OUTPUT"
+          echo "levels=$LEVELS"   >> "$GITHUB_OUTPUT"
+          echo "Changed framework packages: [$CHANGED] · level=$LEVEL (from PR label: ${LABELS:-none})"
+
+      - name: Auto-bump versions (framework mode — 7 packages, Policy A OFF)
+        id: autobump
+        if: steps.gate.outputs.release == 'true' && (steps.plan.outputs.changed != '')
+        run: |
+          tag() { git -C phpclaw tag -l "$1-v*" | sed "s/^$1-v//" | sort -V | tail -1; }
+          OUTPUT=$(CHANGED_FILES="$(cat /tmp/changed_files.txt)" \
+          BUMP_LEVELS='${{ steps.plan.outputs.levels }}' \
+          BUMP_PACKAGES='core,cloud,mcp,laravel,symfony,magento,drupal' \
+          POLICY_A=off \
+          CURRENT_CORE="$(tag core)"       CURRENT_CLOUD="$(tag cloud)" \
+          CURRENT_MCP="$(tag mcp)" \
+          CURRENT_LARAVEL="$(tag laravel)" CURRENT_SYMFONY="$(tag symfony)" \
+          CURRENT_MAGENTO="$(tag magento)" CURRENT_DRUPAL="$(tag drupal)" \
+          php scripts/auto-bump.php)
+          echo "$OUTPUT"
+          # Part C: adapters auto-bump.php patch-bumped purely because their require
+          # line moved (core/cloud major), not because their own source changed —
+          # the Split step below needs to publish these too, not just steps.plan's list.
+          DEP_BUMPED=$(echo "$OUTPUT" | grep '^DEPENDENCY_BUMPED=' | cut -d= -f2)
+          echo "dependency_bumped=$DEP_BUMPED" >> "$GITHUB_OUTPUT"
+
+      - name: Split → strip path repos → push mirror + tags
+        if: steps.gate.outputs.release == 'true' && (steps.plan.outputs.changed != '' || steps.autobump.outputs.dependency_bumped != '')
+        env:
+          PAT: ${{ secrets.PACKAGIST_SPLIT_PAT }}
+          TRIGGER_SHA: ${{ github.sha }}
+          DEP_BUMPED: ${{ steps.autobump.outputs.dependency_bumped }}
+        run: |
+          if [ -z "$PAT" ]; then
+            echo "PACKAGIST_SPLIT_PAT not set — Packagist mirrors not configured yet (pre-launch). Skipping publish."
+            exit 0
+          fi
+          PAT="$(printf '%s' "$PAT" | tr -d '[:space:]')"
+          cd phpclaw
+          git config user.name "phpclaw-release-bot"
+          git config user.email "release-bot@phpclaw.ai"
+          # Part C: fold in any adapters auto-bump.php dependency-bumped (require line
+          # rewritten by a core/cloud major, own source untouched) — deduped in case one
+          # ever ends up in both sets. steps.plan.outputs.changed alone would miss these.
+          ALL_CHANGED=$(printf '%s\n%s\n' "${{ steps.plan.outputs.changed }}" "${DEP_BUMPED//,/ }" \
+            | xargs -n1 | sort -u | xargs)
+          # Ephemeral commit: strip the local-only path `repositories` from each changed
+          # package's composer.json so the published mirror is Packagist-clean. This commit
+          # is NEVER pushed to the monorepo — only its subtree split is mirrored.
+          for pkg in $ALL_CHANGED; do
+            php -r '$f=$argv[1];$c=json_decode(file_get_contents($f),true);unset($c["repositories"]);file_put_contents($f,json_encode($c,JSON_PRETTY_PRINT|JSON_UNESCAPED_SLASHES|JSON_UNESCAPED_UNICODE)."\n");' "packages/$pkg/composer.json"
+            git add "packages/$pkg/composer.json"
+          done
+          if ! git diff --cached --quiet; then
+            git commit -q -m "chore(split): strip path repos [ci-ephemeral]"
+          fi
+          for pkg in $ALL_CHANGED; do
+            VER=$(tr -d '[:space:]' < "packages/$pkg/VERSION")
+            if [ "$pkg" = "core" ]; then REPO="phpclaw"; else REPO="phpclaw-$pkg"; fi
+            MIRROR="https://x-access-token:${PAT}@github.com/phpclaw-php/${REPO}.git"
+            SPLIT_SHA=$(git subtree split --prefix="packages/$pkg" -q)
+            echo "→ $pkg v$VER  →  phpclaw-php/$REPO  (split $SPLIT_SHA)"
+            # Publish the mirror (read-only, always force) + its plain vX.Y.Z tag → Packagist.
+            git push --force "$MIRROR" "${SPLIT_SHA}:refs/heads/${GITHUB_REF_NAME}"
+            IS_DEP_BUMP=false
+            for d in ${DEP_BUMPED//,/ }; do
+              [ "$d" = "$pkg" ] && IS_DEP_BUMP=true
+            done
+            if [ "$IS_DEP_BUMP" = true ]; then
+              # Annotated, not lightweight — this release has no source diff of its own
+              # (Risk #3: a "dependency bump" tag needs a clear message or it reads as a
+              # mystery release).
+              git tag -f -a "v${VER}" -m "chore: dependency bump — core/cloud major update, no adapter source change" "$SPLIT_SHA"
+            else
+              git tag -f "v${VER}" "$SPLIT_SHA"
+            fi
+            git push --force "$MIRROR" "v${VER}"
+            # Namespaced tag on the monorepo = auto-bump's source of truth next run.
+            # Immutable: points at the real triggering commit, created only if absent.
+            if ! git rev-parse -q --verify "refs/tags/${pkg}-v${VER}" >/dev/null; then
+              git tag "${pkg}-v${VER}" "$TRIGGER_SHA"
+              git push "https://x-access-token:${PAT}@github.com/phpclaw-php/phpclaw-monorepo.git" "${pkg}-v${VER}"
+            fi
+          done
+
+      # Packagist publishes automatically once the phpclaw-php GitHub App / webhook is
+      # installed — a pushed tag on a mirror triggers the update. No extra step is
+      # needed here.
+
+      # Refreshes the combined grand-total badge (root README) after a Composer-side
+      # release. Mirrors the ZIP half of this sum computed in release.yml — that
+      # workflow can't see Packagist's numbers, and this one can't see GitHub's
+      # release-asset counts without re-fetching them, so each recomputes the full
+      # total independently rather than trying to share partial state across runs.
+      - name: Refresh combined download badge
+        if: steps.gate.outputs.release == 'true' && (steps.plan.outputs.changed != '' || steps.autobump.outputs.dependency_bumped != '')
+        env:
+          GH_TOKEN: ${{ secrets.GIST_TOKEN }}
+          GIST_ID: ${{ vars.DOWNLOAD_BADGE_GIST_ID }}
+        run: |
+          set -euo pipefail
+          if [ -z "$GH_TOKEN" ] || [ -z "$GIST_ID" ]; then
+            echo "GIST_TOKEN/DOWNLOAD_BADGE_GIST_ID not set — download badge not configured yet. Skipping."
+            exit 0
+          fi
+
+          zip_total=$(gh api --paginate "repos/phpclaw-php/phpclaw-monorepo/releases" \
+            --jq '.[] | select(.tag_name != "latest") | .assets[] | .download_count' \
+            | awk '{s+=$1} END {print s+0}')
+
+          composer_total=0
+          for pkg in phpclaw phpclaw-cloud phpclaw-drupal phpclaw-laravel phpclaw-magento phpclaw-mcp phpclaw-symfony; do
+            pkg_total=$(curl -s "https://packagist.org/packages/phpclaw/$pkg.json" \
+              | jq -r '.package.downloads.total // 0')
+            composer_total=$((composer_total + pkg_total))
+          done
+
+          total=$((zip_total + composer_total))
+          if [ "$total" -ge 1000000 ]; then
+            msg=$(awk -v t="$total" 'BEGIN{printf "%.1fM", t/1000000}')
+          elif [ "$total" -ge 1000 ]; then
+            msg=$(awk -v t="$total" 'BEGIN{printf "%.1fk", t/1000}')
+          else
+            msg="$total"
+          fi
+          printf '{"schemaVersion":1,"label":"downloads","message":"%s","color":"blue"}\n' \
+            "$msg" > "$RUNNER_TEMP/downloads-total.json"
+          gh gist edit "$GIST_ID" --filename "downloads-total.json" "$RUNNER_TEMP/downloads-total.json"
+          echo "combined total: $total ($msg)"

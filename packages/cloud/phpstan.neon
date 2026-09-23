@@ -1,0 +1,7 @@
+parameters:
+    level: 5
+    phpVersion: 80100
+    paths:
+        - src
+    treatPhpDocTypesAsCertain: false
+    reportUnmatchedIgnoredErrors: false

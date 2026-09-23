@@ -1,0 +1,142 @@
+<?xml version="1.0" encoding="utf-8"?>
+<extension type="plugin" group="system" method="upgrade" version="4.0">
+    <name>plg_system_phpclaw</name>
+    <author>Akash Patel</author>
+    <creationDate>2026-08-17</creationDate>
+    <authorEmail>er.akashpatel1908@gmail.com</authorEmail>
+    <authorUrl>https://phpclaw.ai</authorUrl>
+    <version>1.0.0</version>
+    <targetplatform name="joomla" version="[456].*"/>
+    <description>PLG_SYSTEM_PHPCLAW_DESC</description>
+    <namespace path="src">PhpClaw\Joomla</namespace>
+
+    <files>
+        <filename plugin="phpclaw">phpclaw.php</filename>
+        <folder>src</folder>
+        <folder>services</folder>
+    </files>
+
+    <languages folder="language">
+        <language tag="en-GB">en-GB/plg_system_phpclaw.ini</language>
+        <language tag="en-GB">en-GB/plg_system_phpclaw.sys.ini</language>
+    </languages>
+
+    <updateservers>
+        <server type="extension" name="phpClaw System Plugin">https://phpclaw.ai/api/joomla-update/plugin</server>
+    </updateservers>
+
+    <config>
+        <fields name="params" addfieldprefix="PhpClaw\Joomla\Field">
+            <fieldset name="provider" label="PLG_SYSTEM_PHPCLAW_FIELDSET_PROVIDER">
+                <field name="provider"
+                       type="providers"
+                       label="PLG_SYSTEM_PHPCLAW_FIELD_PROVIDER_LABEL"
+                       description="PLG_SYSTEM_PHPCLAW_FIELD_PROVIDER_DESC"
+                       default=""/>
+
+                <field name="model"
+                       type="text"
+                       label="PLG_SYSTEM_PHPCLAW_FIELD_MODEL_LABEL"
+                       description="PLG_SYSTEM_PHPCLAW_FIELD_MODEL_DESC"
+                       default=""
+                       size="40"
+                       hint="PLG_SYSTEM_PHPCLAW_FIELD_MODEL_HINT"/>
+
+                <field name="api_key"
+                       type="textarea"
+                       label="PLG_SYSTEM_PHPCLAW_FIELD_API_KEY_LABEL"
+                       description="PLG_SYSTEM_PHPCLAW_FIELD_API_KEY_DESC"
+                       default=""
+                       rows="2"
+                       cols="60"
+                       autocomplete="off"
+                       filter="raw"
+                       showon="provider!:ollama[AND]provider!:"/>
+
+                <field name="base_url"
+                       type="url"
+                       label="PLG_SYSTEM_PHPCLAW_FIELD_BASE_URL_LABEL"
+                       description="PLG_SYSTEM_PHPCLAW_FIELD_BASE_URL_DESC"
+                       default=""
+                       size="60"
+                       hint="https://api.example.com/v1/chat/completions"
+                       showon="provider:custom"/>
+            </fieldset>
+
+            <fieldset name="storage" label="PLG_SYSTEM_PHPCLAW_FIELDSET_STORAGE">
+                <field name="store_messages"
+                       type="radio"
+                       label="PLG_SYSTEM_PHPCLAW_FIELD_STORE_MESSAGES_LABEL"
+                       description="PLG_SYSTEM_PHPCLAW_FIELD_STORE_MESSAGES_DESC"
+                       default="1"
+                       class="btn-group">
+                    <option value="0">JNO</option>
+                    <option value="1">JYES</option>
+                </field>
+            </fieldset>
+
+            <fieldset name="agent" label="PLG_SYSTEM_PHPCLAW_FIELDSET_AGENT">
+                <field name="system_prompt"
+                       type="textarea"
+                       label="PLG_SYSTEM_PHPCLAW_FIELD_SYSTEM_PROMPT_LABEL"
+                       description="PLG_SYSTEM_PHPCLAW_FIELD_SYSTEM_PROMPT_DESC"
+                       default=""
+                       rows="4"
+                       cols="60"
+                       hint="PLG_SYSTEM_PHPCLAW_FIELD_SYSTEM_PROMPT_HINT"/>
+
+                <field name="max_iterations"
+                       type="number"
+                       label="PLG_SYSTEM_PHPCLAW_FIELD_MAX_ITERATIONS_LABEL"
+                       description="PLG_SYSTEM_PHPCLAW_FIELD_MAX_ITERATIONS_DESC"
+                       default="20"
+                       min="1"
+                       max="50"/>
+
+            </fieldset>
+
+            <fieldset name="skills" label="PLG_SYSTEM_PHPCLAW_FIELDSET_SKILLS">
+                <field name="remote_skill_urls"
+                       type="textarea"
+                       label="PLG_SYSTEM_PHPCLAW_FIELD_REMOTE_SKILL_URLS_LABEL"
+                       description="PLG_SYSTEM_PHPCLAW_FIELD_REMOTE_SKILL_URLS_DESC"
+                       rows="3"
+                       cols="60"
+                       hint="https://example.com/skills.json"/>
+            </fieldset>
+
+            <fieldset name="cloud" label="PLG_SYSTEM_PHPCLAW_FIELDSET_CLOUD">
+                <field name="cloud_inactive_note"
+                       type="note"
+                       label="PLG_SYSTEM_PHPCLAW_FIELD_CLOUD_INACTIVE_LABEL"
+                       description="PLG_SYSTEM_PHPCLAW_FIELD_CLOUD_INACTIVE_DESC"
+                       showon="store_messages:0"/>
+
+                <field name="cloud_key"
+                       type="password"
+                       label="PLG_SYSTEM_PHPCLAW_FIELD_CLOUD_KEY_LABEL"
+                       description="PLG_SYSTEM_PHPCLAW_FIELD_CLOUD_KEY_DESC"
+                       default=""
+                       size="60"
+                       showon="store_messages:1"/>
+
+                <field name="cloud_signing_secret"
+                       type="password"
+                       label="PLG_SYSTEM_PHPCLAW_FIELD_CLOUD_SIGNING_SECRET_LABEL"
+                       description="PLG_SYSTEM_PHPCLAW_FIELD_CLOUD_SIGNING_SECRET_DESC"
+                       default=""
+                       size="60"
+                       showon="store_messages:1"/>
+
+                <field name="cloud_disable"
+                       type="text"
+                       label="PLG_SYSTEM_PHPCLAW_FIELD_CLOUD_DISABLE_LABEL"
+                       description="PLG_SYSTEM_PHPCLAW_FIELD_CLOUD_DISABLE_DESC"
+                       default=""
+                       size="60"
+                       hint="PLG_SYSTEM_PHPCLAW_FIELD_CLOUD_DISABLE_HINT"
+                       showon="store_messages:1"/>
+            </fieldset>
+        </fields>
+    </config>
+</extension>

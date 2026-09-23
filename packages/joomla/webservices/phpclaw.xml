@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<extension type="plugin" group="webservices" method="upgrade" version="4.0">
+    <name>plg_webservices_phpclaw</name>
+    <author>Akash Patel</author>
+    <creationDate>2026-09-09</creationDate>
+    <authorEmail>er.akashpatel1908@gmail.com</authorEmail>
+    <authorUrl>https://phpclaw.ai</authorUrl>
+    <version>1.0.0</version>
+    <targetplatform name="joomla" version="[456].*"/>
+    <description>PLG_WEBSERVICES_PHPCLAW_DESC</description>
+    <namespace path="src">PhpClaw\Joomla\WebServices</namespace>
+
+    <files>
+        <folder>src</folder>
+        <folder plugin="phpclaw">services</folder>
+    </files>
+
+    <languages folder="language">
+        <language tag="en-GB">en-GB/plg_webservices_phpclaw.ini</language>
+        <language tag="en-GB">en-GB/plg_webservices_phpclaw.sys.ini</language>
+    </languages>
+
+    <updateservers>
+        <server type="extension" name="phpClaw Web Services Plugin">https://phpclaw.ai/api/joomla-update/webservices</server>
+    </updateservers>
+</extension>

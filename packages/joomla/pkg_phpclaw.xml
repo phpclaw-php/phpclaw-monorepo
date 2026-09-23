@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<extension type="package" method="upgrade" version="4.0">
+    <name>pkg_phpclaw</name>
+    <packagename>phpclaw</packagename>
+    <author>Akash Patel</author>
+    <creationDate>2026-08-17</creationDate>
+    <authorEmail>er.akashpatel1908@gmail.com</authorEmail>
+    <authorUrl>https://phpclaw.ai</authorUrl>
+    <version>1.0.0</version>
+    <targetplatform name="joomla" version="[456].*"/>
+    <description>PKG_PHPCLAW_DESC</description>
+    <license>MIT</license>
+
+    <scriptfile>script.php</scriptfile>
+
+    <files>
+        <file type="plugin" group="system" id="phpclaw">packages/plg_system_phpclaw.zip</file>
+        <file type="plugin" group="webservices" id="phpclaw">packages/plg_webservices_phpclaw.zip</file>
+        <file type="component" id="com_phpclaw">packages/com_phpclaw.zip</file>
+    </files>
+
+    <languages folder="language">
+        <language tag="en-GB">en-GB/pkg_phpclaw.sys.ini</language>
+    </languages>
+
+    <updateservers>
+        <server type="extension" name="phpClaw Package">https://phpclaw.ai/api/joomla-update/package</server>
+    </updateservers>
+</extension>

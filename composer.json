@@ -1,0 +1,34 @@
+{
+    "name": "phpclaw/phpclaw-monorepo",
+    "description": "phpClaw monorepo — development root. Not published to Packagist.",
+    "type": "project",
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "Akash Patel",
+            "email": "er.akashpatel1908@gmail.com"
+        }
+    ],
+    "require-dev": {
+        "phpunit/phpunit": "^10.0|^11.0",
+        "laravel/pint": "^1.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "PhpClaw\\": "packages/core/src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "PhpClaw\\Tests\\": "packages/core/tests/"
+        }
+    },
+    "scripts": {
+        "test": "phpunit --testdox",
+        "test-core": "phpunit packages/core/tests/ --testdox",
+        "lint": "pint --test",
+        "fix": "pint"
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true
+}

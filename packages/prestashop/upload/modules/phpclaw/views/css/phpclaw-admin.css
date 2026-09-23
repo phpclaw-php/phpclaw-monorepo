@@ -1,0 +1,1136 @@
+/* phpClaw AI Agent: PrestaShop back-office styles */
+
+/* Design tokens: light mode */
+:root {
+    --phpclaw-bg: #fff;
+    --phpclaw-bg-alt: #fafafa;
+    --phpclaw-bg-hover: #f9f9f9;
+    --phpclaw-text: #333;
+    --phpclaw-text-muted: #666;
+    --phpclaw-text-dimmed: #888;
+    --phpclaw-border: #e0e0e0;
+    --phpclaw-border-light: #f0f0f0;
+    --phpclaw-input-border: #ced4da;
+    --phpclaw-accent: #25b9d7;
+    --phpclaw-accent-hover: #1ea3be;
+    --phpclaw-error-bg: #fdecea;
+    --phpclaw-error-border: #f5c6cb;
+    --phpclaw-error-text: #721c24;
+    --phpclaw-table-header-bg: #f5f5f5;
+    --phpclaw-table-header-text: #555;
+    --phpclaw-card-bg: #fafafa;
+    --phpclaw-card-text: #333;
+    --phpclaw-card-desc: #777;
+    --phpclaw-community-bg: #fafbfc;
+    --phpclaw-community-border: #e0e0e0;
+    --phpclaw-spinner-track: rgba(0, 0, 0, 0.15);
+    --phpclaw-focus-ring: rgba(37, 185, 215, 0.4);
+    --phpclaw-code-bg: #1d2327;
+    --phpclaw-code-text: #e4e6e8;
+    --phpclaw-card-border: #e0e0e0;
+    --phpclaw-card-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+    --phpclaw-card-radius: 4px;
+    --phpclaw-section-spacing: 1.5rem;
+}
+
+/* Design tokens: dark mode */
+
+/* Shared card polish */
+.card {
+    border: 1px solid var(--phpclaw-card-border, #dee2e6);
+    box-shadow: var(--phpclaw-card-shadow);
+    border-radius: var(--phpclaw-card-radius);
+}
+
+.card-title.mt-0 {
+    margin-top: 0;
+    font-size: 1.15rem;
+    font-weight: 700;
+    color: #1d2327;
+}
+
+/* Table shared styling: match native PrestaShop grid-table */
+#content.bootstrap .container-xl .table thead th {
+    background: transparent !important;
+    color: #363a41;
+    font-size: 12.8px;
+    font-weight: 700;
+    text-transform: none;
+    letter-spacing: 0;
+    border: 0 !important;
+    border-bottom: 2px solid #25b9d7 !important;
+    padding: 8px 10px;
+    line-height: 1.5;
+    vertical-align: top;
+}
+
+#content.bootstrap .container-xl .table td {
+    font-size: 13px;
+    color: #363a41;
+    background: transparent !important;
+    border: 0 !important;
+    border-top: 1px solid #bbcdd2 !important;
+    padding: 8px 10px;
+    line-height: 1.5;
+    vertical-align: top;
+}
+
+#content.bootstrap .container-xl .table td.text-muted,
+#content.bootstrap .container-xl .table .text-muted {
+    color: #6b7280 !important;
+}
+
+/* Code block shared */
+.phpclaw-code-block {
+    background: var(--phpclaw-code-bg);
+    color: var(--phpclaw-code-text);
+    padding: 14px 18px;
+    border-radius: 6px;
+    font-size: 12px;
+    line-height: 1.6;
+    overflow-x: auto;
+    white-space: pre-wrap;
+    word-break: break-all;
+    font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+}
+
+/* Muted text helper */
+.phpclaw-text-muted {
+    color: var(--phpclaw-text-muted);
+    font-size: 0.875rem;
+}
+
+/* Status badges */
+.phpclaw-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.phpclaw-badge--pending  { background: #fff3cd; color: #856404; }
+.phpclaw-badge--running  { background: #cce5ff; color: #004085; }
+.phpclaw-badge--done     { background: #d4edda; color: #155724; }
+.phpclaw-badge--failed   { background: #f8d7da; color: #721c24; }
+
+/* Community card */
+.phpclaw-community-card {
+    margin-top: 28px;
+    border: 1px solid var(--phpclaw-community-border, #e0e0e0);
+    border-radius: 8px;
+    padding: 28px 24px;
+    background: var(--phpclaw-community-bg, #fafbfc);
+    text-align: center;
+}
+
+.phpclaw-community-card h3 {
+    font-size: 17px;
+    font-weight: 700;
+    color: var(--phpclaw-card-text, #333);
+    margin: 0 0 8px;
+}
+
+.phpclaw-community-card p {
+    font-size: 13px;
+    color: var(--phpclaw-text-muted, #666);
+    margin: 0 0 16px;
+    line-height: 1.6;
+}
+
+.phpclaw-community-btns {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+    flex-wrap: wrap;
+    margin-bottom: 18px;
+}
+
+.phpclaw-community-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 10px 20px;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 600;
+    text-decoration: none;
+    transition: opacity 0.15s;
+}
+
+.phpclaw-community-btn:hover {
+    opacity: 0.85;
+    text-decoration: none;
+}
+
+.phpclaw-community-btn--primary {
+    background: #25b9d7;
+    color: #fff;
+}
+
+.phpclaw-community-btn--dark {
+    background: #24292e;
+    color: #fff;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .phpclaw-community-btns {
+        flex-direction: column;
+        align-items: stretch;
+    }
+}
+
+/* WCAG: Focus indicators */
+.phpclaw-community-btn:focus-visible {
+    outline: 2px solid var(--phpclaw-accent, #25b9d7);
+    outline-offset: 2px;
+    box-shadow: 0 0 0 4px var(--phpclaw-focus-ring, rgba(37, 185, 215, 0.4));
+}
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+    outline: 2px solid var(--phpclaw-accent, #25b9d7);
+    outline-offset: 2px;
+}
+
+/* WCAG: Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+    .phpclaw-community-btn {
+        transition: none;
+    }
+
+    * {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+    }
+}
+
+/* WCAG: aria-busy loading state (used by debug chat) */
+#phpclaw-messages[aria-busy="true"] {
+    position: relative;
+}
+
+#phpclaw-messages[aria-busy="true"]::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: linear-gradient(
+        90deg,
+        transparent 0%,
+        var(--phpclaw-accent, #25b9d7) 50%,
+        transparent 100%
+    );
+    animation: phpclaw-busy-bar 1.5s ease-in-out infinite;
+}
+
+@keyframes phpclaw-busy-bar {
+    0%   { transform: translateX(-100%); }
+    100% { transform: translateX(100%); }
+}
+
+/* WCAG 2.1 AA contrast: dual-mode helpers */
+.phpclaw-stat-number {
+    font-size: 32px;
+    font-weight: 700;
+    color: #0c6370;
+}
+
+.phpclaw-link {
+    color: #0c6370 !important;
+}
+
+/* WCAG 2.1 AA contrast: light-mode remediation (dark mode keeps its own tokens) */
+
+    .text-muted,
+    small.text-muted,
+    .phpclaw-text-muted {
+        color: #595f63 !important;
+    }
+
+    .nav-tabs .nav-link,
+    .nav-tabs .nav-link.active,
+    .phpclaw-guide-tab,
+    .btn-outline-primary,
+    .btn-outline-secondary,
+    p a:not(.btn) {
+        color: #0c6370 !important;
+    }
+
+    .btn-outline-primary,
+    .btn-outline-secondary,
+    .btn-primary,
+    #phpclaw-new-chat,
+    .phpclaw-community-btn--primary {
+        background-color: #0c6370 !important;
+        border-color: #0c6370 !important;
+        color: #fff !important;
+    }
+
+/* WCAG: content links distinguishable without colour */
+p a:not(.btn) {
+    text-decoration: underline;
+}
+
+/* Settings form rhythm: tighter vertical gap + clearly visible labels */
+.phpclaw-settings-form .mb-3.row,
+.phpclaw-settings-form .row.mb-3 {
+    margin-bottom: 1rem;
+    align-items: center;
+}
+
+.phpclaw-settings-form .col-form-label,
+.phpclaw-settings-form label.form-check-label {
+    font-weight: 600;
+    color: #1d2327 !important;
+}
+
+/* Narrow the label column so the field sits next to the label (no big gap) */
+.phpclaw-settings-form .col-form-label.col-sm-3 {
+    flex: 0 0 auto;
+    width: 190px;
+    max-width: 190px;
+}
+
+/* Keep the button row aligned with the field column */
+.phpclaw-settings-form .offset-sm-3 {
+    margin-left: 190px;
+}
+
+/* Button row: separate from fields + breathing room at the bottom */
+.phpclaw-settings-form > .row:last-child {
+    margin-top: 1.5rem;
+    margin-bottom: 0;
+}
+
+.phpclaw-settings-form {
+    padding-bottom: 6px;
+}
+
+.phpclaw-settings-form .col-sm-6 > small,
+.phpclaw-settings-form .col-sm-9 > small,
+.phpclaw-settings-form .form-text {
+    display: block;
+    margin-top: 5px;
+    line-height: 1.5;
+}
+
+/* Community card: visible text, dark GitHub + orange Packagist */
+.phpclaw-community-btn {
+    min-height: 42px;
+    padding: 11px 22px;
+    justify-content: center;
+}
+
+.phpclaw-community-btn--orange {
+    background: #a85309;
+    color: #fff !important;
+}
+
+.phpclaw-community-btn--dark {
+    color: #fff !important;
+}
+
+.phpclaw-community-btn:focus-visible {
+    outline: 2px solid var(--phpclaw-accent, #25b9d7);
+    outline-offset: 2px;
+}
+
+/* Tighten the PS page-header band → content gap on phpClaw pages */
+.page-header {
+    margin-top: 0 !important;
+    margin-bottom: 0 !important;
+    padding-top: 2px !important;
+    padding-bottom: 6px !important;
+}
+
+.page-header .page-title {
+    margin-bottom: 0 !important;
+}
+
+.container-xl.pt-2 {
+    padding-top: 6px !important;
+}
+
+/* Setup / status notices: guarantee readable text on phpClaw pages */
+.alert-warning { background-color: #fff3cd; border-color: #ffe69c; color: #664d03; }
+.alert-info    { background-color: #cff4fc; border-color: #9eeaf9; color: #055160; }
+.alert-danger  { background-color: #f8d7da; border-color: #f1aeb5; color: #842029; }
+.alert-success { background-color: #d1e7dd; border-color: #a3cfbb; color: #0f5132; }
+.alert-dismissible .btn-close { filter: none; opacity: 0.7; }
+
+/* Compact status alerts: less vertical footprint */
+.container-xl .alert {
+    padding: 9px 14px;
+    margin-bottom: 0.75rem;
+}
+
+
+/* About: features as a CSS grid (PS admin Bootstrap doesn't lay out the cols reliably) */
+.phpclaw-features-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 16px;
+    margin-bottom: 24px;
+}
+
+.phpclaw-feature-card {
+    border: 1px solid var(--phpclaw-card-border, #dee2e6);
+    border-radius: var(--phpclaw-card-radius, 4px);
+    background: #fff;
+    padding: 18px;
+    box-shadow: var(--phpclaw-card-shadow, 0 1px 3px rgba(0,0,0,.06));
+}
+
+/* Reliable section spacing: PS admin doesn't apply Bootstrap mb-3/mb-4 utilities */
+.container-xl .card {
+    margin-bottom: 1.5rem;
+}
+
+/* PS admin zeroes .card-body padding, so card content touches the card border.
+   Restore comfortable padding on every phpClaw card (matches the Guide page). */
+#content.bootstrap .container-xl .card-body {
+    padding: 24px 28px;
+}
+
+.container-xl h3 {
+    margin-bottom: 0.85rem;
+}
+
+/* PS admin theme paints h3/h4 with a white background bar and gives them
+   negative horizontal margins (-20px). Strip both so titles sit flush on the
+   card with clean spacing above the text below. */
+#content.bootstrap .container-xl h3,
+#content.bootstrap .container-xl h4 {
+    background: transparent !important;
+    background-color: transparent !important;
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+}
+
+/* Prevent horizontal overflow on phpClaw pages (content slides under the fixed menu otherwise) */
+.container-xl {
+    max-width: 100%;
+}
+
+.container-xl .table {
+    table-layout: fixed;
+    width: 100%;
+}
+
+.container-xl .table th,
+.container-xl .table td {
+    white-space: normal;
+    word-break: break-word;
+    vertical-align: top;
+}
+
+.phpclaw-feature-card,
+.container-xl .card {
+    max-width: 100%;
+    box-sizing: border-box;
+    overflow-wrap: anywhere;
+}
+
+/* Card titles: prominent, aligned with body text, proper spacing
+   (also kills PS admin's negative h3 horizontal margins) */
+.card .card-title,
+.card .card-title.mt-0 {
+    margin-top: 2px !important;
+    margin-bottom: 14px !important;
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+}
+
+.phpclaw-about-hero-layout {
+    background: linear-gradient(135deg, #1d2327 0%, #2271b1 100%);
+    padding: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 32px;
+    margin-bottom: 1.5rem;
+}
+
+.phpclaw-hero-logo {
+    width: 64px;
+    height: 64px;
+    background: rgba(255, 255, 255, .15);
+    border-radius: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.phpclaw-about-hero-layout .phpclaw-hero-title {
+    margin: 0;
+    font-size: 28px;
+    color: #fff !important;
+    line-height: 1.2;
+}
+
+.phpclaw-about-hero-layout .phpclaw-hero-subtitle {
+    margin: 6px 0 0;
+    color: rgba(255, 255, 255, .85) !important;
+    font-size: 15px;
+}
+
+.phpclaw-about-hero-layout .phpclaw-hero-version {
+    margin: 4px 0 0;
+    color: rgba(255, 255, 255, .65) !important;
+    font-size: 13px;
+}
+
+.phpclaw-hero-btn--primary {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 10px 22px;
+    background: #fff;
+    color: #2271b1;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 700;
+    text-decoration: none;
+}
+
+.phpclaw-hero-btn--ghost {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 10px 22px;
+    background: rgba(255, 255, 255, .12);
+    color: #fff;
+    border: 1px solid rgba(255, 255, 255, .3);
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 600;
+    text-decoration: none;
+}
+
+.phpclaw-about-desc {
+    line-height: 1.8;
+}
+
+.phpclaw-about-fs-sm {
+    font-size: 0.875rem;
+}
+
+.phpclaw-about-fs-90 {
+    font-size: 0.9rem;
+    line-height: 1.7;
+}
+
+.phpclaw-feature-icon {
+    font-size: 22px;
+    margin-bottom: 10px;
+}
+
+.phpclaw-feature-label {
+    font-size: 13px;
+    display: block;
+    margin-bottom: 6px;
+}
+
+.phpclaw-feature-desc {
+    font-size: 13px;
+    line-height: 1.7;
+}
+
+.phpclaw-about-pkg-code {
+    font-size: 12px;
+}
+
+.phpclaw-about-th-pkg {
+    width: 260px;
+}
+
+.phpclaw-stat-hero {
+    font-size: 32px;
+    font-weight: 700;
+    color: #2271b1;
+}
+
+.phpclaw-stat-hero--accent {
+    font-size: 32px;
+    font-weight: 700;
+    color: #ea4aaa;
+}
+
+.phpclaw-stat-label {
+    font-size: 13px;
+    margin-top: 6px;
+}
+
+.phpclaw-test-result {
+    font-size: 0.875rem;
+}
+
+.phpclaw-wrap--full {
+    max-width: 100%;
+}
+
+.phpclaw-empty-sidebar-note {
+    font-size: 12px;
+    margin: 0;
+}
+
+.phpclaw-guide-intro {
+    font-size: 13px;
+}
+
+.phpclaw-guide-th-sm {
+    font-size: 13px;
+}
+
+.phpclaw-guide-fs {
+    font-size: 13px;
+}
+
+.phpclaw-guide-h4 {
+    font-size: 14px;
+}
+
+.phpclaw-alert-fs {
+    font-size: 13px;
+}
+
+.phpclaw-footer {
+    margin-top: 32px;
+    padding: 12px 0;
+    border-top: 1px solid #dee2e6;
+    font-size: 12px;
+    color: #6c757d;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex-wrap: wrap;
+}
+
+.phpclaw-footer a {
+    color: inherit;
+}
+
+.phpclaw-footer-end {
+    margin-left: auto;
+}
+
+.phpclaw-footer-link {
+    color: inherit;
+}
+
+#phpclaw-chat-wrap {
+    display: flex;
+    height: calc(100vh - 210px);
+    min-height: 520px;
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
+    background: #fff;
+    overflow: hidden;
+    margin-top: 0;
+}
+
+/* Sidebar */
+#phpclaw-sidebar {
+    width: 260px;
+    flex-shrink: 0;
+    border-right: 1px solid #dee2e6;
+    display: flex;
+    flex-direction: column;
+    background: #f8f9fa;
+}
+
+#phpclaw-sidebar-top {
+    padding: 12px;
+    border-bottom: 1px solid #e0e0e0;
+}
+
+#phpclaw-conv-search {
+    width: 100%;
+    margin-top: 8px;
+    padding: 6px 8px;
+    border: 1px solid #ced4da;
+    border-radius: 3px;
+    font-size: 12px;
+    box-sizing: border-box;
+}
+
+#phpclaw-conv-list {
+    flex: 1;
+    overflow-y: auto;
+}
+
+.phpclaw-conv-item {
+    padding: 10px 14px;
+    cursor: pointer;
+    border-bottom: 1px solid #e8e8e8;
+    transition: background 0.1s;
+}
+
+.phpclaw-conv-item:hover { background: #e9ecef; }
+.phpclaw-conv-item.active { background: #cfe2ff; }
+
+.phpclaw-conv-item-title {
+    font-size: 13px;
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: #212529;
+}
+
+.phpclaw-conv-item-time {
+    font-size: 11px;
+    color: #5f6368;
+    margin-top: 2px;
+}
+
+/* Chat area */
+#phpclaw-chat-area {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+#phpclaw-chat-header {
+    padding: 12px 18px;
+    border-bottom: 1px solid #dee2e6;
+    font-weight: 600;
+    font-size: 14px;
+    color: #212529;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    flex-shrink: 0;
+}
+
+#phpclaw-messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    scroll-behavior: smooth;
+}
+
+/* Bubbles */
+.phpclaw-bubble-wrap { display: flex; align-items: flex-end; gap: 8px; flex-shrink: 0; }
+.phpclaw-bubble-wrap.user { justify-content: flex-end; }
+.phpclaw-bubble-wrap.assistant { justify-content: flex-start; }
+
+.phpclaw-avatar {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    font-size: 14px;
+    background: #f0f0f0;
+}
+
+.phpclaw-bubble {
+    max-width: 72%;
+    padding: 10px 14px;
+    font-size: 13px;
+    line-height: 1.6;
+    white-space: pre-wrap;
+    word-break: break-word;
+    border-radius: 14px;
+}
+
+.phpclaw-bubble.user {
+    background: #0d6efd;
+    color: #fff;
+    border-radius: 14px 14px 2px 14px;
+}
+
+.phpclaw-bubble.assistant {
+    background: #f0f1f2;
+    color: #212529;
+    border-radius: 2px 14px 14px 14px;
+    border: 1px solid #dee2e6;
+}
+
+/* Typing indicator */
+.phpclaw-typing { display: flex; gap: 4px; align-items: center; padding: 12px 14px; }
+
+.phpclaw-typing span {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: #6c757d;
+    animation: phpclaw-bounce 1.2s infinite;
+}
+
+.phpclaw-typing span:nth-child(2) { animation-delay: 0.2s; }
+.phpclaw-typing span:nth-child(3) { animation-delay: 0.4s; }
+
+@keyframes phpclaw-bounce {
+    0%, 60%, 100% { transform: translateY(0); }
+    30% { transform: translateY(-6px); }
+}
+
+/* Welcome screen */
+#phpclaw-welcome {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    flex: 1;
+    color: #6c757d;
+    text-align: center;
+    padding: 40px;
+}
+
+#phpclaw-welcome h4 { margin-bottom: 8px; color: #212529; }
+#phpclaw-welcome p { font-size: 13px; max-width: 400px; line-height: 1.6; }
+
+/* Input area */
+#phpclaw-input-area {
+    border-top: 1px solid #dee2e6;
+    padding: 12px 18px;
+    flex-shrink: 0;
+    background: #fff;
+}
+
+#phpclaw-input-row {
+    display: flex;
+    align-items: flex-end;
+    gap: 8px;
+    max-width: 820px;
+    margin: 0 auto;
+}
+
+#phpclaw-message-ta {
+    flex: 1;
+    resize: none;
+    padding: 10px 12px;
+    border: 1px solid #ced4da;
+    border-radius: 8px;
+    font-size: 13px;
+    line-height: 1.5;
+    font-family: inherit;
+    min-height: 44px;
+    max-height: 160px;
+    overflow-y: auto;
+    box-sizing: border-box;
+}
+
+#phpclaw-message-ta:focus { border-color: #0d6efd; outline: none; box-shadow: 0 0 0 2px rgba(13, 110, 253, .25); }
+
+#phpclaw-send-btn {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    padding: 0;
+    border: none;
+    background: #0d6efd;
+    color: #fff;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, .18);
+}
+
+#phpclaw-send-btn:hover:not(:disabled) { background: #0b5ed7; }
+#phpclaw-send-btn:disabled { background: #ced4da; cursor: not-allowed; box-shadow: none; }
+#phpclaw-send-btn svg { width: 18px; height: 18px; fill: currentColor; }
+
+#phpclaw-input-meta {
+    text-align: center;
+    font-size: 11px;
+    color: #6c757d;
+    margin-top: 6px;
+}
+
+/* Tool call cards */
+.pc-tool-card {
+    align-self: flex-start;
+    flex-shrink: 0;
+    width: 88%;
+    max-width: 88%;
+    margin: 4px 0;
+    border: 1px solid #d0d7de;
+    border-left: 3px solid #0d6efd;
+    border-radius: 8px;
+    background: #f6f8fa;
+    font-size: 12px;
+    overflow: hidden;
+}
+
+.pc-tool-card__header {
+    padding: 6px 10px;
+    background: #eaeef2;
+    border-bottom: 1px solid #d0d7de;
+}
+
+.pc-tool-card__name { font-weight: 600; color: #0d6efd; }
+
+.pc-tool-card__input {
+    padding: 6px 10px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    color: #57606a;
+    border-bottom: 1px dashed #d0d7de;
+    word-break: break-all;
+}
+
+.pc-tool-card__body { padding: 6px 10px; }
+
+.pc-tool-card__raw {
+    margin: 0;
+    padding: 0 10px 8px;
+    white-space: pre-wrap;
+    word-break: break-word;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 11px;
+    color: #1f2328;
+    max-height: 320px;
+    overflow: auto;
+}
+
+.pc-tool-card__list { list-style: none; margin: 0; padding: 0; }
+.pc-tool-card__item { padding: 5px 0; border-bottom: 1px solid #ebeef1; }
+.pc-tool-card__item:last-child { border-bottom: none; }
+.pc-tool-card__item-title { font-weight: 600; color: #1f2328; }
+.pc-tool-card__item-meta { color: #57606a; font-size: 11px; margin-top: 2px; }
+.pc-tool-card__group-header { font-weight: 600; color: #57606a; margin: 6px 0 2px; text-transform: capitalize; }
+.pc-tool-card__stats-line { display: flex; justify-content: space-between; gap: 12px; padding: 4px 0; border-bottom: 1px dashed #e3e7ea; }
+.pc-tool-card__stats-line:last-child { border-bottom: none; }
+.pc-tool-card__stats-key { color: #57606a; text-transform: capitalize; }
+.pc-tool-card__stats-val { font-weight: 600; color: #1f2328; }
+.pc-tool-card__table { width: 100%; border-collapse: collapse; font-size: 11px; }
+.pc-tool-card__table th, .pc-tool-card__table td { text-align: left; padding: 4px 6px; border-bottom: 1px solid #ebeef1; vertical-align: top; }
+.pc-tool-card__table th { color: #57606a; font-weight: 600; background: #f0f2f4; }
+.pc-tool-card__footer { padding: 6px 0 2px; font-size: 11px; color: #6c757d; }
+.pc-chip { display: inline-block; padding: 1px 7px; border-radius: 10px; font-size: 10px; font-weight: 600; margin-left: 5px; background: #eaeef2; color: #57606a; }
+.pc-badge { display: inline-block; padding: 1px 7px; border-radius: 10px; font-size: 10px; font-weight: 600; margin-left: 5px; }
+.pc-badge--ok { background: #d1f0d9; color: #0a6b2e; }
+.pc-badge--err { background: #fbd5d5; color: #9b1c1c; }
+.pc-badge--muted { background: #e6e8ea; color: #57606a; }
+.pc-tool-card__raw-toggle { border-top: 1px solid #d0d7de; }
+.pc-tool-card__raw-toggle > summary { cursor: pointer; padding: 5px 10px; font-size: 11px; color: #57606a; user-select: none; }
+.pc-tool-card__raw-toggle > summary:hover { color: #0d6efd; }
+.pc-tool-card--pending { border-left-color: #f0ad4e; background: #fff8ec; }
+.pc-tool-card--pending .pc-tool-card__header { background: #fcefd6; border-bottom-color: #f3dca6; }
+.pc-tool-card--pending .pc-tool-card__name { color: #b8860b; }
+
+.pc-spin {
+    display: inline-block;
+    width: 11px;
+    height: 11px;
+    margin-right: 4px;
+    vertical-align: -1px;
+    border: 2px solid #e6c98a;
+    border-top-color: #b8860b;
+    border-radius: 50%;
+    animation: pcSpin 0.7s linear infinite;
+}
+
+@keyframes pcSpin { to { transform: rotate(360deg); } }
+
+@media (prefers-color-scheme: dark) {
+    .pc-tool-card { border-color: #30363d; border-left-color: #4493f8; background: #161b22; }
+    .pc-tool-card__header { background: #21262d; border-bottom-color: #30363d; }
+    .pc-tool-card__name { color: #4493f8; }
+    .pc-tool-card__input { color: #8b949e; border-bottom-color: #30363d; }
+    .pc-tool-card__raw { color: #c9d1d9; }
+    .pc-tool-card__item { border-bottom-color: #21262d; }
+    .pc-tool-card__item-title { color: #e6edf3; }
+    .pc-tool-card__item-meta { color: #8b949e; }
+    .pc-tool-card__group-header { color: #8b949e; }
+    .pc-tool-card__stats-line { border-bottom-color: #21262d; }
+    .pc-tool-card__stats-key { color: #8b949e; }
+    .pc-tool-card__stats-val { color: #e6edf3; }
+    .pc-tool-card__table th { background: #21262d; color: #8b949e; }
+    .pc-tool-card__table th, .pc-tool-card__table td { border-bottom-color: #21262d; }
+    .pc-chip { background: #21262d; color: #8b949e; }
+    .pc-badge--ok { background: #133929; color: #4ac17e; }
+    .pc-badge--err { background: #3c1618; color: #f87171; }
+    .pc-badge--muted { background: #21262d; color: #8b949e; }
+    .pc-tool-card__raw-toggle { border-top-color: #30363d; }
+    .pc-tool-card__raw-toggle > summary { color: #8b949e; }
+    .pc-tool-card__raw-toggle > summary:hover { color: #4493f8; }
+    .pc-tool-card--pending { border-left-color: #d29922; background: #2b2410; }
+    .pc-tool-card--pending .pc-tool-card__header { background: #3a2e10; border-bottom-color: #4d3c14; }
+    .pc-tool-card--pending .pc-tool-card__name { color: #e3b341; }
+    .pc-spin { border-color: #5c4d1f; border-top-color: #e3b341; }
+}
+
+.phpclaw-guide-tabs {
+    border-bottom: 2px solid #dee2e6;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 6px;
+    margin-bottom: 28px;
+}
+
+.phpclaw-guide-tab {
+    padding: 9px 16px;
+    font-size: 13px;
+    font-weight: 600;
+    color: #595f63;
+    background: none;
+    border: none;
+    border-bottom: 3px solid transparent;
+    border-radius: 4px 4px 0 0;
+    cursor: pointer;
+    transition: color 0.15s, border-color 0.15s, background 0.15s;
+}
+
+.phpclaw-guide-tab:hover {
+    color: #0c6370;
+    background: #f1f4f5;
+}
+
+.phpclaw-guide-tab.active {
+    color: #0c6370;
+    border-bottom-color: #0c6370;
+}
+
+.phpclaw-guide-tab:focus-visible {
+    outline: 2px solid #0c6370;
+    outline-offset: 2px;
+}
+
+.phpclaw-guide-panel {
+    display: none;
+}
+
+.phpclaw-guide-panel.active {
+    display: block;
+}
+
+.phpclaw-guide-panel .card {
+    max-width: 960px;
+}
+
+.phpclaw-guide-panel .card-body {
+    padding: 24px 28px;
+}
+
+.phpclaw-guide-panel p {
+    line-height: 1.7;
+}
+
+.phpclaw-guide-panel .table {
+    margin-top: 8px;
+    margin-bottom: 0;
+    width: 100%;
+    background: transparent;
+    border: 0;
+}
+
+#content.bootstrap .phpclaw-guide-panel .table thead th {
+    font-size: 12.8px;
+    font-weight: 700;
+    color: #363a41;
+    background: transparent !important;
+    border: 0 !important;
+    border-bottom: 2px solid #25b9d7 !important;
+    padding: 8px 10px;
+    line-height: 1.5;
+    vertical-align: top;
+    text-transform: none;
+}
+
+#content.bootstrap .phpclaw-guide-panel .table td {
+    font-size: 13px;
+    color: #363a41;
+    background: transparent !important;
+    border: 0 !important;
+    border-top: 1px solid #bbcdd2 !important;
+    padding: 8px 10px;
+    line-height: 1.5;
+    vertical-align: top;
+}
+
+#content.bootstrap .phpclaw-guide-panel .table td code,
+#content.bootstrap .phpclaw-guide-panel .table td small {
+    line-height: 1.5;
+}
+
+.phpclaw-guide-panel .table td.text-muted,
+.phpclaw-guide-panel .table .text-muted {
+    color: #6b7280 !important;
+}
+
+.phpclaw-guide-steps {
+    padding-left: 22px;
+    margin-bottom: 0;
+}
+
+.phpclaw-guide-steps li {
+    margin-bottom: 20px;
+    font-size: 13px;
+    line-height: 1.6;
+}
+
+.phpclaw-guide-steps li:last-child {
+    margin-bottom: 0;
+}
+
+.phpclaw-guide-steps li p {
+    margin: 5px 0 0;
+}
+
+.phpclaw-guide-panel h3,
+.phpclaw-guide-panel h4 {
+    background: transparent !important;
+    background-color: transparent !important;
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+}
+
+/* Guide table column width helpers */
+.phpclaw-col-70  { width: 70px; }
+.phpclaw-col-80  { width: 80px; }
+.phpclaw-col-90  { width: 90px; }
+.phpclaw-col-100 { width: 100px; }
+.phpclaw-col-110 { width: 110px; }
+.phpclaw-col-120 { width: 120px; }
+.phpclaw-col-130 { width: 130px; }
+.phpclaw-col-140 { width: 140px; }
+.phpclaw-col-150 { width: 150px; }
+.phpclaw-col-160 { width: 160px; }
+.phpclaw-col-200 { width: 200px; }
+.phpclaw-col-240 { width: 240px; }
+.phpclaw-col-260 { width: 260px; }
+.phpclaw-col-270 { width: 270px; }
+.phpclaw-col-340 { width: 340px; }
+.phpclaw-col-420 { width: 420px; }
+
+/* Guide table max-width helpers */
+.phpclaw-table-mw-600 { max-width: 600px; }
+.phpclaw-table-mw-640 { max-width: 640px; }
+
+/* Disabled state for the chat panel when phpClaw is not configured */
+.phpclaw-is-disabled {
+    opacity: 0.5;
+    pointer-events: none;
+}
+
+.phpclaw-hidden {
+    display: none;
+}

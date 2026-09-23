@@ -1,0 +1,176 @@
+<?php
+/** @var \PhpClaw\Magento\Block\Adminhtml\Settings $block */
+declare(strict_types=1);
+
+$values    = $block->getValues();
+$saveUrl   = $block->getSaveUrl();
+$testUrl   = $block->getTestConnectionUrl();
+$formKey   = $block->getFormKey();
+$maxIter   = (int) $values['max_iterations'] > 0 ? (int) $values['max_iterations'] : 20;
+$provider  = (string) $values['provider'];
+$isOllama  = $provider === 'ollama';
+$isCustom  = $provider === 'custom';
+$escape    = static fn ($value): string => htmlspecialchars((string) $value, ENT_QUOTES, 'UTF-8');
+?>
+<div class="phpclaw-admin-page">
+
+  <h2 class="phpclaw-page-title">Settings</h2>
+  <p class="phpclaw-body-text phpclaw-page-intro">Configure your AI provider and cloud features.</p>
+
+  <form method="post" action="<?= $escape($saveUrl) ?>" class="phpclaw-settings-form">
+    <input type="hidden" name="form_key" value="<?= $escape($formKey) ?>"/>
+
+    <div class="phpclaw-content-panel">
+      <table class="phpclaw-settings-table">
+        <tbody>
+
+          <tr>
+            <th><label for="phpclaw-provider">Provider</label></th>
+            <td>
+              <select id="phpclaw-provider" name="provider" class="phpclaw-input">
+                <?php foreach ($block->getProviderOptions() as $opt): ?>
+                  <option value="<?= $escape($opt['value']) ?>"
+                          <?= $values['provider'] === $opt['value'] ? 'selected' : '' ?>>
+                    <?= $escape($opt['label']) ?>
+                  </option>
+                <?php endforeach; ?>
+              </select>
+            </td>
+          </tr>
+
+          <tr>
+            <th><label for="phpclaw-model">Model</label></th>
+            <td>
+              <input id="phpclaw-model" type="text" name="model" class="phpclaw-input"
+                     value="<?= $escape($values['model']) ?>"/>
+            </td>
+          </tr>
+
+          <tr id="phpclaw-row-api-key" style="<?= $isOllama ? 'display:none' : '' ?>">
+            <th><label for="phpclaw-api-key">API Key</label></th>
+            <td>
+              <input id="phpclaw-api-key" type="password" name="api_key" class="phpclaw-input"
+                     autocomplete="new-password"
+                     value="<?= $escape($values['api_key']) ?>"
+                     placeholder="<?= $block->hasApiKey() ? '(saved, leave blank to keep)' : '' ?>"/>
+              <p class="phpclaw-field-help">Your API key for the selected provider. Not required for Ollama (local models).</p>
+            </td>
+          </tr>
+
+          <tr id="phpclaw-row-base-url" style="<?= $isCustom ? '' : 'display:none' ?>">
+            <th><label for="phpclaw-base-url">Base URL</label></th>
+            <td>
+              <input id="phpclaw-base-url" type="url" name="base_url" class="phpclaw-input"
+                     value="<?= $escape($values['base_url']) ?>"
+                     placeholder="https://openrouter.ai/api/v1/chat/completions"/>
+              <p class="phpclaw-field-help">OpenAI-compatible endpoint URL. Only used when provider is set to Custom.</p>
+            </td>
+          </tr>
+
+          <tr>
+            <th><label for="phpclaw-system-prompt">System Prompt</label></th>
+            <td>
+              <textarea id="phpclaw-system-prompt" name="system_prompt" rows="4" class="phpclaw-input phpclaw-input--textarea"
+                        placeholder="e.g. You are a helpful assistant for my Magento store. Always be concise."><?= $escape($values['system_prompt']) ?></textarea>
+              <p class="phpclaw-field-help">Optional. Customise the AI's persona and behaviour for your site.</p>
+            </td>
+          </tr>
+
+          <tr>
+            <th><label for="phpclaw-store-messages">Store Messages</label></th>
+            <td>
+              <label class="phpclaw-checkbox-label">
+                <input id="phpclaw-store-messages" type="checkbox" name="store_messages" value="1"
+                       <?= $values['store_messages'] ? 'checked' : '' ?>/>
+                Enable chat history (recommended)
+              </label>
+              <p class="phpclaw-field-help">When enabled: prompt and response text is persisted via your configured memory driver, required for multi-turn chat to remember previous messages. When disabled: no message content is ever saved; each prompt is processed independently with no memory of previous turns.</p>
+            </td>
+          </tr>
+
+          <tr>
+            <th><label for="phpclaw-max-iterations">Max Iterations</label></th>
+            <td>
+              <input id="phpclaw-max-iterations" type="number" name="max_iterations" min="1" max="50"
+                     class="phpclaw-input phpclaw-input--small"
+                     value="<?= $escape($maxIter) ?>"/>
+              <p class="phpclaw-field-help">Maximum tool-call iterations per request. Default: 20.</p>
+            </td>
+          </tr>
+
+          <?php if ($block->isCloudAvailable()): ?>
+          <tr id="phpclaw-cloud-off-notice"<?= $block->storeMessagesEnabled() ? ' style="display:none"' : '' ?>>
+            <td colspan="2">
+              <div class="message message-notice">
+                Store Messages is off, so cloud tracing and the cloud security scan are inactive and
+                the cloud fields are hidden. Your saved cloud settings are kept. Turn Store Messages
+                on to see them again.
+              </div>
+            </td>
+          </tr>
+
+          <tr data-phpclaw-cloud-row="1">
+            <th><label for="phpclaw-cloud-key">Cloud Key</label></th>
+            <td>
+              <input id="phpclaw-cloud-key" type="password" name="cloud_key" class="phpclaw-input"
+                     autocomplete="new-password"
+                     value="<?= $escape($values['cloud_key']) ?>"
+                     placeholder="<?= $block->hasCloudKey() ? '(saved, leave blank to keep)' : '' ?>"/>
+              <p class="phpclaw-field-help">phpClaw Cloud API key. Enables cloud guards and webhook features. Optional. Requires a phpClaw Cloud account; visit <a href="https://phpclaw.ai" target="_blank" rel="noopener">phpclaw.ai</a> to sign up.</p>
+            </td>
+          </tr>
+
+          <tr data-phpclaw-cloud-row="1">
+            <th><label for="phpclaw-cloud-signing-secret">Cloud Signing Secret</label></th>
+            <td>
+              <input id="phpclaw-cloud-signing-secret" type="password" name="cloud_signing_secret" class="phpclaw-input"
+                     autocomplete="new-password"
+                     value="<?= $escape($values['cloud_signing_secret']) ?>"
+                     placeholder="<?= $block->hasCloudSigningSecret() ? '(saved, leave blank to keep)' : '' ?>"/>
+              <p class="phpclaw-field-help">Shared secret used to verify signed cloud scan responses. Copy it from your phpClaw Cloud dashboard when you create the API key. Leave empty to skip signature verification.</p>
+            </td>
+          </tr>
+
+          <tr data-phpclaw-cloud-row="1">
+            <th><label for="phpclaw-cloud-disable">Disable Cloud Features</label></th>
+            <td>
+              <input id="phpclaw-cloud-disable" type="text" name="cloud_disable" class="phpclaw-input"
+                     value="<?= $escape($values['cloud_disable']) ?>"
+                     placeholder="e.g. guards, webhooks"/>
+              <p class="phpclaw-field-help">Comma-separated cloud feature names to disable. Leave empty to enable all features from your plan. Only applies when a Cloud Key is set above.</p>
+            </td>
+          </tr>
+          <?php endif; ?>
+
+          <tr>
+            <th><label for="phpclaw-remote-skill-urls">Remote Skill URLs</label></th>
+            <td>
+              <textarea id="phpclaw-remote-skill-urls" name="remote_skill_urls" rows="3" class="phpclaw-input phpclaw-input--textarea"
+                        placeholder="https://example.com/skills/seo.md, https://example.com/skills/tone.json"><?= $escape($values['remote_skill_urls']) ?></textarea>
+              <p class="phpclaw-field-help">Comma-separated HTTPS SKILL.md / JSON URLs, always-on and keyword-matched. Skills inject curated context snippets automatically when their keywords match the user message.</p>
+            </td>
+          </tr>
+
+        </tbody>
+      </table>
+
+      <div class="phpclaw-settings-actions">
+        <button type="submit" class="action-default scalable phpclaw-btn-primary">Save Settings</button>
+        <button type="button" id="phpclaw-test-conn" class="action-default scalable phpclaw-btn-secondary">Test Connection</button>
+        <span id="phpclaw-test-result" class="phpclaw-test-result"></span>
+        <p class="phpclaw-field-help phpclaw-test-help">Save your settings first, then click Test Connection.</p>
+      </div>
+    </div>
+  </form>
+
+  <?= $block->getChildHtml('phpclaw_footer') ?: '' ?>
+
+</div>
+
+<script type="application/json" id="phpclaw-settings-config">
+<?= /* @noEscape */ json_encode([
+    'test_url' => $testUrl,
+    'form_key' => $formKey,
+], JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>
+</script>
+<script src="<?= $block->escapeUrl($block->getViewFileUrl('PhpClaw_Magento::js/phpclaw-settings.js')) ?>"></script>

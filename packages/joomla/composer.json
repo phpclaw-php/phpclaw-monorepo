@@ -1,0 +1,106 @@
+{
+    "name": "phpclaw/phpclaw-joomla",
+    "description": "phpClaw adapter for Joomla 4/5/6. System plugin, admin component, CLI command, Joomla Database API.",
+    "homepage": "https://phpclaw.ai",
+    "type": "library",
+    "keywords": [
+        "joomla",
+        "ai",
+        "agent",
+        "llm",
+        "phpclaw",
+        "chatbot",
+        "automation",
+        "joomla-plugin",
+        "joomla-component"
+    ],
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "Akash Patel",
+            "email": "er.akashpatel1908@gmail.com"
+        }
+    ],
+    "support": {
+        "issues": "https://github.com/phpclaw-php/phpclaw-monorepo/issues",
+        "source": "https://github.com/phpclaw-php/phpclaw-monorepo",
+        "docs": "https://phpclaw.ai/docs"
+    },
+    "require": {
+        "php": "^8.1",
+        "phpclaw/phpclaw": "^0.1",
+        "phpclaw/phpclaw-cloud": "^0.1",
+        "phpclaw/phpclaw-mcp": "^0.1"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^10.5",
+        "laravel/pint": "^1.0",
+        "phpstan/phpstan": "^1.10",
+        "joomla/console": "^3.0",
+        "joomla/database": "^3.0",
+        "joomla/di": "^3.0",
+        "phpbench/phpbench": "^1.6"
+    },
+    "autoload": {
+        "psr-4": {
+            "PhpClaw\\Joomla\\": "plugin/src/",
+            "PhpClaw\\Joomla\\WebServices\\": "webservices/src/",
+            "PhpClaw\\Joomla\\Component\\Administrator\\": "component/src/",
+            "PhpClaw\\Joomla\\Component\\Api\\": "component/api/src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "PhpClaw\\Joomla\\Tests\\": "tests/"
+        },
+        "exclude-from-classmap": [
+            "tests/Support/Stubs/"
+        ]
+    },
+    "scripts": {
+        "test": "phpunit --configuration phpunit.xml",
+        "test:coverage": "phpunit --configuration phpunit.xml --coverage-text",
+        "lint": "pint",
+        "analyse": "phpstan analyse",
+        "sync-core": "composer reinstall phpclaw/phpclaw phpclaw/phpclaw-cloud phpclaw/phpclaw-mcp"
+    },
+    "repositories": [
+        {
+            "type": "path",
+            "url": "../core",
+            "options": {
+                "symlink": false,
+                "versions": {
+                    "phpclaw/phpclaw": "0.1.0"
+                }
+            }
+        },
+        {
+            "type": "path",
+            "url": "../cloud",
+            "options": {
+                "symlink": false,
+                "versions": {
+                    "phpclaw/phpclaw-cloud": "0.1.0"
+                }
+            }
+        },
+        {
+            "type": "path",
+            "url": "../mcp",
+            "options": {
+                "symlink": false,
+                "versions": {
+                    "phpclaw/phpclaw-mcp": "0.1.0"
+                }
+            }
+        }
+    ],
+    "minimum-stability": "stable",
+    "prefer-stable": true,
+    "config": {
+        "platform": {
+            "php": "8.3"
+        }
+    }
+}

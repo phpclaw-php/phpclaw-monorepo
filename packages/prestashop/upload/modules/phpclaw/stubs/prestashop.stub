@@ -1,0 +1,617 @@
+<?php
+
+/**
+ * PrestaShop framework stubs for PHPStan static analysis.
+ *
+ * Declares the PS core classes, constants, and functions used by this module.
+ * Loaded via phpstan.neon scanFiles, never shipped (export-ignored).
+ */
+
+// ----- Constants -----
+
+define('_DB_PREFIX_', 'ps_');
+define('_PS_VERSION_', '8.2.0');
+define('_PS_ROOT_DIR_', '/var/www/html');
+define('_PS_MODULE_DIR_', '/var/www/html/modules/');
+
+// ----- Classes -----
+
+class Configuration
+{
+    /**
+     * @param  string      $key
+     * @param  mixed       $defaultValue
+     * @param  int|null    $idLang
+     * @param  int|null    $idShopGroup
+     * @param  int|null    $idShop
+     * @return string|false|null
+     */
+    public static function get(
+        string $key,
+        mixed $defaultValue = false,
+        ?int $idLang = null,
+        ?int $idShopGroup = null,
+        ?int $idShop = null,
+    ): string|false|null {
+    }
+
+    /**
+     * @param  string   $key
+     * @param  mixed    $values
+     * @param  bool     $html
+     * @param  int|null $idShopGroup
+     * @param  int|null $idShop
+     * @return bool
+     */
+    public static function updateValue(
+        string $key,
+        mixed $values,
+        bool $html = false,
+        ?int $idShopGroup = null,
+        ?int $idShop = null,
+    ): bool {
+    }
+
+    /**
+     * @param  string $key
+     * @return bool
+     */
+    public static function deleteByName(string $key): bool
+    {
+    }
+
+    /**
+     * @return void
+     */
+    public static function clearConfigurationCacheForTesting(): void
+    {
+    }
+
+    /**
+     * @return void
+     */
+    public static function loadConfiguration(): void
+    {
+    }
+}
+
+class Db
+{
+    /**
+     * @param  bool   $master
+     * @return static
+     */
+    public static function getInstance(bool $master = true): static
+    {
+    }
+
+    /**
+     * @param  string $sql
+     * @param  bool   $array
+     * @param  bool   $nullOnError
+     * @return array<int, array<string, mixed>>|false
+     */
+    public function executeS(string $sql, bool $array = true, bool $nullOnError = false): array|false
+    {
+    }
+
+    /**
+     * @param  string $sql
+     * @param  bool   $nullOnError
+     * @return bool
+     */
+    public function execute(string $sql, bool $nullOnError = false): bool
+    {
+    }
+
+    /**
+     * @param  string $string
+     * @param  bool   $htmlOk
+     * @param  bool   $bqSql
+     * @return string
+     */
+    public function escape(string $string, bool $htmlOk = false, bool $bqSql = false): string
+    {
+    }
+}
+
+class Hook
+{
+    /**
+     * @param  string      $hookName
+     * @param  array<mixed> $hookArgs
+     * @param  int|null    $idModule
+     * @param  bool        $arrayReturn
+     * @param  bool        $checkExceptions
+     * @param  bool        $usePush
+     * @param  int|null    $idShop
+     * @param  bool        $chain
+     * @return string|array<int, mixed>|false|null
+     */
+    public static function exec(
+        string $hookName,
+        array $hookArgs = [],
+        ?int $idModule = null,
+        bool $arrayReturn = false,
+        bool $checkExceptions = true,
+        bool $usePush = false,
+        ?int $idShop = null,
+        bool $chain = false,
+    ): string|array|false|null {
+    }
+}
+
+class Tools
+{
+    /**
+     * @param  string $key
+     * @param  mixed  $defaultValue
+     * @return mixed
+     */
+    public static function getValue(string $key, mixed $defaultValue = false): mixed
+    {
+    }
+
+    /**
+     * @param  string $key
+     * @return bool
+     */
+    public static function isSubmit(string $key): bool
+    {
+    }
+
+    /**
+     * @param  string $url
+     * @return void
+     */
+    public static function redirectAdmin(string $url): void
+    {
+    }
+}
+
+class Validate
+{
+    /**
+     * @param  mixed $object
+     * @return bool
+     */
+    public static function isLoadedObject(mixed $object): bool
+    {
+    }
+}
+
+class Employee
+{
+    public int $id = 0;
+    public int $id_employee = 0;
+    public int $id_profile = 0;
+    public bool $active = false;
+    public string $email = '';
+
+    /**
+     * @param  bool  $activeOnly
+     * @return array<int, array<string, mixed>>
+     */
+    public static function getEmployees(bool $activeOnly = true): array
+    {
+    }
+
+    /**
+     * @return bool
+     */
+    public function isSuperAdmin(): bool
+    {
+    }
+
+    /**
+     * @param int $id
+     */
+    public function __construct(int $id = 0)
+    {
+    }
+
+    /**
+     * @param  int    $idEmployee
+     * @param  string $passwd
+     * @return bool
+     */
+    public function checkPassword(int $idEmployee, string $passwd): bool
+    {
+    }
+}
+
+class PrestaShopLogger
+{
+    /**
+     * @param  string      $message
+     * @param  int         $severity
+     * @param  int|null    $errorCode
+     * @param  string|null $objectType
+     * @param  int|null    $objectId
+     * @param  bool        $allowDuplicate
+     * @return bool
+     */
+    public static function addLog(
+        string $message,
+        int $severity = 1,
+        ?int $errorCode = null,
+        ?string $objectType = null,
+        ?int $objectId = null,
+        bool $allowDuplicate = false,
+    ): bool {
+    }
+}
+
+class Phpclaw
+{
+    public const PHPCLAW_VERSION = '1.0.0';
+}
+
+class Module
+{
+    public string $name;
+
+    public string $tab;
+
+    public string $version;
+
+    public string $author;
+
+    public int $need_instance;
+
+    public string $displayName;
+
+    public string $description;
+
+    public bool $bootstrap;
+
+    public int $id;
+
+    /** @var array<string, mixed> */
+    public array $ps_versions_compliancy;
+
+    /** @var array<string, static> */
+    public static array $_INSTANCE;
+
+    public Context $context;
+
+    public function __construct()
+    {
+    }
+
+    /**
+     * @param  string $moduleName
+     * @return static|false
+     */
+    public static function getInstanceByName(string $moduleName): static|false
+    {
+    }
+
+    /**
+     * @return bool
+     */
+    public function install(): bool
+    {
+    }
+
+    /**
+     * @return bool
+     */
+    public function uninstall(): bool
+    {
+    }
+
+    /**
+     * @param  string $hookName
+     * @return bool
+     */
+    public function registerHook(string $hookName): bool
+    {
+    }
+
+    /**
+     * @return string
+     */
+    public function getPathUri(): string
+    {
+    }
+
+    /**
+     * @param  string                $id
+     * @param  array<int, mixed>     $parameters
+     * @param  string|null           $domain
+     * @param  string|null           $locale
+     * @return string
+     */
+    public function trans(string $id, array $parameters = [], ?string $domain = null, ?string $locale = null): string
+    {
+    }
+}
+
+class Language
+{
+    /**
+     * @param  bool $active
+     * @return array<int, array<string, mixed>>
+     */
+    public static function getLanguages(bool $active = true): array
+    {
+    }
+}
+
+class Smarty
+{
+    /**
+     * @param  string|array<string, mixed> $name
+     * @param  mixed                       $value
+     * @return static
+     */
+    public function assign(string|array $name, mixed $value = null): static
+    {
+    }
+
+    /**
+     * @param  string  $template
+     * @param  mixed   $cacheId
+     * @param  mixed   $compileId
+     * @param  mixed   $parent
+     * @param  bool    $display
+     * @return string
+     */
+    public function fetch(string $template, mixed $cacheId = null, mixed $compileId = null, mixed $parent = null, bool $display = false): string
+    {
+    }
+}
+
+class Link
+{
+    /**
+     * @param  string                $controller
+     * @param  bool                  $withToken
+     * @param  array<string, mixed>  $sfRouteParams
+     * @param  array<string, mixed>  $params
+     * @return string
+     */
+    public function getAdminLink(
+        string $controller,
+        bool $withToken = true,
+        array $sfRouteParams = [],
+        array $params = [],
+    ): string {
+    }
+
+    /**
+     * @param  string        $module
+     * @param  string        $controller
+     * @param  array<mixed>  $params
+     * @param  bool|null     $ssl
+     * @param  int|null      $idLang
+     * @param  int|null      $idShop
+     * @param  bool          $relativeProtocol
+     * @return string
+     */
+    public function getModuleLink(
+        string $module,
+        string $controller = 'default',
+        array $params = [],
+        ?bool $ssl = null,
+        ?int $idLang = null,
+        ?int $idShop = null,
+        bool $relativeProtocol = false,
+    ): string {
+    }
+}
+
+class Shop
+{
+    /**
+     * @param  bool $withSsl
+     * @return string
+     */
+    public function getBaseURL(bool $withSsl = false): string
+    {
+    }
+}
+
+class Context
+{
+    public ?\Employee $employee = null;
+    public \Smarty $smarty;
+    public ?\Controller $controller;
+    public \Link $link;
+    public object $cookie;
+    public \Shop $shop;
+
+    /**
+     * @return static
+     */
+    public static function getContext(): static
+    {
+    }
+}
+
+class Controller
+{
+    public \Context $context;
+
+    /**
+     * @param  string|array<int, string> $css
+     * @param  string                    $cssMediaType
+     * @param  int|null                  $offset
+     * @param  bool                      $checkPath
+     * @return void
+     */
+    public function addCSS(string|array $css, string $cssMediaType = "all", ?int $offset = null, bool $checkPath = true): void
+    {
+    }
+
+    /**
+     * @param  string|array<int, string> $js
+     * @param  bool                      $checkPath
+     * @return void
+     */
+    public function addJS(string|array $js, bool $checkPath = true): void
+    {
+    }
+
+    public function __construct()
+    {
+    }
+
+    /**
+     * @param  string      $id
+     * @param  array<mixed> $parameters
+     * @param  string|null $domain
+     * @param  string|null $locale
+     * @return string
+     */
+    public function trans(string $id, array $parameters = [], ?string $domain = null, ?string $locale = null): string
+    {
+    }
+}
+
+class AdminController extends Controller
+{
+    public string $meta_title = '';
+    public string $content = '';
+    public bool $bootstrap = false;
+
+    /** @var array<int, string> */
+    public array $errors = [];
+
+    /** @var array<int, string> */
+    public array $warnings = [];
+
+    /** @var array<int, string> */
+    public array $informations = [];
+
+    public object $module;
+
+    public function __construct()
+    {
+    }
+
+    public function initContent(): void
+    {
+    }
+
+    /**
+     * @param  string      $type
+     * @param  string|null $idTab
+     * @return bool
+     */
+    public function access(string $type, ?string $idTab = null): bool
+    {
+    }
+
+    /**
+     * @param  string|null $value
+     * @param  string|null $controller
+     * @param  string|null $method
+     * @return void
+     */
+    public function ajaxRender(?string $value = null, ?string $controller = null, ?string $method = null): void
+    {
+    }
+
+    /**
+     * @return bool
+     */
+    public function checkToken(): bool
+    {
+    }
+}
+
+class ModuleAdminController extends AdminController
+{
+    public function __construct()
+    {
+    }
+}
+
+class FrontController extends Controller
+{
+    public object $module;
+
+    public $ajax = false;
+
+    public function __construct()
+    {
+    }
+
+    public function init(): void
+    {
+    }
+}
+
+class ModuleFrontController extends FrontController
+{
+    public function __construct()
+    {
+    }
+
+    public function init(): void
+    {
+    }
+
+    public function display(): void
+    {
+    }
+}
+
+class Tab
+{
+    public int $id;
+
+    /** @var array<int, string>|string */
+    public $name;
+
+    public string $class_name;
+
+    public string $module;
+
+    public int $active;
+
+    public int $id_parent;
+
+    /**
+     * @param  int|null $id
+     */
+    public function __construct(?int $id = null)
+    {
+    }
+
+    /**
+     * @param  string $className
+     * @return int
+     */
+    public static function getIdFromClassName(string $className): int
+    {
+    }
+
+    /**
+     * @return bool
+     */
+    public function add(): bool
+    {
+    }
+
+    /**
+     * @return bool
+     */
+    public function delete(): bool
+    {
+    }
+}
+
+class Profile
+{
+    /**
+     * @param  int $idProfile
+     * @param  int $idTab
+     * @return array<string, mixed>|false
+     */
+    public static function getProfileAccess(int $idProfile, int $idTab)
+    {
+    }
+}

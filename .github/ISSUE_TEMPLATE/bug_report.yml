@@ -1,0 +1,126 @@
+name: Bug Report
+description: Report a bug in phpClaw or one of its adapters
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a bug. Please fill in every required field so we can reproduce it.
+
+        Found a wrong PHPDoc comment or a static-analysis warning? Open a pull request instead of an issue.
+
+        Found a security issue? Do not open a public issue. Follow the steps in [SECURITY.md](https://github.com/phpclaw-php/phpclaw-monorepo/blob/HEAD/.github/SECURITY.md) instead.
+  - type: dropdown
+    id: package
+    attributes:
+      label: Package
+      description: Which phpClaw package is affected?
+      options:
+        - core (phpclaw/phpclaw)
+        - cloud (phpclaw/phpclaw-cloud)
+        - mcp (phpclaw/phpclaw-mcp)
+        - wordpress (phpclaw/phpclaw-wordpress)
+        - joomla (phpclaw/phpclaw-joomla)
+        - drupal (phpclaw/phpclaw-drupal)
+        - magento (phpclaw/phpclaw-magento)
+        - opencart (phpclaw/phpclaw-opencart)
+        - prestashop (phpclaw/phpclaw-prestashop)
+        - laravel (phpclaw/phpclaw-laravel)
+        - symfony (phpclaw/phpclaw-symfony)
+        - Not sure
+    validations:
+      required: true
+  - type: input
+    id: phpclaw-version
+    attributes:
+      label: phpClaw Version
+      description: The exact version of the affected package. For a Composer install, run `composer show phpclaw/<package>`.
+      placeholder: "composer show phpclaw/phpclaw-wordpress"
+    validations:
+      required: true
+  - type: input
+    id: platform-version
+    attributes:
+      label: Platform and Version
+      description: The CMS or framework phpClaw runs on, with its exact version. Write N/A for a standalone core, cloud or mcp install.
+      placeholder: "WordPress 6.8.1"
+    validations:
+      required: true
+  - type: input
+    id: php-version
+    attributes:
+      label: PHP Version
+      description: Output of `php -v`. Please be as specific as possible.
+      placeholder: "8.3.12"
+    validations:
+      required: true
+  - type: dropdown
+    id: provider
+    attributes:
+      label: LLM Provider
+      description: Which provider was configured when the bug happened?
+      options:
+        - Anthropic
+        - OpenAI
+        - Gemini
+        - OpenAI-compatible endpoint (Ollama, LM Studio, other)
+        - Not provider related
+    validations:
+      required: true
+  - type: dropdown
+    id: install-method
+    attributes:
+      label: Install Method
+      options:
+        - Composer
+        - ZIP upload
+    validations:
+      required: true
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: A clear description of the bug.
+    validations:
+      required: true
+  - type: textarea
+    id: steps-to-reproduce
+    attributes:
+      label: Steps To Reproduce
+      description: Numbered steps or a short code sample that reproduces the bug on a clean install. Link a repository if it helps.
+      placeholder: |
+        1. Install ...
+        2. Configure ...
+        3. Send the prompt ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected Behaviour
+      description: What you expected to happen.
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual Behaviour
+      description: What happened instead.
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs and Error Output
+      description: Stack traces or log lines. Remove API keys, prompts containing personal data and any other secrets before pasting.
+      render: shell
+    validations:
+      required: false
+  - type: textarea
+    id: notes
+    attributes:
+      label: Notes
+      description: Anything else that might be relevant.
+    validations:
+      required: false

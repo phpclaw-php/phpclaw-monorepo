@@ -1,0 +1,108 @@
+{
+    "name": "phpclaw/phpclaw-wordpress",
+    "description": "AI assistant plugin for WordPress and WooCommerce: chat UI, 30 built-in tools, 8 AI providers, REST API and WP-CLI commands.",
+    "homepage": "https://phpclaw.ai",
+    "type": "wordpress-plugin",
+    "license": "MIT",
+    "keywords": [
+        "ai",
+        "agent",
+        "llm",
+        "wordpress",
+        "woocommerce",
+        "wp-cli",
+        "anthropic",
+        "openai",
+        "phpclaw"
+    ],
+    "authors": [
+        {
+            "name": "Akash Patel",
+            "email": "er.akashpatel1908@gmail.com",
+            "homepage": "https://phpclaw.ai"
+        }
+    ],
+    "support": {
+        "issues": "https://github.com/phpclaw-php/phpclaw-monorepo/issues",
+        "source": "https://github.com/phpclaw-php/phpclaw-monorepo",
+        "docs": "https://phpclaw.ai/docs"
+    },
+    "require": {
+        "php": "^8.1",
+        "phpclaw/phpclaw": "^0.1",
+        "phpclaw/phpclaw-cloud": "^0.1",
+        "phpclaw/phpclaw-mcp": "^0.1"
+    },
+    "autoload": {
+        "psr-4": {
+            "PhpClaw\\WordPress\\": "src/",
+            "PhpClaw\\WooCommerce\\": "src/WooCommerce/"
+        },
+        "files": [
+            "src/helpers.php"
+        ]
+    },
+    "require-dev": {
+        "brain/monkey": "^2.6",
+        "laravel/pint": "^1.0",
+        "mockery/mockery": "^1.5",
+        "php-stubs/woocommerce-stubs": "^11.0",
+        "php-stubs/wp-cli-stubs": "^2.12",
+        "phpbench/phpbench": "^1.6",
+        "phpstan/phpstan": "^1.0 || ^2.0",
+        "phpunit/phpunit": "^10.5",
+        "szepeviktor/phpstan-wordpress": "^2.0"
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "PhpClaw\\WordPress\\Tests\\": "tests/"
+        }
+    },
+    "scripts": {
+        "test": "phpunit",
+        "lint": "pint",
+        "analyse": "phpstan analyse",
+        "sync-core": "composer reinstall phpclaw/phpclaw phpclaw/phpclaw-cloud phpclaw/phpclaw-mcp"
+    },
+    "repositories": [
+        {
+            "type": "path",
+            "url": "../core",
+            "options": {
+                "symlink": false,
+                "versions": {
+                    "phpclaw/phpclaw": "0.1.0"
+                }
+            }
+        },
+        {
+            "type": "path",
+            "url": "../cloud",
+            "options": {
+                "symlink": false,
+                "versions": {
+                    "phpclaw/phpclaw-cloud": "0.1.0"
+                }
+            }
+        },
+        {
+            "type": "path",
+            "url": "../mcp",
+            "options": {
+                "symlink": false,
+                "versions": {
+                    "phpclaw/phpclaw-mcp": "0.1.0"
+                }
+            }
+        }
+    ],
+    "minimum-stability": "stable",
+    "prefer-stable": true,
+    "config": {
+        "sort-packages": true,
+        "allow-plugins": true,
+        "platform": {
+            "php": "8.3"
+        }
+    }
+}

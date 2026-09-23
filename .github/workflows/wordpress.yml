@@ -1,0 +1,109 @@
+name: WordPress Adapter
+
+on:
+  push:
+    branches: [0.x]
+    paths:
+      - 'packages/wordpress/**'
+      - '!packages/wordpress/**.md'
+      - '.github/workflows/wordpress.yml'
+      - '.github/workflows/_adapter-quality.yml'
+  pull_request:
+    paths:
+      - 'packages/wordpress/**'
+      - '!packages/wordpress/**.md'
+      - '.github/workflows/wordpress.yml'
+      - '.github/workflows/_adapter-quality.yml'
+
+
+concurrency:
+  group: wordpress-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    uses: ./.github/workflows/_adapter-quality.yml
+    with:
+      adapter: wordpress
+      is_cms: true
+      php_versions: '["8.1","8.2","8.3","8.4"]'
+
+  test:
+    name: PHP ${{ matrix.php }} / WP ${{ matrix.wordpress }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    strategy:
+      fail-fast: false
+      matrix:
+        # wordpress here is a display label only unit tests stub WP via
+        # brain/monkey (no real WP core installed, nothing in bootstrap.php
+        # varies by version). Real per-version compatibility is covered by
+        # a separate integration test pipeline.
+        php:       ['8.1', '8.2', '8.3', '8.4']
+        wordpress: ['6.0', '6.7', '7.0']
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up PHP ${{ matrix.php }}
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          extensions: curl, json, mbstring
+          coverage: none
+
+      - name: Install dependencies
+        working-directory: packages/wordpress
+        run: composer install --prefer-dist --no-progress --no-interaction --ignore-platform-req=php
+
+
+      - name: Run unit tests
+        working-directory: packages/wordpress
+        run: vendor/bin/phpunit --testsuite=Unit --testdox
+
+      - name: Run feature tests (optional — skip without key)
+        working-directory: packages/wordpress
+        run: vendor/bin/phpunit --testsuite=Feature --testdox
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          OPENAI_API_KEY:    ${{ secrets.OPENAI_API_KEY }}
+          GROQ_API_KEY:      ${{ secrets.GROQ_API_KEY }}
+        continue-on-error: true
+
+  coverage:
+    name: Coverage (PHP 8.3)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: test
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up PHP 8.3 with Xdebug
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: curl, json, mbstring, xdebug
+          coverage: xdebug
+
+      - name: Install dependencies
+        working-directory: packages/wordpress
+        run: composer install --prefer-dist --no-progress --no-interaction
+
+      - name: Run tests with coverage
+        working-directory: packages/wordpress
+        run: |
+          vendor/bin/phpunit --testsuite=Unit \
+            --coverage-text \
+            --coverage-clover=coverage.xml
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v7
+        with:
+          files: packages/wordpress/coverage.xml
+          flags: wordpress
+          fail_ci_if_error: false
+        continue-on-error: true

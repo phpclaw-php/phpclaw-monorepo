@@ -1,0 +1,69 @@
+name: phpClaw Magento
+
+on:
+  push:
+    branches: [0.x]
+    paths:
+      - 'packages/magento/**'
+      - '!packages/magento/**.md'
+      - '.github/workflows/magento.yml'
+      - '.github/workflows/_adapter-quality.yml'
+  pull_request:
+    paths:
+      - 'packages/magento/**'
+      - '!packages/magento/**.md'
+      - '.github/workflows/magento.yml'
+      - '.github/workflows/_adapter-quality.yml'
+
+
+concurrency:
+  group: magento-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    uses: ./.github/workflows/_adapter-quality.yml
+    with:
+      adapter: magento
+      is_cms: true
+      php_versions: '["8.1","8.2","8.3","8.4"]'
+
+  test:
+    name: PHP ${{ matrix.php }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    strategy:
+      fail-fast: false
+      matrix:
+        php: ['8.1', '8.2', '8.3', '8.4']
+
+    defaults:
+      run:
+        working-directory: packages/magento
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up PHP ${{ matrix.php }}
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          extensions: pdo, pdo_sqlite, json, mbstring
+          coverage: xdebug
+
+      - name: Install dependencies
+        run: composer install --prefer-dist --no-interaction --ignore-platform-req=php
+
+      - name: Run tests with coverage
+        run: composer test:coverage
+
+      - name: Enforce 80% coverage
+        continue-on-error: true
+        run: |
+          COVERAGE=$(composer test:coverage 2>&1 | grep -oP 'Lines:\s+\K[\d.]+' | head -1)
+          echo "Coverage: ${COVERAGE}%"
+          if (( $(echo "$COVERAGE < 80" | bc -l) )); then
+            echo "Coverage ${COVERAGE}% is below the 80% minimum"
+            exit 1
+          fi

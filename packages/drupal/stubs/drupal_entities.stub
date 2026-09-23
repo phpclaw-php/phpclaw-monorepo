@@ -1,0 +1,88 @@
+<?php
+
+/**
+ * PHPStan stubs for Drupal module entity interfaces not registered in the Composer
+ * autoloader (Drupal loads them via its own classloader at runtime).  We declare
+ * only the methods our tools actually call so PHPStan can validate the call-sites.
+ */
+
+namespace Drupal\block;
+
+use Drupal\Core\Config\Entity\ConfigEntityInterface;
+
+interface BlockInterface extends ConfigEntityInterface
+{
+    public function getPluginId(): string;
+
+    public function getRegion(): string;
+
+    public function getTheme(): string;
+
+    public function getWeight(): int;
+}
+
+namespace Drupal\user;
+
+use Drupal\Core\Entity\EntityInterface;
+use Drupal\Core\Config\Entity\ConfigEntityInterface;
+
+interface UserInterface extends EntityInterface
+{
+    public function getCreatedTime(): int;
+
+    public function getLastAccessedTime(): int;
+
+    public function getAccountName(): string;
+
+    public function isActive(): bool;
+
+    /**
+     * @return \Drupal\Core\Language\LanguageInterface
+     */
+    public function language(): \Drupal\Core\Language\LanguageInterface;
+}
+
+interface RoleInterface extends ConfigEntityInterface
+{
+    /**
+     * @return string[]
+     */
+    public function getPermissions(): array;
+
+    public function isAdmin(): bool;
+}
+
+namespace Drupal\system;
+
+use Drupal\Core\Config\Entity\ConfigEntityInterface;
+
+interface MenuInterface extends ConfigEntityInterface
+{
+    public function getDescription(): string;
+}
+
+namespace Drupal\views;
+
+use Drupal\Core\Config\Entity\ConfigEntityInterface;
+
+interface ViewEntityInterface extends ConfigEntityInterface
+{
+}
+
+namespace Drupal\webform;
+
+use Drupal\Core\Config\Entity\ConfigEntityInterface;
+
+interface WebformInterface extends ConfigEntityInterface
+{
+    public function isOpen(): bool;
+}
+
+class WebformEntityStorage
+{
+    /**
+     * @param array<int|string>|null $ids
+     * @return array<string, WebformInterface>
+     */
+    public function loadMultiple(?array $ids = null): array {}
+}

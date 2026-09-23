@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/phpclaw-php/phpclaw-monorepo/blob/HEAD/.github/SECURITY.md
+    about: Report security issues privately by email, never in a public issue.

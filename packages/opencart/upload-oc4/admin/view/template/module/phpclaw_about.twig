@@ -1,0 +1,91 @@
+{{ header }}{{ column_left }}
+<div id="content">
+  <div class="page-header">
+    <div class="container-fluid">
+      <div class="float-end">
+        {% if can_manage_all %}<a href="{{ url_settings }}" class="btn btn-secondary"><i class="fa fa-cog"></i> Settings</a>{% endif %}
+        <a href="{{ url_debug }}" class="btn btn-secondary"><i class="fa fa-comments"></i> Chat</a>
+        <a href="{{ url_analytics }}" class="btn btn-secondary"><i class="fa fa-bar-chart"></i> Analytics</a>
+        <a href="{{ url_guide }}" class="btn btn-secondary"><i class="fa fa-book"></i> Guide</a>
+        <a href="{{ url_about }}" class="btn btn-primary"><i class="fa fa-info-circle"></i> About</a>
+      </div>
+      <h1><i class="fa fa-robot"></i> phpClaw - About</h1>
+    </div>
+  </div>
+
+  <div class="container-fluid">
+
+    <div class="pc-about-hero">
+      <h2 class="pc-about-hero-title">phpClaw</h2>
+      <p class="pc-about-hero-subtitle">Universal AI agent engine for OpenCart</p>
+      <p class="pc-about-hero-version">Version {{ about.version }}</p>
+      <div class="pc-about-hero-buttons">
+        <a href="https://phpclaw.ai" target="_blank" rel="noopener"
+           class="pc-btn-hero-primary">
+          phpclaw.ai
+        </a>
+        <a href="https://phpclaw.ai/docs" target="_blank" rel="noopener"
+           class="pc-btn-hero-ghost">
+          Documentation
+        </a>
+        <a href="https://github.com/phpclaw-php/phpclaw-monorepo" target="_blank" rel="noopener"
+           class="pc-btn-hero-ghost">
+          GitHub
+        </a>
+      </div>
+    </div>
+
+    <div class="pc-content-panel pc-mb-20">
+      <h3 class="pc-section-title">What is phpClaw?</h3>
+      <p class="pc-body-text">phpClaw is an AI assistant that lives inside your OpenCart admin. Connect any AI provider (Anthropic Claude, OpenAI GPT, Groq, Google Gemini, Mistral, Ollama (local), and more via extensions) and ask questions about your store in plain English.</p>
+      <p class="pc-body-text">No SQL to write. No dashboards to learn. Just ask: <em>"Any low stock products?"</em>, <em>"Revenue this month?"</em>, <em>"Show recent errors"</em>. Get real answers from real store data.</p>
+      <p class="pc-body-text-last">Part of the phpClaw ecosystem. The same AI engine available for Laravel, WordPress, Drupal, Magento, and other PHP frameworks and CMS platforms.</p>
+    </div>
+
+    <div class="pc-feature-grid">
+      {% set features = [
+        {'icon': '🤖', 'title': '8 AI Providers',             'text': 'Anthropic Claude, OpenAI GPT, Groq, Google Gemini, Mistral, DeepSeek, Ollama (local), Custom. Switch from Settings. Zero code changes.'},
+        {'icon': '🛠',  'title': '17 Built-in Tools',          'text': 'Products, Orders, Customers, Categories, Coupons, Reviews, Manufacturers, Shipping, Database (read-only SQL), Log viewer, plus file, search, shell, and HTTP request tools.'},
+        {'icon': '💬', 'title': 'Chat UI',                    'text': 'Chat-style interface in the admin panel. Multi-turn conversation history, searchable sidebar. Ask anything.'},
+        {'icon': '🔌', 'title': 'Admin HTTP Routes',          'text': 'POST endpoint, authenticated admin session required (no API key, no versioning). Integrate the AI agent into any frontend or external service.'},
+        {'icon': '🖥',  'title': 'PHP CLI',                   'text': 'php phpclaw.php send. Run from the phpClaw cli/ folder to send prompts from the terminal. Script automations, run in cron, or pipe output.'},
+        {'icon': '🔒', 'title': 'Enterprise-Grade Security',  'text': 'Multi-layered protection against prompt injection, unsafe commands, and data leakage. Your data stays safe.'}
+      ] %}
+      {% for f in features %}
+      <div class="pc-feature-card">
+        <div class="pc-feature-icon">{{ f.icon }}</div>
+        <strong class="pc-feature-title">{{ f.title }}</strong>
+        <p class="pc-feature-text">{{ f.text }}</p>
+      </div>
+      {% endfor %}
+    </div>
+
+    <div class="pc-content-panel pc-mb-20">
+      <h3 class="pc-section-title">Open Source Ecosystem</h3>
+      <h2 class="pc-ecosystem-builtin-heading">Built-in features</h2>
+      <p class="pc-ecosystem-subtitle">MIT-licensed. The 4-package ecosystem:</p>
+      <table class="table table-bordered table-striped pc-table-narrow">
+          <thead>
+            <tr><th class="pc-th-pkg">Package</th><th>Installed</th><th>What it adds</th></tr>
+          </thead>
+          <tbody>
+            {% for p in about.packages %}
+              <tr>
+                <td><code>{{ p.name }}</code></td>
+                <td>{% if p.installed %}<span class="pc-icon-yes">&#10003;</span>{% else %}<span class="pc-icon-no">&#10007;</span>{% endif %}</td>
+                <td>{{ p.description }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+    </div>
+
+    <div class="pc-cloud-note">
+      The phpClaw Cloud package is bundled and provides the transport layer for cloud features. Activating cloud features requires a cloud key from <a href="https://phpclaw.ai" target="_blank" rel="noopener">phpclaw.ai</a>. Self-hosted users who do not set a cloud key run fully locally with no data leaving their server.
+    </div>
+
+    {% include 'extension/phpclaw/admin/view/template/module/phpclaw_community.twig' %}
+
+  </div>
+</div>
+{{ footer }}

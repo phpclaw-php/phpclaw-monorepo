@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<module>
+    <name>phpclaw</name>
+    <displayName><![CDATA[phpClaw AI Agent]]></displayName>
+    <version><![CDATA[1.0.0]]></version>
+    <description><![CDATA[Universal AI agent engine for PrestaShop. Ask questions in plain English, get real answers from your store data.]]></description>
+    <author><![CDATA[Akash Patel]]></author>
+    <tab><![CDATA[administration]]></tab>
+    <is_configurable>1</is_configurable>
+    <need_instance>0</need_instance>
+    <limited_countries></limited_countries>
+    <ps_versions_compliancy>
+        <min>8.0.0</min>
+        <max>_PS_VERSION_</max>
+    </ps_versions_compliancy>
+</module>

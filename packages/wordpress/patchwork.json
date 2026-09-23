@@ -1,0 +1,3 @@
+{
+    "redefinable-internals": ["ob_get_level", "headers_sent", "header", "error_log"]
+}

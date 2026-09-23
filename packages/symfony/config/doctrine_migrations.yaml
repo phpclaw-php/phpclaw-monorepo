@@ -1,0 +1,3 @@
+doctrine_migrations:
+    migrations_paths:
+        'PhpClaw\Symfony\Migrations': '%kernel.project_dir%/vendor/phpclaw/phpclaw-symfony/src/Migrations'

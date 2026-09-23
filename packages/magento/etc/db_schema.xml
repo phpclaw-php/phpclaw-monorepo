@@ -1,0 +1,79 @@
+<?xml version="1.0"?>
+<!--
+    Declarative schema for PhpClaw_Magento module.
+    Applied by: bin/magento setup:upgrade
+    Generates:  etc/db_schema_whitelist.json (run setup:db-declaration:generate-whitelist after changes)
+
+    Column `lookup_key` is used instead of `key` to avoid the MySQL reserved word conflict.
+-->
+<schema xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:noNamespaceSchemaLocation="urn:magento:framework:Setup/Declaration/Schema/etc/schema.xsd">
+
+    <table name="phpclaw_conversations" resource="default" engine="innodb"
+           charset="utf8mb4" collation="utf8mb4_unicode_ci" comment="PhpClaw conversation sessions">
+        <column xsi:type="char"     name="id"         length="26"  nullable="false"                 comment="ULID primary key"/>
+        <column xsi:type="varchar"  name="namespace"  length="100" nullable="false" default="default" comment="Isolation namespace"/>
+        <column xsi:type="int"      name="admin_user_id" unsigned="true" nullable="false" default="0" comment="Owning admin user ID, 0 when no admin session (CLI)"/>
+        <column xsi:type="varchar"  name="title"      length="255" nullable="true"                  comment="Optional conversation title"/>
+        <column xsi:type="text"     name="metadata"   nullable="true"                               comment="JSON metadata"/>
+        <column xsi:type="datetime" name="created_at" nullable="false"                              comment="Created timestamp"/>
+        <column xsi:type="datetime" name="updated_at" nullable="false"                              comment="Updated timestamp"/>
+        <constraint xsi:type="primary" referenceId="PRIMARY">
+            <column name="id"/>
+        </constraint>
+        <index referenceId="PHPCLAW_CONV_NS_CREATED" indexType="btree">
+            <column name="namespace"/>
+            <column name="created_at"/>
+        </index>
+        <index referenceId="PHPCLAW_CONV_USER_NS_UPDATED" indexType="btree">
+            <column name="admin_user_id"/>
+            <column name="namespace"/>
+            <column name="updated_at"/>
+        </index>
+    </table>
+
+    <table name="phpclaw_messages" resource="default" engine="innodb"
+           charset="utf8mb4" collation="utf8mb4_unicode_ci" comment="PhpClaw conversation messages">
+        <column xsi:type="char"     name="id"              length="26"  nullable="false"               comment="ULID primary key"/>
+        <column xsi:type="char"     name="conversation_id" length="26"  nullable="false"               comment="FK to phpclaw_conversations"/>
+        <column xsi:type="varchar"  name="role"            length="20"  nullable="false"               comment="user | assistant | tool"/>
+        <column xsi:type="text"     name="content"         nullable="true"                             comment="Message text (null when store_messages=false)"/>
+        <column xsi:type="varchar"  name="tool_name"       length="255" nullable="true"               comment="Tool name(s); comma-separated when batch fired multiple tools"/>
+        <column xsi:type="text"     name="tool_input"      nullable="true"                             comment="JSON-encoded tool input(s); JSON array when multiple"/>
+        <column xsi:type="datetime" name="created_at"      nullable="false"                            comment="Created timestamp"/>
+        <constraint xsi:type="primary" referenceId="PRIMARY">
+            <column name="id"/>
+        </constraint>
+        <constraint xsi:type="foreign" referenceId="PHPCLAW_MSG_CONV_ID"
+                    table="phpclaw_messages" column="conversation_id"
+                    referenceTable="phpclaw_conversations" referenceColumn="id"
+                    onDelete="CASCADE"/>
+        <index referenceId="PHPCLAW_MSG_CONV_CREATED" indexType="btree">
+            <column name="conversation_id"/>
+            <column name="created_at"/>
+        </index>
+    </table>
+
+    <table name="phpclaw_memory" resource="default" engine="innodb"
+           charset="utf8mb4" collation="utf8mb4_unicode_ci" comment="PhpClaw persistent key-value memory">
+        <column xsi:type="char"     name="id"         length="26"  nullable="false"                 comment="ULID primary key"/>
+        <column xsi:type="varchar"  name="namespace"  length="100" nullable="false" default="default" comment="Isolation namespace"/>
+        <column xsi:type="varchar"  name="lookup_key" length="255" nullable="false"                 comment="Memory key (lookup_key avoids MySQL reserved word)"/>
+        <column xsi:type="text"     name="value"      nullable="false"                              comment="Serialized value"/>
+        <column xsi:type="datetime" name="expires_at" nullable="true"                               comment="TTL expiry; NULL = no expiry"/>
+        <column xsi:type="datetime" name="created_at" nullable="false"                              comment="Created timestamp"/>
+        <column xsi:type="datetime" name="updated_at" nullable="false"                              comment="Updated timestamp"/>
+        <constraint xsi:type="primary" referenceId="PRIMARY">
+            <column name="id"/>
+        </constraint>
+        <constraint xsi:type="unique" referenceId="PHPCLAW_MEM_NS_KEY">
+            <column name="namespace"/>
+            <column name="lookup_key"/>
+        </constraint>
+        <index referenceId="PHPCLAW_MEM_NS_EXPIRES" indexType="btree">
+            <column name="namespace"/>
+            <column name="expires_at"/>
+        </index>
+    </table>
+
+</schema>

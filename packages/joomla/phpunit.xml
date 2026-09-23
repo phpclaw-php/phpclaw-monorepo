@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:noNamespaceSchemaLocation="https://schema.phpunit.de/10.5/phpunit.xsd"
+         bootstrap="tests/bootstrap.php"
+         colors="true"
+         failOnWarning="true"
+         failOnRisky="true">
+
+    <testsuites>
+        <testsuite name="Unit">
+            <directory>tests/Unit</directory>
+        </testsuite>
+    </testsuites>
+
+    <source>
+        <include>
+            <directory suffix=".php">plugin/src</directory>
+            <directory suffix=".php">component/src</directory>
+            <directory suffix=".php">component/api/src</directory>
+            <directory suffix=".php">webservices/src</directory>
+        </include>
+        <exclude>
+            <!-- EngineFactory, EngineBootstrapper, and ToolBuilder require a live Joomla
+                 DI container (build, boot, buildDb, ensureTables). Integration coverage
+                 tracked via installed-CMS integration tests instead. -->
+            <file>component/src/Engine/EngineFactory.php</file>
+            <file>component/src/Engine/EngineBootstrapper.php</file>
+            <file>component/src/Engine/ToolBuilder.php</file>
+            <!-- Framework-bound: Joomla event/extension entry points. -->
+            <file>plugin/src/Extension/PhpClawPlugin.php</file>
+            <file>component/src/Extension/PhpclawComponent.php</file>
+            <!-- Framework-bound MVC controllers/models/views - require live Joomla Factory,
+                 Session, Input, MVCFactory, DI container. Covered by installed-CMS
+                 integration tests instead. ApiController has file-read structural tests
+                 in tests/Unit/Controller/ApiControllerTest.php. -->
+            <file>component/src/Controller/ApiController.php</file>
+            <file>component/src/Controller/DisplayController.php</file>
+            <file>component/src/Model/AboutModel.php</file>
+            <file>component/src/Model/AnalyticsModel.php</file>
+            <file>component/src/Model/ChatModel.php</file>
+            <file>component/src/Model/GuideModel.php</file>
+            <file>component/src/View/About/HtmlView.php</file>
+            <file>component/src/View/Analytics/HtmlView.php</file>
+            <file>component/src/View/Chat/HtmlView.php</file>
+            <file>component/src/View/Guide/HtmlView.php</file>
+            <!-- Framework-bound: Joomla CMSApplication toolbar helper. -->
+            <file>component/src/Admin/AboutPage.php</file>
+            <!-- Framework-bound: Joomla JFormField subclasses require Joomla bootstrap to instantiate. -->
+            <file>plugin/src/Field/ProvidersField.php</file>
+        </exclude>
+    </source>
+
+</phpunit>

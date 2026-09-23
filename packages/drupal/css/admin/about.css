@@ -1,0 +1,560 @@
+
+.phpclaw-about {
+  font-family: var(--phpclaw-font);
+  margin: -20px -20px 0;
+}
+
+.phpclaw-about a { text-decoration: none; }
+.phpclaw-about a:hover { text-decoration: underline; }
+
+
+.phpclaw-about__hero {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 32px;
+  padding: 48px 48px 40px;
+  background: linear-gradient(135deg, #0a1628 0%, #1a2744 50%, #0d2137 100%);
+  color: #e8edf3;
+}
+
+.phpclaw-about__hero-text {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+.phpclaw-about__hero-icon {
+  width: 64px;
+  height: 64px;
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.phpclaw-about__title {
+  margin: 0;
+  font-size: 28px;
+  font-weight: 300;
+  color: #fff;
+  line-height: 1.2;
+}
+
+.phpclaw-about__title strong {
+  font-weight: 700;
+  color: var(--phpclaw-blue-accent);
+}
+
+.phpclaw-about__tagline {
+  margin: 6px 0 0;
+  font-size: 15px;
+  color: rgba(255, 255, 255, 0.75);
+}
+
+.phpclaw-about__cta-row {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.phpclaw-about__cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 22px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 700;
+  text-decoration: none !important;
+  transition: opacity 0.15s ease;
+}
+
+.phpclaw-about__cta:hover { opacity: 0.9; }
+
+.phpclaw-about__cta--primary {
+  background: #fff;
+  color: var(--phpclaw-blue);
+}
+
+.phpclaw-about__cta--secondary {
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+
+.phpclaw-about__body {
+  padding: 32px 48px;
+  background: var(--phpclaw-bg);
+}
+
+
+.phpclaw-about__card {
+  background: var(--phpclaw-card-bg);
+  border: 1px solid var(--phpclaw-card-border);
+  border-radius: var(--phpclaw-radius);
+  padding: 28px 32px;
+  margin-bottom: 24px;
+}
+
+.phpclaw-about__card h2,
+.phpclaw-about__card h3 {
+  margin-top: 0;
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--phpclaw-text);
+}
+
+.phpclaw-about__card p {
+  color: var(--phpclaw-text-secondary);
+  font-size: 14px;
+  line-height: 1.8;
+  margin: 0 0 12px;
+}
+
+.phpclaw-about__card p:last-child { margin-bottom: 0; }
+
+
+.phpclaw-about__hero-versions {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  padding: 14px 18px;
+  flex-shrink: 0;
+}
+
+.phpclaw-about__hero-versions table { border-collapse: collapse; }
+
+.phpclaw-about__hero-versions td {
+  padding: 4px 12px 4px 0;
+  font-size: 12.5px;
+  color: #94a3b8;
+  white-space: nowrap;
+}
+
+.phpclaw-about__hero-versions td:first-child {
+  font-weight: 600;
+  color: #cbd5e1;
+}
+
+.phpclaw-about__hero-versions code {
+  font-size: 11.5px;
+  color: #64748b;
+}
+
+.phpclaw-about__hero-versions strong { color: #e2e8f0; }
+
+
+.phpclaw-about__row {
+  display: flex;
+  gap: 24px;
+  margin-bottom: 24px;
+}
+
+.phpclaw-about__col {
+  flex: 1;
+  min-width: 0;
+}
+
+
+.phpclaw-about__providers {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.phpclaw-about__provider-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 16px;
+  background: #fff;
+  border: 1px solid #c3c4c7;
+  border-radius: 6px;
+  transition: border-color 0.15s ease;
+}
+
+.phpclaw-about__provider-card.is-active {
+  border-color: #86efac;
+  background: #f0fdf4;
+}
+
+.phpclaw-about__provider-icon {
+  width: 36px;
+  height: 36px;
+  background: #1e293b;
+  color: #fff;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 16px;
+  flex-shrink: 0;
+}
+
+.phpclaw-about__provider-card.is-active .phpclaw-about__provider-icon {
+  background: #16a34a;
+}
+
+.phpclaw-about__provider-info { flex: 1; }
+
+.phpclaw-about__provider-info strong {
+  display: block;
+  font-size: 13px;
+  color: #1e293b;
+}
+
+.phpclaw-about__provider-models {
+  font-size: 12px;
+  color: #64748b;
+}
+
+.phpclaw-about__provider-status { flex-shrink: 0; }
+
+.phpclaw-about__badge {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 12px;
+  font-size: 11.5px;
+  font-weight: 600;
+}
+
+.phpclaw-about__badge--active {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.phpclaw-about__badge--inactive {
+  background: #f1f5f9;
+  color: #94a3b8;
+}
+
+
+.phpclaw-about__features {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.phpclaw-about__feature-card {
+  background: #fff;
+  border: 1px solid #c3c4c7;
+  border-radius: 8px;
+  padding: 20px 22px;
+  transition: border-color 0.15s ease;
+}
+
+.phpclaw-about__feature-card:hover {
+  border-color: #93c5fd;
+}
+
+.phpclaw-about__feature-card h4 {
+  margin: 0 0 6px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #1e293b;
+}
+
+.phpclaw-about__feature-card p {
+  margin: 0;
+  font-size: 13px;
+  color: #50575e;
+  line-height: 1.7;
+}
+
+
+.phpclaw-about__quickstart {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.phpclaw-about__step {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+}
+
+.phpclaw-about__step-num {
+  width: 32px;
+  height: 32px;
+  background: var(--phpclaw-blue);
+  color: #fff;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 14px;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.phpclaw-about__step strong {
+  display: block;
+  font-size: 13px;
+  color: #1e293b;
+  margin-bottom: 6px;
+}
+
+.phpclaw-about__step pre {
+  margin: 0;
+  padding: 12px 16px;
+  background: #0f172a;
+  color: #e2e8f0;
+  border-radius: 5px;
+  font-size: 12.5px;
+  line-height: 1.5;
+  overflow-x: auto;
+}
+
+
+.phpclaw-about__examples {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.phpclaw-about__example-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  background: #fff;
+  border: 1px solid #c3c4c7;
+  border-radius: 5px;
+  font-size: 13px;
+}
+
+.phpclaw-about__example-q {
+  font-weight: 600;
+  color: #1e293b;
+  white-space: nowrap;
+}
+
+.phpclaw-about__example-a {
+  color: #50575e;
+  font-size: 12.5px;
+}
+
+
+.phpclaw-about__frameworks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.phpclaw-about__fw-badge {
+  display: inline-block;
+  padding: 6px 14px;
+  background: #fff;
+  border: 1px solid #c3c4c7;
+  border-radius: 20px;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: #475569;
+  transition: all 0.15s ease;
+}
+
+.phpclaw-about__fw-badge:hover {
+  background: #e0f2fe;
+  border-color: #7dd3fc;
+  color: #0369a1;
+}
+
+.phpclaw-about__fw-badge.is-current {
+  background: var(--phpclaw-blue);
+  border-color: var(--phpclaw-blue);
+  color: #fff;
+  font-weight: 700;
+}
+
+
+.phpclaw-about__extras-table {
+  width: 100%;
+  font-size: 13px;
+  border-collapse: collapse;
+}
+
+.phpclaw-about__extras-table thead tr {
+  border-bottom: 2px solid #e0e0e0;
+}
+
+.phpclaw-about__extras-table th {
+  text-align: left;
+  padding: 6px 12px 10px 0;
+  color: #50575e;
+  font-weight: 600;
+}
+
+.phpclaw-about__extras-table th:first-child { width: 280px; }
+
+.phpclaw-about__extras-table td {
+  padding: 9px 12px 9px 0;
+  color: #3c434a;
+}
+
+.phpclaw-about__extras-table tr {
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.phpclaw-about__extras-table code {
+  font-size: 12px;
+  background: #f6f7f7;
+  padding: 2px 6px;
+  border-radius: 3px;
+  white-space: nowrap;
+}
+
+
+.phpclaw-about__links {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+
+.phpclaw-about__link-card {
+  display: flex;
+  flex-direction: column;
+  padding: 16px 18px;
+  background: #fff;
+  border: 1px solid #c3c4c7;
+  border-radius: 6px;
+  text-decoration: none !important;
+  transition: all 0.15s ease;
+  position: relative;
+}
+
+.phpclaw-about__link-card:hover {
+  border-color: #3b82f6;
+  background: #eff6ff;
+}
+
+.phpclaw-about__link-card strong {
+  font-size: 13px;
+  color: #1e293b;
+  margin-bottom: 2px;
+}
+
+.phpclaw-about__link-card span {
+  font-size: 12px;
+  color: #50575e;
+}
+
+.phpclaw-about__link-arrow {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  color: #94a3b8;
+  font-size: 1.1em;
+}
+
+.phpclaw-about__link-card:hover .phpclaw-about__link-arrow {
+  color: #3b82f6;
+}
+
+
+.phpclaw-about__support-row {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 16px;
+}
+
+.phpclaw-about__support-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 24px;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 700;
+  text-decoration: none !important;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
+  transition: opacity 0.15s ease;
+}
+
+.phpclaw-about__support-btn:hover { opacity: 0.85; }
+
+
+.phpclaw-about__footer {
+  margin-top: 12px;
+  padding: 20px 0 0;
+  border-top: 1px solid #e2e8f0;
+  text-align: center;
+}
+
+.phpclaw-about__footer p {
+  margin: 0 0 4px;
+  font-size: 13px;
+  color: #50575e;
+}
+
+.phpclaw-about__footer a {
+  color: #3b82f6;
+  font-weight: 600;
+}
+
+.phpclaw-about__footer-sub {
+  font-size: 12px !important;
+  color: #94a3b8 !important;
+}
+
+
+@media (max-width: 1200px) {
+  .phpclaw-about__features {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 768px) {
+  .phpclaw-about__hero {
+    flex-direction: column;
+    padding: 32px 24px;
+  }
+
+  .phpclaw-about__body {
+    padding: 24px;
+  }
+
+  .phpclaw-about__row {
+    flex-direction: column;
+  }
+
+  .phpclaw-about__features,
+  .phpclaw-about__links {
+    grid-template-columns: 1fr;
+  }
+
+  .phpclaw-about__example-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+  }
+}
+
+.phpclaw-cloud-note {
+  background: #f6f6f6;
+  border-left: 3px solid #2271b1;
+  padding: 14px 16px;
+  border-radius: 6px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: #1d2327;
+  margin: 0 0 24px;
+}
+.phpclaw-cloud-note a {
+  color: #2271b1;
+  text-decoration: none;
+  font-weight: 500;
+}
+.phpclaw-cloud-note a:hover {
+  text-decoration: underline;
+}

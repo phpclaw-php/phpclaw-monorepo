@@ -1,0 +1,11 @@
+store_messages: true
+remote_skill_urls: ''
+guards: []
+hooks: []
+skills: []
+cloud_signing_secret: ''
+tool_deny: []
+api_auth_providers:
+  - basic_auth
+  - cookie
+

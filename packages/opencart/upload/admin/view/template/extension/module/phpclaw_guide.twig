@@ -1,0 +1,570 @@
+{{ header }}{{ column_left }}
+<div id="content">
+  <div class="page-header pc-page-header">
+    <div class="container-fluid">
+      <h1 class="pc-page-title">🤖 phpClaw</h1>
+    </div>
+  </div>
+
+  <div class="container-fluid pc-subnav-wrap">
+    <div class="pc-subnav">
+      <a href="{{ url_debug }}"     class="btn btn-sm btn-default">💬 Chat</a>
+      <a href="{{ url_analytics }}" class="btn btn-sm btn-default">📊 Analytics</a>
+      <a href="{{ url_guide }}"     class="btn btn-sm btn-primary">📖 Guide</a>
+      {% if can_manage_all %}<a href="{{ url_settings }}"  class="btn btn-sm btn-default">⚙ Settings</a>{% endif %}
+      <a href="{{ url_about }}"     class="btn btn-sm btn-default">ℹ️ About</a>
+    </div>
+  </div>
+
+  <div class="container-fluid">
+
+    <ul class="nav nav-tabs pc-guide-tabs-nav" id="guide-tabs">
+      <li class="active"><a href="#guide-quickstart" data-toggle="tab">Quickstart</a></li>
+      <li>              <a href="#guide-tools"      data-toggle="tab">Tools</a></li>
+      <li>              <a href="#guide-memory"     data-toggle="tab">Memory</a></li>
+      <li>              <a href="#guide-providers"  data-toggle="tab">Providers</a></li>
+      <li>              <a href="#guide-guards"     data-toggle="tab">Guards</a></li>
+      <li>              <a href="#guide-hooks"      data-toggle="tab">Hooks</a></li>
+      <li>              <a href="#guide-skills"     data-toggle="tab">Skills</a></li>
+      <li>              <a href="#guide-rest"       data-toggle="tab">REST API</a></li>
+      <li>              <a href="#guide-cli"        data-toggle="tab">CLI</a></li>
+      <li>              <a href="#guide-privacy"    data-toggle="tab">Privacy</a></li>
+    </ul>
+
+    <div class="pc-guide-panel">
+      <div class="tab-content">
+
+        <div class="tab-pane active" id="guide-quickstart">
+          <h3 class="pc-section-title">Quickstart</h3>
+          <p class="pc-muted-text">Get phpClaw running in 4 steps.</p>
+
+          <ol class="pc-quickstart-steps">
+            <li>
+              <strong>Install the extension</strong><br>
+              Go to <em>Extensions &gt; Installer</em>, upload the ZIP for your OpenCart version (<em>phpclaw-opencart3-&lt;version&gt;.ocmod.zip</em> for 3.x, <em>phpclaw-opencart4-&lt;version&gt;.ocmod.zip</em> for 4.x), then go to <em>Extensions &gt; Extensions &gt; Modules</em>, find phpClaw, and click Install.
+            </li>
+            <li>
+              <strong>Pick a provider</strong> <span class="pc-muted-text">(Administrator only)</span><br>
+              Open the Settings page and choose an AI provider: Anthropic, OpenAI, Gemini, Groq, Mistral, DeepSeek, Ollama (local), or Custom (any OpenAI-compatible endpoint).
+            </li>
+            <li>
+              <strong>Add your API key</strong> <span class="pc-muted-text">(Administrator only)</span><br>
+              Paste the provider's API key into the API Key field on the Settings page, then save. Ollama needs no key. Custom providers also need a Base URL.
+            </li>
+            <li>
+              <strong>Open Chat and start asking</strong><br>
+              Click the Chat tab. Ask anything about your store:<br>
+              <em>"What are my top 5 products by sales this month?"</em><br>
+              <em>"Show pending orders from today."</em><br>
+              <em>"List customers who registered in the last 7 days."</em>
+            </li>
+          </ol>
+
+          <h4>CLI access</h4>
+          <p class="pc-muted-text">Run from your OpenCart root directory:</p>
+          <table class="table table-bordered table-striped">
+            <thead>
+              <tr><th class="pc-th-cmd">Command</th><th>Description</th></tr>
+            </thead>
+            <tbody>
+              <tr><td><code>php system/library/phpclaw/cli/phpclaw.php send "your prompt"</code></td><td>Send a prompt and print the response.</td></tr>
+              <tr><td><code>php system/library/phpclaw/cli/phpclaw.php send "prompt" --provider=anthropic</code></td><td>Override provider for one call.</td></tr>
+              <tr><td><code>php system/library/phpclaw/cli/phpclaw.php send "prompt" --model=claude-sonnet-5</code></td><td>Override model for one call.</td></tr>
+              <tr><td><code>php system/library/phpclaw/cli/phpclaw.php send "prompt" --stream</code></td><td>Stream the response token-by-token.</td></tr>
+              <tr><td><code>php system/library/phpclaw/cli/phpclaw.php mcp-server</code></td><td>Start the phpClaw MCP server (stdio transport).</td></tr>
+            </tbody>
+          </table>
+
+          <h4>REST API</h4>
+          <p class="pc-muted-text">POST to the send endpoint from any frontend or external service:</p>
+          <table class="table table-bordered pc-guide-table-md pc-mb-20">
+            <tr><th class="pc-th-endpoint">Endpoint</th><td><code>{{ url_send }}</code></td></tr>
+            <tr><th>Method</th><td><code>POST</code></td></tr>
+            <tr><th>Auth</th><td>OpenCart admin session. Requires <code>OCSESSID</code> cookie + <code>user_token</code> in URL. Login first to get both (see curl example below).</td></tr>
+            <tr><th>Body</th><td><code>message=your+prompt</code> (form-encoded)</td></tr>
+            <tr><th>Optional</th><td><code>conversation_id</code>: continue one of <strong>your own</strong> conversations from a previous response</td></tr>
+            <tr><th>Scoping</th><td>Requests are scoped to the authenticated user's own conversations. Users whose group holds the <code>manage_all</code> permission can access all conversations.</td></tr>
+          </table>
+          <strong>Success (200):</strong>
+          <pre class="pc-code-block">{
+  "success": true,
+  "text": "Here are your pending orders...",
+  "provider": "ollama",
+  "model": "qwen2.5:7b",
+  "tokens": 2884,
+  "iterations": 2,
+  "conversation_id": "01JQABCDE...",
+  "tool_calls": []
+}</pre>
+          <strong>Error responses (JSON body with an <code>error</code> key; HTTP 400 for a missing message, 403 for a permission or ownership failure, 200 otherwise):</strong>
+          <table class="table table-bordered pc-guide-table-sm500">
+            <thead><tr><th><code>error</code> field value</th><th>Meaning</th></tr></thead>
+            <tbody>
+              <tr><td><code>Message is required.</code></td><td>Empty message body</td></tr>
+              <tr><td><code>Permission denied.</code></td><td>Not logged in or no permission</td></tr>
+              <tr><td><code>Conversation not found.</code></td><td><code>conversation_id</code> does not exist (returned only by the separate Load Conversation action)</td></tr>
+              <tr><td><code>You do not have permission to access this conversation.</code></td><td><code>conversation_id</code> belongs to another user (HTTP 403)</td></tr>
+              <tr><td><code>Request blocked by security guard.</code></td><td>Guard blocked the prompt</td></tr>
+              <tr><td><code>Agent reached max iterations. Try a simpler or more specific request.</code></td><td>Agent hit the max-iterations limit</td></tr>
+              <tr><td><code>AI provider error. Check your API key and provider settings.</code></td><td>Provider or API key issue</td></tr>
+              <tr><td><code>An internal error occurred. Please try again.</code></td><td>Internal server error</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="tab-pane" id="guide-tools">
+          <h3 class="pc-section-title">Available Tools</h3>
+          <p class="pc-muted-text">phpClaw ships with 10 tools for OpenCart. The AI agent automatically picks the right tool based on your prompt.</p>
+
+          <h4>Built-in Tools</h4>
+
+          <table class="table table-bordered table-striped">
+            <thead>
+              <tr>
+                <th class="pc-th-name">Name</th>
+                <th class="pc-th-desc">Description</th>
+                <th>Example Prompts</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for t in tools %}
+              <tr><td><strong>{{ t.name }}</strong></td><td>{{ t.description }}</td><td class="pc-example-prompts">{{ t.prompts }}</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+
+          <h4 class="pc-mt-24">
+            Core Utility Tools
+            <small class="pc-privacy-small">
+              ships with <code>phpclaw/phpclaw</code>, no extra install
+            </small>
+          </h4>
+          <table class="table table-bordered table-striped pc-guide-table-md">
+            <thead>
+              <tr><th class="pc-th-name">Tool</th><th class="pc-th-status">Status</th><th>Notes</th></tr>
+            </thead>
+            <tbody>
+              {% for t in core_tools %}
+              <tr>
+                <td><code>{{ t.tool }}</code></td>
+                <td>{% if t.deprecated %}<span class="pc-status-warn">&#9888; Deprecated</span>{% else %}<span class="pc-status-ok">&#10003; Ready</span>{% endif %}</td>
+                <td class="pc-example-prompts">{{ t.desc }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+
+          <div class="pc-enterprise-cta">
+            <strong>Need a custom tool for your store?</strong>
+            <p>
+              We build custom AI tools for CRMs, ERPs, payment systems, and internal workflows.
+              <a href="https://phpclaw.ai/enterprise" target="_blank" rel="noopener">Contact us</a> to discuss your requirements.
+            </p>
+          </div>
+        </div>
+
+        <div class="tab-pane" id="guide-memory">
+          <h3 class="pc-section-title">Memory</h3>
+          <p class="pc-muted-text">Memory drivers store conversations and key-value state. OpenCart ships three native drivers; additional drivers from core auto-register.</p>
+
+          <h4 class="pc-mt-24">Auto-Discovered Core Memory Drivers</h4>
+          {% if capability_records.memory is empty %}
+            <p class="pc-muted-text">No core memory drivers discovered.</p>
+          {% else %}
+            <table class="table table-bordered table-striped pc-guide-table-sm">
+              <thead>
+                <tr><th>Driver</th><th>Label</th><th>Source</th><th>Class</th></tr>
+              </thead>
+              <tbody>
+                {% for m in capability_records.memory %}
+                  <tr>
+                    <td><code>{{ m.driver }}</code></td>
+                    <td>{{ m.label }}</td>
+                    <td>{{ m.source }}</td>
+                    <td><small><code>{{ m.class }}</code></small></td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          {% endif %}
+
+          <h4 class="pc-mt-24">Database Tables</h4>
+          <p class="pc-muted-text">Three dedicated tables created automatically on install:</p>
+          <table class="table table-bordered pc-guide-table-sm">
+            <thead>
+              <tr><th class="pc-th-table">Table</th><th>Purpose</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><code>{DB_PREFIX}phpclaw_memory</code></td>
+                <td>Key-value store for agent state and custom namespaces.</td>
+              </tr>
+              <tr>
+                <td><code>{DB_PREFIX}phpclaw_conversations</code></td>
+                <td>Conversation metadata: ID, title, created/updated timestamps.</td>
+              </tr>
+              <tr>
+                <td><code>{DB_PREFIX}phpclaw_messages</code></td>
+                <td>Full message history: every user and assistant turn per conversation.</td>
+              </tr>
+            </tbody>
+          </table>
+
+          <div class="pc-guide-tip">
+            <strong>Backup tip:</strong> Include all three <code>{DB_PREFIX}phpclaw_*</code> tables in your database backups to preserve chat history.
+          </div>
+        </div>
+
+        <div class="tab-pane" id="guide-providers">
+          <h3 class="pc-section-title">Supported Providers</h3>
+          <p class="pc-muted-text">Select a provider in Settings and enter the corresponding API key.</p>
+
+          <table class="table table-bordered table-striped">
+            <thead>
+              <tr>
+                <th class="pc-th-name">Provider</th>
+                <th>Key name</th>
+                <th>Get API key</th>
+                <th>Notes</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for p in providers %}
+              <tr>
+                <td><strong>{{ p.name }}</strong></td>
+                <td><code>{{ p.key }}</code></td>
+                <td>{% if p.signup %}<a href="{{ p.signup }}" target="_blank" rel="noopener">{{ p.signup }}</a>{% else %}-{% endif %}</td>
+                <td>{{ p.notes }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+
+          <div class="pc-guide-tip">
+            <strong>Ollama tip:</strong> Install Ollama locally, pull a model (<code>ollama pull qwen2.5:7b</code>), and leave the API key blank. The default host is <code>http://127.0.0.1:11434</code> (the built-in Ollama preset default). No Settings field is needed for local Ollama.
+          </div>
+        </div>
+
+        <div class="tab-pane" id="guide-rest">
+          <h3 class="pc-section-title">REST API</h3>
+          <p class="pc-muted-text">Integrate phpClaw into any frontend, mobile app, or external service via OpenCart admin AJAX endpoints.</p>
+
+          <h4>POST: Send a prompt</h4>
+          <table class="table table-bordered pc-guide-table-md pc-mb-20">
+            <tr><th class="pc-th-endpoint">Endpoint</th><td><code>{{ url_send }}</code></td></tr>
+            <tr><th>Method</th><td><code>POST</code></td></tr>
+            <tr><th>Auth</th><td>OpenCart admin session. Requires <code>OCSESSID</code> cookie + <code>user_token</code> in URL. Login first to get both (see curl example below).</td></tr>
+            <tr><th>Body</th><td><code>message=your+prompt</code> (form-encoded)</td></tr>
+            <tr><th>Optional</th><td><code>conversation_id</code>: pass from a previous response to continue <strong>your own</strong> conversation</td></tr>
+            <tr><th>Scoping</th><td>Requests are scoped to the authenticated user's own conversations. Passing a <code>conversation_id</code> that belongs to a different user returns HTTP 403 with <code>{"error":"You do not have permission to access this conversation."}</code>. Users whose group holds the <code>manage_all</code> permission can send to and load any user's conversation.</td></tr>
+          </table>
+
+          <strong>curl example (3 steps):</strong>
+          <pre class="pc-code-block"># Step 1: establish session
+curl -s -c /tmp/oc.txt -b /tmp/oc.txt \
+  "http://your-site/admin/index.php?route=common/login" &gt; /dev/null
+
+# Step 2: login and capture dashboard
+curl -s -c /tmp/oc.txt -b /tmp/oc.txt \
+  -X POST "http://your-site/admin/index.php?route=common/login" \
+  -d "username=admin&amp;password=YOUR_PASSWORD" -L &gt; /tmp/dashboard.html
+
+# Step 3: extract token and send
+TOKEN=$(grep -o 'user_token=[a-zA-Z0-9]*' /tmp/dashboard.html | head -1 | cut -d= -f2)
+curl -s -c /tmp/oc.txt -b /tmp/oc.txt \
+  -X POST "http://your-site/admin/index.php?route=extension/module/phpclaw/send&amp;user_token=$TOKEN" \
+  -d "message=List the 5 most recent orders"</pre>
+
+          <strong>Success (200):</strong>
+          <pre class="pc-code-block">{
+  "success": true,
+  "text": "Here are the 5 most recent orders...",
+  "provider": "ollama",
+  "model": "qwen2.5:7b",
+  "tokens": 2884,
+  "iterations": 2,
+  "conversation_id": "01JQABCDE...",
+  "tool_calls": []
+}</pre>
+
+          <strong>Error responses (JSON body with an <code>error</code> key; HTTP 400 for a missing message, 403 for a permission or ownership failure, 200 otherwise):</strong>
+          <table class="table table-bordered pc-guide-table-sm500">
+            <thead><tr><th><code>error</code> field value</th><th>Meaning</th></tr></thead>
+            <tbody>
+              <tr><td><code>Message is required.</code></td><td>Empty message body</td></tr>
+              <tr><td><code>Permission denied.</code></td><td>Not logged in or no permission</td></tr>
+              <tr><td><code>Conversation not found.</code></td><td><code>conversation_id</code> does not exist (returned only by the separate Load Conversation action)</td></tr>
+              <tr><td><code>You do not have permission to access this conversation.</code></td><td><code>conversation_id</code> belongs to another user (HTTP 403)</td></tr>
+              <tr><td><code>Request blocked by security guard.</code></td><td>Guard blocked the prompt</td></tr>
+              <tr><td><code>AI provider error. Check your API key and provider settings.</code></td><td>Provider or API key issue</td></tr>
+              <tr><td><code>An internal error occurred. Please try again.</code></td><td>Internal server error</td></tr>
+              <tr><td><code>Agent reached max iterations. Try a simpler or more specific request.</code></td><td>Agent hit the iteration cap</td></tr>
+            </tbody>
+          </table>
+
+          <h4 class="pc-mt-24">POST: Stream a prompt (Server-Sent Events)</h4>
+          <table class="table table-bordered pc-guide-table-md pc-mb-20">
+            <tr><th class="pc-th-endpoint">Endpoint</th><td><code>{{ url_send|replace({'/send': '/stream'}) }}</code></td></tr>
+            <tr><th>Method</th><td><code>POST</code></td></tr>
+            <tr><th>Accept</th><td><code>text/event-stream</code></td></tr>
+            <tr><th>Body</th><td><code>message=your+prompt&amp;conversation_id=&lt;optional, own conversations only&gt;</code></td></tr>
+            <tr><th>Scoping</th><td>Same per-user scoping as <code>send</code>. Passing another user's <code>conversation_id</code> emits an SSE <code>error</code> event. Users with <code>manage_all</code> can stream to any conversation.</td></tr>
+            <tr><th>Content-Type returned</th><td><code>text/event-stream</code></td></tr>
+          </table>
+
+          <strong>SSE event types emitted (in order):</strong>
+          <table class="table table-bordered pc-guide-table-md">
+            <thead><tr><th class="pc-th-id">Event</th><th>Payload</th><th>When</th></tr></thead>
+            <tbody>
+              <tr><td><code>tool_before</code></td><td><code>{tool_name, tool_input}</code></td><td>Fired before each tool call</td></tr>
+              <tr><td><code>tool_after</code></td><td><code>{tool_name, tool_input, tool_result}</code></td><td>Fired after tool returns; replaces pending card with typed result</td></tr>
+              <tr><td><code>chunk</code></td><td><code>{text}</code></td><td>Streaming assistant text token (one per ~10 chars)</td></tr>
+              <tr><td><code>done</code></td><td><code>{text, provider, model, tokens, iterations, conversation_id, title, is_new, tool_calls}</code></td><td>Final frame after the agent finishes</td></tr>
+              <tr><td><code>error</code></td><td><code>{error}</code></td><td>On guard block, provider error, or internal failure</td></tr>
+            </tbody>
+          </table>
+
+          <strong>curl example (complete: login + stream):</strong>
+          <pre class="pc-code-block"># Step 1: establish session
+curl -s -c /tmp/oc.txt -b /tmp/oc.txt \
+  "http://your-site/admin/index.php?route=common/login" &gt; /dev/null
+
+# Step 2: login and capture dashboard
+curl -s -c /tmp/oc.txt -b /tmp/oc.txt \
+  -X POST "http://your-site/admin/index.php?route=common/login" \
+  -d "username=admin&amp;password=YOUR_PASSWORD" -L &gt; /tmp/dashboard.html
+
+# Step 3: extract token and stream
+TOKEN=$(grep -o 'user_token=[a-zA-Z0-9]*' /tmp/dashboard.html | head -1 | cut -d= -f2)
+curl -s -N -c /tmp/oc.txt -b /tmp/oc.txt \
+  -X POST "http://your-site/admin/index.php?route=extension/module/phpclaw/stream&amp;user_token=$TOKEN" \
+  -H "Accept: text/event-stream" \
+  -d "message=list 2 products with stock"</pre>
+
+          <strong>Sample raw stream:</strong>
+          <pre class="pc-code-block">event: tool_before
+data: {"tool_name":"oc_product","tool_input":{"limit":2}}
+
+event: tool_after
+data: {"tool_name":"oc_product","tool_input":{"limit":2},"tool_result":"{ ... }"}
+
+event: chunk
+data: {"text":"Here are t"}
+
+event: chunk
+data: {"text":"he 2 produ"}
+
+...
+
+event: done
+data: {"text":"Here are the 2 products...","provider":"ollama","model":"qwen2.5:7b","tokens":3075,"iterations":2,"conversation_id":"01KT...","tool_calls":[{...}]}</pre>
+        </div>
+
+        <div class="tab-pane" id="guide-cli">
+          <h3 class="pc-section-title">CLI Commands</h3>
+          <p class="pc-muted-text">Run from your OpenCart root directory:</p>
+
+          <table class="table table-bordered table-striped">
+            <thead>
+              <tr><th class="pc-th-cmd">Command</th><th>Description</th></tr>
+            </thead>
+            <tbody>
+              <tr><td><code>php system/library/phpclaw/cli/phpclaw.php send "your prompt"</code></td><td>Send a prompt and print the response. Creates a new unowned conversation (not tied to any admin user).</td></tr>
+              <tr><td><code>php system/library/phpclaw/cli/phpclaw.php send "prompt" --provider=anthropic</code></td><td>Override provider for one call.</td></tr>
+              <tr><td><code>php system/library/phpclaw/cli/phpclaw.php send "prompt" --model=claude-sonnet-5</code></td><td>Override model for one call.</td></tr>
+              <tr><td><code>php system/library/phpclaw/cli/phpclaw.php send "prompt" --stream</code></td><td>Stream the response token-by-token.</td></tr>
+              <tr><td><code>php system/library/phpclaw/cli/phpclaw.php mcp-server</code></td><td>Start the phpClaw MCP server (stdio transport).</td></tr>
+            </tbody>
+          </table>
+
+          <div class="pc-guide-tip">
+            <strong>Provider override:</strong> Use <code>--provider=openai --model=gpt-4o</code> to test a different provider for a single call without changing your Settings.
+          </div>
+        </div>
+
+        <div class="tab-pane" id="guide-guards">
+          <h3 class="pc-section-title">Guards</h3>
+          <p class="pc-muted-text">
+            Guards scan every user message before it reaches the LLM. Lower <code>priority</code> numbers run first.
+          </p>
+
+          <h4 class="pc-mt-24">Discovered Guards</h4>
+          {% if capability_records.guards is empty %}
+            <p class="pc-muted-text">No guards discovered. Default guards activate automatically on every install. Add custom guards via the <code>guards</code> key in <code>config/phpclaw.php</code>.</p>
+          {% else %}
+            <table class="table table-bordered table-striped">
+              <thead>
+                <tr><th>Name</th><th>Label</th><th>Priority</th><th>Default</th><th>Source</th><th>Class</th></tr>
+              </thead>
+              <tbody>
+                {% for g in capability_records.guards %}
+                  <tr>
+                    <td><code>{{ g.name }}</code></td>
+                    <td>{{ g.label }}</td>
+                    <td>{{ g.priority }}</td>
+                    <td>{% if g.enabled_by_default %}&#10003;{% else %}&#10007;{% endif %}</td>
+                    <td>{{ g.source }}</td>
+                    <td><small><code>{{ g.class }}</code></small></td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          {% endif %}
+        </div>
+
+        <div class="tab-pane" id="guide-hooks">
+          <h3 class="pc-section-title">Hooks</h3>
+          <p class="pc-muted-text">Below are the registered listener classes for this adapter.</p>
+
+          <h4 class="pc-mt-24">Registered Hook Listeners</h4>
+          {% if capability_records.hooks is empty %}
+            <p class="pc-muted-text">No hook listeners discovered. Register listeners via the <code>hooks</code> key in <code>config/phpclaw.php</code>.</p>
+          {% else %}
+            <table class="table table-bordered table-striped">
+              <thead>
+                <tr><th>Event</th><th>Name</th><th>Priority</th><th>Default</th><th>Source</th><th>Class</th></tr>
+              </thead>
+              <tbody>
+                {% for h in capability_records.hooks %}
+                  <tr>
+                    <td><code>{{ h.event }}</code></td>
+                    <td>{{ h.name }}</td>
+                    <td>{{ h.priority }}</td>
+                    <td>{% if h.enabled_by_default %}&#10003;{% else %}&#10007;{% endif %}</td>
+                    <td>{{ h.source }}</td>
+                    <td><small><code>{{ h.class }}</code></small></td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          {% endif %}
+        </div>
+
+        <div class="tab-pane" id="guide-skills">
+          <h3 class="pc-section-title">Skills</h3>
+          <p class="pc-muted-text">
+            Skills inject curated context snippets into the prompt when their keywords match the user message. These skills are always active, no configuration needed. See the Discovered Skills table below.
+          </p>
+
+          <h4 class="pc-mt-24">Discovered Skills</h4>
+          {% if capability_records.skills is empty %}
+            <p class="pc-muted-text">No skills discovered. Default skills ship with core; check <code>SkillCatalogue::all()</code>. Add custom skills via the <code>skills</code> key in <code>config/phpclaw.php</code>.</p>
+          {% else %}
+            <table class="table table-bordered table-striped">
+              <thead>
+                <tr><th>Name</th><th>Label</th><th>Keywords</th><th>Source</th><th>Class</th></tr>
+              </thead>
+              <tbody>
+                {% for s in capability_records.skills %}
+                  <tr>
+                    <td><code>{{ s.name }}</code></td>
+                    <td>{{ s.label }}</td>
+                    <td><small>{{ s.keywords | join(', ') }}</small></td>
+                    <td>{{ s.source }}</td>
+                    <td><small><code>{{ s.class }}</code></small></td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          {% endif %}
+
+          <h4 class="pc-mt-24">Remote Skills</h4>
+          {% if remote_skill_urls is empty %}
+            <p class="pc-muted-text">No remote skill URLs configured.</p>
+          {% elseif remote_skills is empty %}
+            <p class="pc-muted-text">Remote skill URLs configured but none registered; check they're saved, HTTPS, reachable, and end in .md/.json.</p>
+          {% else %}
+            <table class="table table-bordered table-striped">
+              <thead>
+                <tr><th>Name</th><th>Description</th><th>Keywords</th><th>Source</th></tr>
+              </thead>
+              <tbody>
+                {% for s in remote_skills %}
+                  <tr>
+                    <td><code>{{ s.name }}</code></td>
+                    <td><small>{{ s.description }}</small></td>
+                    <td><small>{{ s.keywords | join(', ') }}</small></td>
+                    <td>remote</td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+            <p class="pc-muted-text"><small>{{ remote_skill_urls | join(', ') }}</small></p>
+          {% endif %}
+        </div>
+
+        <div class="tab-pane" id="guide-privacy">
+          <h3 class="pc-section-title">Privacy &amp; Data Storage</h3>
+          <p class="pc-muted-text">The <strong>Store Messages</strong> setting controls whether prompts and responses are persisted in the OpenCart database.</p>
+
+          <table class="table table-bordered pc-guide-table-lg pc-mb-20">
+            <thead>
+              <tr>
+                <th class="pc-th-pkg"></th>
+                <th class="pc-th-desc">store_messages = <span class="pc-privacy-span-on">ON</span> (default)</th>
+                <th>store_messages = <span class="pc-privacy-span-off">OFF</span></th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>Conversation metadata</strong><br><small class="pc-privacy-small">ID, title, timestamps</small></td>
+                <td>&#10003; Stored in conversation store</td>
+                <td>&#10007; <strong>Never stored</strong></td>
+              </tr>
+              <tr>
+                <td><strong>Message text</strong><br><small class="pc-privacy-small">User prompts and AI replies</small></td>
+                <td>&#10003; Stored in message store</td>
+                <td>&#10007; <strong>Never stored</strong></td>
+              </tr>
+              <tr>
+                <td><strong>Tool call inputs/outputs</strong><br><small class="pc-privacy-small">Data returned by tools</small></td>
+                <td>&#10003; Stored in message store</td>
+                <td>&#10007; <strong>Never stored</strong></td>
+              </tr>
+            </tbody>
+          </table>
+
+          <div class="pc-guide-tip-mb">
+            <strong>Note:</strong> When <em>store_messages</em> is OFF, multi-turn conversations still work within a single request (the agent holds context in memory), but nothing is persisted. Each new request starts fresh.
+          </div>
+
+          <div class="pc-guide-tip-mb">
+            <strong>phpClaw Cloud:</strong> Request data (prompts, responses, tool calls, and metadata) is sent to phpClaw Cloud only when a Cloud Key is set <em>and</em> Store Messages is ON. When Store Messages is OFF, nothing is sent to the cloud. No data is shared with third parties.
+          </div>
+
+        </div>
+
+      </div>
+    </div>
+
+    <div class="pc-community">
+      <div class="pc-community-inner">
+        <h4 class="pc-community-title">
+          Built for the PHP community
+        </h4>
+        <p class="pc-community-text">
+          phpClaw is open source under the MIT license.
+        </p>
+        <p class="pc-community-text-last">
+          One engine for the entire PHP ecosystem.
+        </p>
+        <div class="pc-community-buttons">
+          <a href="https://github.com/phpclaw-php/phpclaw-monorepo" target="_blank" rel="noopener" class="pc-btn-github">
+            &#9733; Star on GitHub
+          </a>
+          <a href="https://packagist.org/packages/phpclaw/phpclaw" target="_blank" rel="noopener" class="pc-btn-packagist">
+            &#128230; View on Packagist
+          </a>
+        </div>
+        <div class="pc-community-footer">
+          <span class="pc-community-cta">Need more? phpClaw Enterprise</span>
+          <a href="https://phpclaw.ai/enterprise" target="_blank" rel="noopener" class="pc-community-link">&rarr; phpclaw.ai/enterprise</a>
+          <span class="pc-community-license">MIT License, Open Source</span>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+{{ footer }}

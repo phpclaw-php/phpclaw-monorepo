@@ -1,0 +1,13 @@
+services:
+  phpclaw.commands:
+    class: PhpClaw\Drupal\Commands\PhpClawCommands
+    arguments:
+      - '@phpclaw.agent_context'
+    tags:
+      - { name: drush.command }
+  phpclaw.mcp_commands:
+    class: PhpClaw\Drupal\Commands\PhpClawMcpServerCommands
+    arguments:
+      - '@phpclaw.agent_context'
+    tags:
+      - { name: drush.command }

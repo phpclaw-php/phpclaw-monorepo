@@ -1,0 +1,466 @@
+<div class="phpclaw-admin-page">
+
+  <ul class="phpclaw-tabs" id="guide-tabs">
+    <li class="nav-item"><a class="nav-link active" href="#guide-quickstart" data-phpclaw-tab="guide-quickstart">Quickstart</a></li>
+    <li class="nav-item"><a class="nav-link" href="#guide-tools" data-phpclaw-tab="guide-tools">Tools</a></li>
+    <li class="nav-item"><a class="nav-link" href="#guide-providers" data-phpclaw-tab="guide-providers">Providers</a></li>
+    <li class="nav-item"><a class="nav-link" href="#guide-memory" data-phpclaw-tab="guide-memory">Memory</a></li>
+    <li class="nav-item"><a class="nav-link" href="#guide-guards" data-phpclaw-tab="guide-guards">Guards</a></li>
+    <li class="nav-item"><a class="nav-link" href="#guide-hooks" data-phpclaw-tab="guide-hooks">Hooks</a></li>
+    <li class="nav-item"><a class="nav-link" href="#guide-skills" data-phpclaw-tab="guide-skills">Skills</a></li>
+    <li class="nav-item"><a class="nav-link" href="#guide-rest" data-phpclaw-tab="guide-rest">REST API</a></li>
+    <li class="nav-item"><a class="nav-link" href="#guide-cli" data-phpclaw-tab="guide-cli">CLI</a></li>
+    <li class="nav-item"><a class="nav-link" href="#guide-privacy" data-phpclaw-tab="guide-privacy">Privacy</a></li>
+  </ul>
+
+  <div class="tab-content phpclaw-tab-content">
+
+    <div class="tab-pane active" id="guide-quickstart">
+      <h4 class="phpclaw-section-title">Quickstart</h4>
+      <p class="phpclaw-body-text">Get phpClaw running in under three minutes.</p>
+
+      <ol class="phpclaw-body-text">
+        <li><strong>Install the module</strong> <span class="phpclaw-text-muted">(Administrator only)</span>: drop into <code>modules/contrib/phpclaw/</code> or install via <code>composer require phpclaw/phpclaw-drupal</code>, then enable: <code>drush en phpclaw -y</code>.</li>
+        <li><strong>Configure a provider</strong> <span class="phpclaw-text-muted">(Administrator only)</span>: go to {% if manage_all %}<a href="/admin/config/phpclaw/settings">Settings</a>{% else %}Settings{% endif %}, pick a provider (Ollama for local, Anthropic / OpenAI / Groq / Gemini / Mistral / DeepSeek for cloud, or Custom for any OpenAI-compatible gateway), paste the API key, and click <em>Save configuration</em>. See the <strong>Providers</strong> tab for per-provider notes.</li>
+        <li><strong>Try a prompt</strong>: open the <a href="/admin/config/phpclaw/chat">Chat</a> page and send <em>"list 5 articles"</em>. You should see a spinner, a tool card with the article list, and an assistant reply.</li>
+        <li><strong>Try Drush</strong>: from the shell: <code>drush phpclaw:run "How many users do we have?"</code>.</li>
+        <li><strong>Try the REST API</strong>: see the <strong>REST API</strong> tab for the <code>POST /api/phpclaw/send</code> endpoint shape.</li>
+      </ol>
+
+      <h4 class="phpclaw-section-title phpclaw-mt-24">Common first prompts</h4>
+      <ul class="phpclaw-body-text">
+        <li><code>list 5 most recent articles</code></li>
+        <li><code>show users with role administrator</code></li>
+        <li><code>how many published nodes do we have?</code></li>
+        <li><code>which modules are enabled but not configured?</code></li>
+        <li><code>show last 20 watchdog log entries with severity error</code></li>
+      </ul>
+
+      <div class="phpclaw-tip">
+        <strong>Tip:</strong> Small Ollama models (7B) see 5 tools, medium local models (30B-70B) see 8, and cloud providers plus larger models see all 22. If a tool is missing, try a bigger model.
+      </div>
+    </div>
+
+    <div class="tab-pane" id="guide-tools">
+      <h4 class="phpclaw-section-title">Built-in Tools</h4>
+      <p class="phpclaw-body-text">These tools are specific to Drupal. The AI agent automatically picks the right tool based on your prompt. Core utility tools (HTTP, file I/O, shell) are auto-discovered from the core package.</p>
+
+      <div class="phpclaw-tip phpclaw-mt-16">
+        <strong>One permission grants every tool.</strong> A role holding <code>use phpclaw chat</code> reaches all of the tools below, including raw database queries, configuration writes, module install and uninstall, and role and permission changes. That makes the permission administrator equivalent in effect: a holder can grant themselves any permission on this site. Grant it only to roles you would trust with full administrative access. To reach these pages from the administration menu a role also needs the Drupal core permissions <code>Use the administration pages</code>, which opens the whole configuration overview, and <code>View the administration theme</code>.
+      </div>
+
+      <table class="table table-bordered table-striped phpclaw-table">
+        <thead>
+          <tr>
+            <th class="phpclaw-th-name">Tool</th>
+            <th>What it does</th>
+            <th class="phpclaw-th-prompts">Example prompts</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for tool in tools %}
+          <tr>
+            <td><strong>{{ tool.name }}</strong></td>
+            <td>{{ tool.desc }}</td>
+            <td>{% for p in tool.prompts|split(' | ') %}<code>{{ p }}</code> {% endfor %}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+
+      <h4 class="phpclaw-section-title phpclaw-mt-24">Core Utility Tools</h4>
+      <p class="phpclaw-body-text">These tools ship from the <code>phpclaw/phpclaw</code> core package and are available in every adapter automatically, with no module edits required.</p>
+      <table class="table table-bordered table-striped phpclaw-table">
+        <thead>
+          <tr><th class="phpclaw-th-name">Tool</th><th class="phpclaw-th-status">Status</th><th>Notes</th></tr>
+        </thead>
+        <tbody>
+          {% for t in core_tools %}
+          <tr>
+            <td><code>{{ t.tool }}</code></td>
+            <td>{% if t.deprecated %}<span class="phpclaw-status-unavailable">Deprecated</span>{% else %}<span class="phpclaw-status-available">Available</span>{% endif %}</td>
+            <td>{{ t.desc }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+
+      <div class="phpclaw-enterprise-cta">
+        <strong>Need a custom tool for your project?</strong>
+        <p>We build custom AI tools for CRMs, ERPs, payment systems, and internal workflows.
+          <a href="https://phpclaw.ai/enterprise" target="_blank" rel="noopener">Contact us</a>.</p>
+      </div>
+    </div>
+
+    <div class="tab-pane" id="guide-providers">
+      <h4 class="phpclaw-section-title">AI Providers</h4>
+      <p class="phpclaw-body-text">phpClaw supports multiple providers. Pick one in {% if manage_all %}<a href="/admin/config/phpclaw/settings">Settings</a>{% else %}Settings{% endif %} <span class="phpclaw-text-muted">(Administrator only)</span>, paste the API key, save.</p>
+
+      <table class="table table-bordered table-striped phpclaw-table">
+        <thead>
+          <tr>
+            <th class="phpclaw-th-name">Provider</th>
+            <th>Setting key</th>
+            <th>Where to get the API key</th>
+            <th>Notes</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for p in providers %}
+          <tr>
+            <td><strong>{{ p.name }}</strong></td>
+            <td><code>{{ p.key }}</code></td>
+            <td>{% if p.signup %}<a href="{{ p.signup }}" target="_blank" rel="noopener">{{ p.signup }}</a>{% else %}-{% endif %}</td>
+            <td>{{ p.notes }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+
+      <div class="phpclaw-tip">
+        <strong>Switching providers:</strong> changing the provider mid-conversation does not lose chat history; message rows persist independently of which model produced them.
+      </div>
+    </div>
+
+    <div class="tab-pane" id="guide-memory">
+      <h4 class="phpclaw-section-title">Memory</h4>
+      <p class="phpclaw-body-text">Memory drivers store conversations and key-value state.</p>
+
+      <h4 class="phpclaw-section-title phpclaw-mt-24">Auto-Discovered Core Memory Drivers</h4>
+      {% if capability_records.memory is empty %}
+        <p class="phpclaw-body-text">No core memory drivers discovered.</p>
+      {% else %}
+      <table class="table table-bordered table-striped phpclaw-table">
+        <thead>
+          <tr><th>Driver</th><th>Label</th><th>Source</th><th>Class</th></tr>
+        </thead>
+        <tbody>
+          {% for m in capability_records.memory %}
+          <tr>
+            <td><code>{{ m.driver }}</code></td>
+            <td>{{ m.label }}</td>
+            <td>{{ m.source }}</td>
+            <td><small><code>{{ m.class }}</code></small></td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% endif %}
+
+      <h4 class="phpclaw-section-title phpclaw-mt-24">Database Tables</h4>
+      <p class="phpclaw-body-text">phpClaw creates three tables on module install (managed by <code>hook_schema()</code> in <code>phpclaw.install</code>).</p>
+
+      <table class="table table-bordered phpclaw-table">
+        <thead>
+          <tr><th>Table</th><th>Purpose</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>phpclaw_conversations</code></td>
+            <td>Conversation metadata: ID (CHAR 26 ULID), title, namespace, timestamps.</td>
+          </tr>
+          <tr>
+            <td><code>phpclaw_messages</code></td>
+            <td>Full message history per conversation: role, content, tool_name, tool_input.</td>
+          </tr>
+          <tr>
+            <td><code>phpclaw_memory</code></td>
+            <td>Key-value store (lookup_key + namespace) for skills, hooks, and custom extensions.</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="phpclaw-tip">
+        <strong>Backup tip:</strong> Include these three tables in your standard Drupal database backups to preserve all chat history.
+      </div>
+    </div>
+
+    <div class="tab-pane" id="guide-guards">
+      <h4 class="phpclaw-section-title">Guards</h4>
+      <p class="phpclaw-body-text">Guards scan every user message before it reaches the model and sanitise tool output on the way back. Lower <code>priority</code> numbers run first. A guard that throws <code>GuardException</code> stops the run and returns the error to the user.</p>
+
+      <h5 class="phpclaw-mt-16">Discovered Guards</h5>
+      {% if capability_records.guards is empty %}
+        <p class="phpclaw-body-text">No guards discovered. Default guards activate automatically on every install.</p>
+      {% else %}
+      <table class="table table-bordered table-striped phpclaw-table">
+        <thead>
+          <tr><th>Name</th><th>Label</th><th>Priority</th><th>Default</th><th>Source</th><th>Class</th></tr>
+        </thead>
+        <tbody>
+          {% for g in capability_records.guards %}
+          <tr>
+            <td><code>{{ g.name }}</code></td>
+            <td>{{ g.label }}</td>
+            <td>{{ g.priority }}</td>
+            <td>{% if g.enabled_by_default %}&#10003;{% else %}&#10007;{% endif %}</td>
+            <td>{{ g.source }}</td>
+            <td><small><code>{{ g.class }}</code></small></td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% endif %}
+    </div>
+
+    <div class="tab-pane" id="guide-hooks">
+      <h4 class="phpclaw-section-title">Hooks</h4>
+      <p class="phpclaw-body-text">Below are the registered listener classes for this adapter.</p>
+
+      <h5 class="phpclaw-mt-16">Registered Hook Listeners</h5>
+      {% if capability_records.hooks is empty %}
+        <p class="phpclaw-body-text">No hook listeners discovered.</p>
+      {% else %}
+      <table class="table table-bordered table-striped phpclaw-table">
+        <thead>
+          <tr><th>Event</th><th>Name</th><th>Priority</th><th>Default</th><th>Source</th><th>Class</th></tr>
+        </thead>
+        <tbody>
+          {% for h in capability_records.hooks %}
+          <tr>
+            <td><code>{{ h.event }}</code></td>
+            <td>{{ h.name }}</td>
+            <td>{{ h.priority }}</td>
+            <td>{% if h.enabled_by_default %}&#10003;{% else %}&#10007;{% endif %}</td>
+            <td>{{ h.source }}</td>
+            <td><small><code>{{ h.class }}</code></small></td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% endif %}
+    </div>
+
+    <div class="tab-pane" id="guide-skills">
+      <h4 class="phpclaw-section-title">Skills</h4>
+      <p class="phpclaw-body-text">Skills are always-on and inject curated context into the prompt when their keywords match the user message, so no per-skill toggle is needed. Add remote skills under {% if manage_all %}<a href="/admin/config/phpclaw/settings">Settings → Remote Skill URLs</a>{% else %}Settings → Remote Skill URLs{% endif %} <span class="phpclaw-text-muted">(Administrator only)</span>.</p>
+
+      <h5 class="phpclaw-mt-16">Discovered Skills</h5>
+      {% if capability_records.skills is empty %}
+        <p class="phpclaw-body-text">No skills discovered.</p>
+      {% else %}
+      <table class="table table-bordered table-striped phpclaw-table">
+        <thead>
+          <tr><th>Name</th><th>Label</th><th>Keywords</th><th>Source</th><th>Class</th></tr>
+        </thead>
+        <tbody>
+          {% for s in capability_records.skills %}
+          <tr>
+            <td><code>{{ s.name }}</code></td>
+            <td>{{ s.label }}</td>
+            <td><small>{{ s.keywords|join(', ') }}</small></td>
+            <td>{{ s.source }}</td>
+            <td><small><code>{{ s.class }}</code></small></td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% endif %}
+
+      <h5 class="phpclaw-mt-16">Remote Skills</h5>
+      {% if remote_skill_urls is empty %}
+        <p class="phpclaw-body-text">No remote skill URLs configured.</p>
+      {% elseif remote_skills is empty %}
+        <p class="phpclaw-body-text">Remote skill URLs configured but none registered. Check they're saved, HTTPS, reachable, and end in .md/.json.</p>
+      {% else %}
+      <table class="table table-bordered table-striped phpclaw-table">
+        <thead>
+          <tr><th>Name</th><th>Description</th><th>Keywords</th><th>Source</th></tr>
+        </thead>
+        <tbody>
+          {% for s in remote_skills %}
+          <tr>
+            <td><code>{{ s.name }}</code></td>
+            <td><small>{{ s.description }}</small></td>
+            <td><small>{{ s.keywords|join(', ') }}</small></td>
+            <td>remote</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      <p class="phpclaw-body-text"><small>{{ remote_skill_urls|join(', ') }}</small></p>
+      {% endif %}
+    </div>
+
+    <div class="tab-pane" id="guide-rest">
+      <h4 class="phpclaw-section-title">REST API</h4>
+      <p class="phpclaw-body-text">phpClaw exposes two REST endpoints on Drupal's own routing and authentication stack, <code>/api/phpclaw/send</code> and <code>/api/phpclaw/chat/stream</code>. Both require <code>use phpclaw chat</code>. Requests are scoped to the caller's own conversations unless the caller also holds <code>manage all phpclaw conversations</code>, and each conversation is stamped with the calling user's ID.</p>
+
+      <div class="phpclaw-tip">
+        <strong>Before the routes answer:</strong> Drupal core issues no API token. Enable the core <strong>HTTP Basic Authentication</strong> module to call these endpoints from a script, or authenticate with a session cookie. The accepted providers are listed in the <code>api_auth_providers</code> setting, which defaults to <code>basic_auth</code> and <code>cookie</code>; add your own provider ID there if the site uses one. Basic authentication sends the account password on every request, so serve it over HTTPS.
+      </div>
+
+      <h5>POST: Send a prompt</h5>
+      <table class="table table-bordered phpclaw-table">
+        <tr><th class="phpclaw-th-endpoint">Endpoint</th><td><code>/api/phpclaw/send</code></td></tr>
+        <tr><th>Auth</th><td>Any provider in <code>api_auth_providers</code>, holding <code>use phpclaw chat</code></td></tr>
+        <tr><th>Body (JSON)</th><td><code>{"message": "your prompt", "conversation_id": "optional"}</code></td></tr>
+      </table>
+
+      <pre class="phpclaw-pre">curl -u 'USERNAME:PASSWORD' \
+  -X POST https://example.com/api/phpclaw/send \
+  -H 'Content-Type: application/json' \
+  -d '{"message": "how many articles are published?"}'</pre>
+
+      <h5>Success response (200)</h5>
+      <pre class="phpclaw-pre">{
+  "ok": true,
+  "text": "Here are your published articles...",
+  "provider": "anthropic",
+  "model": "claude-haiku-4-5-20251001",
+  "iterations": 2,
+  "tokens": 947,
+  "conversation_id": "01JQABCDE...",
+  "tool_calls": []
+}</pre>
+
+      <h5>Error responses</h5>
+      <p class="phpclaw-body-text">Errors return <code>{"ok": false, "error": "&lt;message&gt;"}</code> with one of these HTTP status codes:</p>
+      <table class="table table-bordered phpclaw-table">
+        <thead><tr><th class="phpclaw-th-status-sm">Status</th><th>When</th></tr></thead>
+        <tbody>
+          <tr><td>400</td><td>Message is empty, or exceeds the 10,000-character limit</td></tr>
+          <tr><td>401</td><td>No credential supplied, or the credential was rejected by every configured authentication provider</td></tr>
+          <tr><td>403</td><td>The user lacks the <code>use phpclaw chat</code> permission, the conversation belongs to another user, or a cookie-authenticated request arrived without a valid <code>X-CSRF-Token</code></td></tr>
+          <tr><td>422</td><td>A guard blocked the message (prompt injection or PII detected)</td></tr>
+          <tr><td>502</td><td>Provider error: check your API key and provider settings</td></tr>
+          <tr><td>500</td><td>Internal error: see the Drupal log (<code>admin/reports/dblog</code>)</td></tr>
+        </tbody>
+      </table>
+
+      <div class="phpclaw-tip">
+        <strong>CSRF:</strong> Drupal requires an <code>X-CSRF-Token</code> header only when the request carries a session cookie. A request authenticated with HTTP Basic sends no cookie and needs no token. Fetch a token from <code>/session/token</code> when calling from a logged-in browser.
+      </div>
+
+      <h5 class="phpclaw-mt-24">Streaming Endpoint (Server-Sent Events)</h5>
+      <p class="phpclaw-body-text">The chat UI streams responses token-by-token and surfaces tool calls live via Server-Sent Events. The stream endpoint is what powers the placeholder cards and incremental assistant bubbles in the admin chat.</p>
+
+      <h6>Endpoint</h6>
+      <table class="table table-bordered phpclaw-table">
+        <tr><th class="phpclaw-th-endpoint">URL</th><td><code>/api/phpclaw/chat/stream</code></td></tr>
+        <tr><th>Method</th><td><code>POST</code></td></tr>
+        <tr><th>Content-Type (request)</th><td><code>application/json</code></td></tr>
+        <tr><th>Content-Type (response)</th><td><code>text/event-stream</code></td></tr>
+        <tr><th>Auth</th><td>Any provider in <code>api_auth_providers</code>, holding <code>use phpclaw chat</code></td></tr>
+        <tr><th>Body</th><td><code>{"message": "your prompt", "conversation_id": "optional"}</code></td></tr>
+      </table>
+
+      <h6>Event frames emitted</h6>
+      <table class="table table-bordered table-striped phpclaw-table">
+        <thead><tr><th>Event</th><th>Fires when</th><th>Payload</th></tr></thead>
+        <tbody>
+          <tr><td><code>tool_before</code></td><td>A tool is about to execute</td><td><code>{tool_name, tool_input}</code></td></tr>
+          <tr><td><code>tool_after</code></td><td>A tool has produced a result</td><td><code>{tool_name, tool_input, tool_result}</code></td></tr>
+          <tr><td><code>chunk</code></td><td>A token arrived from the provider (fast-path streaming)</td><td><code>{text}</code></td></tr>
+          <tr><td><code>done</code></td><td>The full turn is complete</td><td><code>{text, provider, model, iterations, tokens, conversation_id, tool_calls}</code></td></tr>
+          <tr><td><code>error</code></td><td>The turn aborted</td><td><code>{message}</code></td></tr>
+        </tbody>
+      </table>
+
+      <h6>Sample event stream</h6>
+      <pre class="phpclaw-pre">event: tool_before
+data: {"tool_name":"drupal_entity","tool_input":{"entity_type":"node","limit":3}}
+
+event: tool_after
+data: {"tool_name":"drupal_entity","tool_input":{"entity_type":"node","limit":3},"tool_result":"{\"entities\":[...]}"}
+
+event: chunk
+data: {"text":"Here are "}
+
+event: chunk
+data: {"text":"3 articles"}
+
+event: done
+data: {"text":"Here are 3 articles...","provider":"ollama","model":"qwen2.5:7b","iterations":2,"tokens":947,"conversation_id":"01JQ...","tool_calls":[...]}</pre>
+
+      <div class="phpclaw-tip">
+        <strong>Note:</strong> Token-level streaming requires the configured provider to support SSE (Anthropic, OpenAI, Groq, Ollama all do). When the provider does not stream tokens, the full text arrives in the <code>done</code> frame and the typing indicator bridges the wait.
+      </div>
+    </div>
+
+    <div class="tab-pane" id="guide-cli">
+      <h4 class="phpclaw-section-title">Drush Commands</h4>
+      <p class="phpclaw-body-text">Run from your Drupal project root:</p>
+
+      <table class="table table-bordered table-striped phpclaw-table">
+        <thead>
+          <tr><th class="phpclaw-th-cmd">Command</th><th>Description</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><code>drush phpclaw:run "your prompt"</code></td><td>Send a prompt and print the response.</td></tr>
+          <tr><td><code>drush phpclaw:run "prompt" --stream</code></td><td>Stream the response token by token.</td></tr>
+          <tr><td><code>drush pc "prompt"</code></td><td>Short alias for drush phpclaw:run.</td></tr>
+          <tr><td><code>drush phpclaw:mcp-server</code></td><td>Start the phpClaw MCP server (stdio transport).</td></tr>
+          <tr><td><code>drush phpclaw-mcp</code></td><td>Short alias for drush phpclaw:mcp-server.</td></tr>
+        </tbody>
+      </table>
+
+      <div class="phpclaw-tip">
+        <strong>Tip:</strong> Use <code>--stream</code> to see the response appear token by token in your terminal, useful for long answers.
+      </div>
+
+      <div class="phpclaw-tip phpclaw-mt-16">
+        <strong>Conversation ownership:</strong> Drush runs outside a Drupal session, so anyone with shell access can run these commands and conversations they create are stored with owner <code>0</code>. They belong to no site user and are visible only to roles holding <code>manage all phpclaw conversations</code>.
+      </div>
+    </div>
+
+    <div class="tab-pane" id="guide-privacy">
+      <h4 class="phpclaw-section-title">Privacy &amp; Data Storage</h4>
+      <p class="phpclaw-body-text">The <strong>Store Messages</strong> setting controls what data phpClaw persists.</p>
+
+      <table class="table table-bordered phpclaw-table">
+        <thead>
+          <tr>
+            <th></th>
+            <th>store_messages = <span class="phpclaw-status-available">ON</span></th>
+            <th>store_messages = <span class="phpclaw-status-off">OFF</span></th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Conversation metadata</strong><br><small>ID, title, timestamps</small></td>
+            <td>&#10003; Stored in conversation store</td>
+            <td>&#10007; <strong>Never stored</strong></td>
+          </tr>
+          <tr>
+            <td><strong>Message text</strong><br><small>User prompts and AI replies</small></td>
+            <td>&#10003; Stored in message store</td>
+            <td>&#10007; <strong>Never stored</strong></td>
+          </tr>
+          <tr>
+            <td><strong>Tool call inputs/outputs</strong><br><small>Data returned by tools</small></td>
+            <td>&#10003; Stored in message store</td>
+            <td>&#10007; <strong>Never stored</strong></td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="phpclaw-tip">
+        <strong>Note:</strong> When <em>store_messages</em> is OFF, multi-turn conversations still work within a single request, since the agent holds context in memory, but nothing is persisted. Each new request starts fresh.
+      </div>
+
+      <div class="phpclaw-tip phpclaw-mt-16">
+        <strong>phpClaw Cloud:</strong> Request data (prompts, responses, tool calls, and metadata) is sent to phpClaw Cloud only when a Cloud Key is set <em>and</em> Store Messages is ON. When Store Messages is OFF, nothing is sent to the cloud. No data is shared with third parties.
+      </div>
+
+    </div>
+
+  </div>
+
+  <div class="phpclaw-community">
+    <div class="phpclaw-community-inner">
+      <h4 class="phpclaw-community-title">Built for the PHP community</h4>
+      <p class="phpclaw-community-text">phpClaw is open source under the MIT license.</p>
+      <p class="phpclaw-community-text">One engine for the entire PHP ecosystem.</p>
+      <div class="phpclaw-community-buttons">
+        <a href="https://github.com/phpclaw-php/phpclaw" target="_blank" rel="noopener" class="phpclaw-btn-github">&#9733; Star on GitHub</a>
+        <a href="https://packagist.org/packages/phpclaw/phpclaw" target="_blank" rel="noopener" class="phpclaw-btn-packagist">&#128230; View on Packagist</a>
+      </div>
+      <div class="phpclaw-community-footer">
+        <span>Need custom AI tools for your project?</span>
+        <a href="https://phpclaw.ai/enterprise" target="_blank" rel="noopener">&rarr; phpclaw.ai/enterprise</a>
+      </div>
+    </div>
+  </div>
+
+</div>

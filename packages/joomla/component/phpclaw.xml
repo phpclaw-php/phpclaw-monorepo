@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="utf-8"?>
+<extension type="component" method="upgrade" version="4.0">
+    <name>com_phpclaw</name>
+    <author>Akash Patel</author>
+    <creationDate>2026-08-17</creationDate>
+    <authorEmail>er.akashpatel1908@gmail.com</authorEmail>
+    <authorUrl>https://phpclaw.ai</authorUrl>
+    <version>1.0.0</version>
+    <targetplatform name="joomla" version="[456].*"/>
+    <description>COM_PHPCLAW_DESC</description>
+    <namespace path="src">PhpClaw\Joomla\Component</namespace>
+
+    <scriptfile>script.php</scriptfile>
+
+    <administration>
+        <menu img="class:cogs">COM_PHPCLAW_MENU</menu>
+        <submenu>
+            <menu link="option=com_phpclaw&amp;view=chat">COM_PHPCLAW_MENU_CHAT</menu>
+            <menu link="option=com_phpclaw&amp;view=analytics">COM_PHPCLAW_MENU_ANALYTICS</menu>
+            <menu link="option=com_phpclaw&amp;view=guide">COM_PHPCLAW_MENU_GUIDE</menu>
+            <menu link="option=com_phpclaw&amp;view=about">COM_PHPCLAW_MENU_ABOUT</menu>
+        </submenu>
+        <files folder=".">
+            <filename>access.xml</filename>
+            <filename>config.xml</filename>
+            <filename>script.php</filename>
+            <folder>src</folder>
+            <folder>services</folder>
+            <folder>tmpl</folder>
+            <folder>sql</folder>
+            <folder>vendor</folder>
+        </files>
+
+        <languages folder="language">
+            <language tag="en-GB">en-GB/com_phpclaw.ini</language>
+            <language tag="en-GB">en-GB/com_phpclaw.sys.ini</language>
+        </languages>
+    </administration>
+
+    <api>
+        <files folder="api">
+            <folder>src</folder>
+        </files>
+    </api>
+
+    <install>
+        <sql>
+            <file driver="mysql"  charset="utf8">sql/install.mysql.utf8.sql</file>
+            <file driver="mysqli" charset="utf8">sql/install.mysql.utf8.sql</file>
+        </sql>
+    </install>
+
+    <uninstall>
+        <sql>
+            <file driver="mysql"  charset="utf8">sql/uninstall.mysql.utf8.sql</file>
+            <file driver="mysqli" charset="utf8">sql/uninstall.mysql.utf8.sql</file>
+        </sql>
+    </uninstall>
+
+    <media destination="com_phpclaw" folder="media">
+        <filename>joomla.asset.json</filename>
+        <folder>css</folder>
+        <folder>js</folder>
+    </media>
+
+    <updateservers>
+        <server type="extension" name="phpClaw Component">https://phpclaw.ai/api/joomla-update/component</server>
+    </updateservers>
+</extension>

@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:noNamespaceSchemaLocation="https://schema.phpunit.de/11.0/phpunit.xsd"
+         bootstrap="vendor/autoload.php"
+         colors="true"
+         failOnRisky="true"
+         failOnWarning="true"
+         stopOnFailure="false">
+
+    <testsuites>
+        <testsuite name="Unit">
+            <directory>tests/Unit</directory>
+        </testsuite>
+        <testsuite name="Feature">
+            <directory>tests/Feature</directory>
+        </testsuite>
+    </testsuites>
+
+    <source>
+        <include>
+            <directory>src</directory>
+        </include>
+        <exclude>
+            <!-- Framework-specific wrappers excluded, they require framework bootstrap to test.
+                 Covered by per-adapter integration tests instead.
+                 Add new framework dirs here when added to src/. -->
+            <directory>src/Drupal</directory>
+            <directory>src/Joomla</directory>
+            <directory>src/Laravel</directory>
+            <directory>src/Magento</directory>
+            <directory>src/OpenCart</directory>
+            <directory>src/PrestaShop</directory>
+            <directory>src/Symfony</directory>
+            <directory>src/WordPress</directory>
+        </exclude>
+    </source>
+
+</phpunit>

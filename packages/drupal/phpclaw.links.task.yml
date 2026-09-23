@@ -1,0 +1,29 @@
+phpclaw.tab.settings:
+  title: 'Settings'
+  route_name: phpclaw.admin.settings
+  base_route: phpclaw.admin.chat
+  weight: 10
+
+phpclaw.tab.chat:
+  title: 'Chat'
+  route_name: phpclaw.admin.chat
+  base_route: phpclaw.admin.chat
+  weight: 20
+
+phpclaw.tab.analytics:
+  title: 'Analytics'
+  route_name: phpclaw.admin.analytics
+  base_route: phpclaw.admin.chat
+  weight: 40
+
+phpclaw.tab.guide:
+  title: 'Guide'
+  route_name: phpclaw.admin.guide
+  base_route: phpclaw.admin.chat
+  weight: 50
+
+phpclaw.tab.about:
+  title: 'About'
+  route_name: phpclaw.admin.about
+  base_route: phpclaw.admin.chat
+  weight: 60

@@ -1,0 +1,272 @@
+name: Build & Publish CMS ZIPs
+
+on:
+  push:
+    branches: [0.x]
+    paths:
+      - 'packages/**'
+
+# Run releases one at a time so concurrent pushes never race on the marketing repo.
+concurrency:
+  group: cms-release
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  pull-requests: read
+
+jobs:
+  # Only the release PR merge releases; any other merge just rebuilds that PR.
+  gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    outputs:
+      release: ${{ steps.check.outputs.release }}
+    steps:
+      - name: Release only when the release PR is merged
+        id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          for attempt in 1 2 3 4 5; do
+            REF=$(gh api "repos/${{ github.repository }}/commits/${{ github.sha }}/pulls" \
+              --jq '.[0].head.ref // ""' 2>/dev/null || true)
+            [ -n "$REF" ] && break
+            echo "No pull request linked to this commit yet (attempt $attempt); waiting."
+            sleep 5
+          done
+          echo "Pushed commit comes from branch: ${REF:-none (direct push)}"
+          if [ "$REF" = "release/${{ github.ref_name }}" ]; then
+            echo "release=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "release=false" >> "$GITHUB_OUTPUT"
+            echo "Not the release PR: nothing to release."
+          fi
+
+  release:
+    needs: gate
+    if: needs.gate.outputs.release == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      # Only the tags this workflow writes, so the Composer run's tags on the same commit
+      # can never be mistaken for the last CMS release.
+      RELEASE_PACKAGES: joomla,wordpress,prestashop,opencart
+    steps:
+      - name: Checkout OSS source into phpclaw/
+        uses: actions/checkout@v7
+        with:
+          path: phpclaw
+          fetch-depth: 0
+
+      - name: Checkout private build script into scripts/
+        uses: actions/checkout@v7
+        with:
+          repository: erakashpatel/clawscripts
+          token: ${{ secrets.BUILD_TOKEN }}
+          path: scripts
+
+      - name: Checkout marketing site into marketing/
+        uses: actions/checkout@v7
+        with:
+          repository: erakashpatel/phpclaw-marketing
+          token: ${{ secrets.MARKETING_TOKEN }}
+          path: marketing
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: zip
+          tools: composer
+
+      # Versions come from the merged range plus the highest release:* label, default patch.
+      - name: Collect changes since the last release
+        env:
+          RELEASE_LINE: ${{ github.ref_name }}
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          HEAD_SHA: ${{ github.sha }}
+        run: php scripts/release-notes.php collect "${{ runner.temp }}/commits.json"
+
+      - name: Auto-bump versions from the release range
+        env:
+          RELEASE_LINE: ${{ github.ref_name }}
+          COMMITS_FILE: ${{ runner.temp }}/commits.json
+        run: |
+          # Latest tag per adapter, read before the level because the major guard compares them.
+          tag() { git -C phpclaw tag -l "$1-v*" | sed "s/^$1-v//" | sort -V | tail -1; }
+          export CURRENT_JOOMLA="$(tag joomla)" CURRENT_WORDPRESS="$(tag wordpress)"
+          export CURRENT_PRESTASHOP="$(tag prestashop)" CURRENT_OPENCART="$(tag opencart)"
+          FILES=$(php scripts/release-notes.php files)
+          # One level per package, from the commits that reach it since its own last release.
+          LEVELS=$(php scripts/release-notes.php levels)
+          echo "Levels: $LEVELS"
+          CHANGED_FILES="$FILES" BUMP_LEVELS="$LEVELS" php scripts/auto-bump.php
+
+      - name: Read per-adapter versions
+        id: v
+        run: |
+          echo "joomla=$(tr -d '[:space:]' < phpclaw/packages/joomla/VERSION)"         >> "$GITHUB_OUTPUT"
+          echo "wordpress=$(tr -d '[:space:]' < phpclaw/packages/wordpress/VERSION)"   >> "$GITHUB_OUTPUT"
+          echo "prestashop=$(tr -d '[:space:]' < phpclaw/packages/prestashop/VERSION)" >> "$GITHUB_OUTPUT"
+          echo "opencart=$(tr -d '[:space:]' < phpclaw/packages/opencart/VERSION)"     >> "$GITHUB_OUTPUT"
+
+      - name: Write release notes from the changelogs
+        env:
+          RELEASE_LINE: ${{ github.ref_name }}
+        run: |
+          mkdir -p dist
+          php scripts/release-notes.php notes joomla     "${{ steps.v.outputs.joomla }}"     > dist/notes-joomla.md
+          php scripts/release-notes.php notes wordpress  "${{ steps.v.outputs.wordpress }}"  > dist/notes-wordpress.md
+          php scripts/release-notes.php notes prestashop "${{ steps.v.outputs.prestashop }}" > dist/notes-prestashop.md
+          php scripts/release-notes.php notes opencart   "${{ steps.v.outputs.opencart }}"   > dist/notes-opencart.md
+
+      - name: Build all CMS ZIPs
+        run: |
+          MAJOR="${GITHUB_REF_NAME%%.x}"
+          php scripts/build-zip-release.php all \
+            --core-major="$MAJOR" --cloud-major="$MAJOR" --mcp-major="$MAJOR"
+
+      - name: Make unversioned copies for the rolling latest
+        run: |
+          cd dist
+          cp "phpclaw-joomla-${{ steps.v.outputs.joomla }}.zip"            phpclaw-joomla.zip
+          cp "phpclaw-wordpress-${{ steps.v.outputs.wordpress }}.zip"      phpclaw-wordpress.zip
+          cp "phpclaw-prestashop-${{ steps.v.outputs.prestashop }}.zip"    phpclaw-prestashop.zip
+          cp "phpclaw-opencart3-${{ steps.v.outputs.opencart }}.ocmod.zip" phpclaw-opencart3.ocmod.zip
+          cp "phpclaw-opencart4-${{ steps.v.outputs.opencart }}.ocmod.zip" phpclaw-opencart4.ocmod.zip
+
+      # Rolling latest release: the docs Download buttons resolve to these assets.
+      - name: Publish rolling latest
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: latest
+          name: Latest CMS builds
+          make_latest: true
+          files: |
+            dist/phpclaw-joomla.zip
+            dist/phpclaw-wordpress.zip
+            dist/phpclaw-prestashop.zip
+            dist/phpclaw-opencart3.ocmod.zip
+            dist/phpclaw-opencart4.ocmod.zip
+
+      # Immutable per-adapter releases, so any previous version stays installable.
+      - name: Publish Joomla release
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: joomla-v${{ steps.v.outputs.joomla }}
+          name: Joomla ${{ steps.v.outputs.joomla }}
+          make_latest: false
+          target_commitish: ${{ github.sha }}
+          body_path: dist/notes-joomla.md
+          files: dist/phpclaw-joomla-${{ steps.v.outputs.joomla }}.zip
+
+      - name: Publish WordPress release
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: wordpress-v${{ steps.v.outputs.wordpress }}
+          name: WordPress ${{ steps.v.outputs.wordpress }}
+          make_latest: false
+          target_commitish: ${{ github.sha }}
+          body_path: dist/notes-wordpress.md
+          files: dist/phpclaw-wordpress-${{ steps.v.outputs.wordpress }}.zip
+
+      - name: Publish PrestaShop release
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: prestashop-v${{ steps.v.outputs.prestashop }}
+          name: PrestaShop ${{ steps.v.outputs.prestashop }}
+          make_latest: false
+          target_commitish: ${{ github.sha }}
+          body_path: dist/notes-prestashop.md
+          files: dist/phpclaw-prestashop-${{ steps.v.outputs.prestashop }}.zip
+
+      - name: Publish OpenCart release
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: opencart-v${{ steps.v.outputs.opencart }}
+          name: OpenCart ${{ steps.v.outputs.opencart }}
+          make_latest: false
+          target_commitish: ${{ github.sha }}
+          body_path: dist/notes-opencart.md
+          files: |
+            dist/phpclaw-opencart3-${{ steps.v.outputs.opencart }}.ocmod.zip
+            dist/phpclaw-opencart4-${{ steps.v.outputs.opencart }}.ocmod.zip
+
+      # GitHub counts downloads per asset, and no shields route sums one adapter's
+      # assets across releases, so the per-adapter lifetime total is computed here.
+      # The rolling "latest" release is excluded so its unversioned copies never
+      # double-count downloads already counted under the versioned release. The
+      # combined grand-total badge (ZIP adapters + Composer packages, root README)
+      # is refreshed here too, reusing this same release-asset data for its ZIP half.
+      - name: Refresh per-adapter and combined download badges
+        env:
+          GH_TOKEN: ${{ secrets.GIST_TOKEN }}
+          GIST_ID: ${{ vars.DOWNLOAD_BADGE_GIST_ID }}
+        run: |
+          set -euo pipefail
+          if [ -z "$GH_TOKEN" ] || [ -z "$GIST_ID" ]; then
+            echo "GIST_TOKEN/DOWNLOAD_BADGE_GIST_ID not set — download badges not configured. Skipping."
+            exit 0
+          fi
+          push_badge() {
+            local filename="$1" total="$2"
+            if [ "$total" -ge 1000000 ]; then
+              msg=$(awk -v t="$total" 'BEGIN{printf "%.1fM", t/1000000}')
+            elif [ "$total" -ge 1000 ]; then
+              msg=$(awk -v t="$total" 'BEGIN{printf "%.1fk", t/1000}')
+            else
+              msg="$total"
+            fi
+            printf '{"schemaVersion":1,"label":"downloads","message":"%s","color":"blue"}\n' \
+              "$msg" > "$RUNNER_TEMP/$filename"
+            gh gist edit "$GIST_ID" --filename "$filename" "$RUNNER_TEMP/$filename"
+            echo "$filename: $total ($msg)"
+          }
+
+          counts=$(gh api --paginate "repos/${{ github.repository }}/releases" \
+            --jq '.[] | select(.tag_name != "latest") | .assets[] | "\(.name)\t\(.download_count)"')
+          zip_total=0
+          for adapter in wordpress joomla opencart prestashop; do
+            adapter_total=$(printf '%s\n' "$counts" \
+              | awk -F'\t' -v p="phpclaw-$adapter" 'index($1,p)==1 {s+=$2} END {print s+0}')
+            push_badge "downloads-$adapter.json" "$adapter_total"
+            zip_total=$((zip_total + adapter_total))
+          done
+
+          # Composer packages aren't counted by GitHub at all — Packagist tracks their
+          # downloads independently. A package not yet registered on Packagist 404s;
+          # `// 0` treats that as zero rather than failing the whole run.
+          composer_total=0
+          for pkg in phpclaw phpclaw-cloud phpclaw-drupal phpclaw-laravel phpclaw-magento phpclaw-mcp phpclaw-symfony; do
+            pkg_total=$(curl -s "https://packagist.org/packages/phpclaw/$pkg.json" \
+              | jq -r '.package.downloads.total // 0')
+            composer_total=$((composer_total + pkg_total))
+          done
+
+          push_badge "downloads-total.json" "$((zip_total + composer_total))"
+
+      # Regenerate the public/api manifests, which is what triggers in-admin update prompts.
+      - name: Refresh CMS update manifests and redeploy marketing
+        run: |
+          git -C marketing config user.name "phpclaw-release-bot"
+          git -C marketing config user.email "release-bot@phpclaw.ai"
+          for attempt in 1 2 3 4 5; do
+            php scripts/gen-update-manifests.php
+            git -C marketing add public/api
+            if git -C marketing diff --cached --quiet; then
+              echo "No manifest changes to publish."
+              exit 0
+            fi
+            git -C marketing commit -m "chore: refresh CMS update manifests"
+            if git -C marketing push; then
+              echo "Manifests published."
+              exit 0
+            fi
+            echo "Push rejected, syncing to remote and regenerating (attempt $attempt)"
+            git -C marketing fetch origin master
+            git -C marketing reset --hard origin/master
+          done
+          echo "Failed to publish manifests after retries" >&2
+          exit 1

@@ -1,0 +1,186 @@
+name: Laravel Adapter
+
+on:
+  push:
+    branches: [0.x]
+    paths:
+      - 'packages/laravel/**'
+      - '!packages/laravel/**.md'
+      - '.github/workflows/laravel.yml'
+      - '.github/workflows/_adapter-quality.yml'
+  pull_request:
+    paths:
+      - 'packages/laravel/**'
+      - '!packages/laravel/**.md'
+      - '.github/workflows/laravel.yml'
+      - '.github/workflows/_adapter-quality.yml'
+
+
+concurrency:
+  group: laravel-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    uses: ./.github/workflows/_adapter-quality.yml
+    with:
+      adapter: laravel
+      is_cms: false
+      # This job's install is unconstrained (no explicit illuminate/*|laravel/framework
+      # version pin), and our own require allows ^10.0|^11.0|^12.0|^13.0 — composer
+      # always resolves the newest allowed major (13.x), which needs PHP 8.4 (its own
+      # composer.json claims ^8.3, but its real transitive symfony/* 8.x dependencies
+      # need 8.4 — same "declared support lags actual code" gap seen elsewhere this
+      # session). On 8.1/8.2/8.3 this floats to a broken mix and fatals. PHP 8.4 is the
+      # only version safe for this generic path; the `test` job proves 8.1-8.4 properly.
+      php_versions: '["8.4"]'
+      coverage_php: '8.4'
+
+  test:
+    name: PHP ${{ matrix.php }} / Laravel ${{ matrix.laravel }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # illuminate/support's own composer.json php floor per major: 10 -> ^8.1,
+          # 11/12 -> ^8.2, 13 -> ^8.3 nominally but really needs 8.4 (see note above).
+          # orchestra/testbench major must match: Laravel 10->testbench 8, 11->9, 12->10, 13->11.
+          - php: '8.1'
+            laravel: '10.*'
+            testbench: '^8.0'
+          - php: '8.2'
+            laravel: '10.*'
+            testbench: '^8.0'
+          - php: '8.2'
+            laravel: '11.*'
+            testbench: '^9.0'
+          - php: '8.2'
+            laravel: '12.*'
+            testbench: '^10.0'
+          - php: '8.3'
+            laravel: '10.*'
+            testbench: '^8.0'
+          - php: '8.3'
+            laravel: '11.*'
+            testbench: '^9.0'
+          - php: '8.3'
+            laravel: '12.*'
+            testbench: '^10.0'
+          - php: '8.4'
+            laravel: '10.*'
+            testbench: '^8.0'
+          - php: '8.4'
+            laravel: '11.*'
+            testbench: '^9.0'
+          - php: '8.4'
+            laravel: '12.*'
+            testbench: '^10.0'
+          - php: '8.4'
+            laravel: '13.*'
+            testbench: '^11.0'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up PHP ${{ matrix.php }}
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          extensions: curl, json, mbstring
+          coverage: none
+
+      # We directly require 7 illuminate/* packages (support/console/database/cache/
+      # contracts/bus/queue), but only pinning those still leaves composer free to
+      # resolve laravel/framework (the monolithic package that "replaces" all of them)
+      # and orchestra/testbench independently — producing a version mismatch that
+      # doesn't represent any real Laravel install. Pin all 7 plus testbench (matched
+      # to the correct Laravel major: 10->testbench 8, 11->9, 12->10, 13->11) plus
+      # laravel/framework itself explicitly.
+      - name: Require Laravel ${{ matrix.laravel }}
+        working-directory: packages/laravel
+        run: |
+          composer require "illuminate/support:${{ matrix.laravel }}" \
+                           "illuminate/console:${{ matrix.laravel }}" \
+                           "illuminate/database:${{ matrix.laravel }}" \
+                           "illuminate/cache:${{ matrix.laravel }}" \
+                           "illuminate/contracts:${{ matrix.laravel }}" \
+                           "illuminate/bus:${{ matrix.laravel }}" \
+                           "illuminate/queue:${{ matrix.laravel }}" \
+                           --no-update --no-interaction
+          composer require --dev "orchestra/testbench:${{ matrix.testbench }}" \
+                                 "laravel/framework:${{ matrix.laravel }}" \
+                                 --no-update --no-interaction
+
+      - name: Install dependencies
+        working-directory: packages/laravel
+        run: composer install --prefer-dist --no-progress --no-interaction --ignore-platform-req=php
+
+
+      - name: Run unit tests
+        working-directory: packages/laravel
+        run: vendor/bin/phpunit --testsuite=Unit --testdox
+        # Feature tests are skipped automatically when no API key is set
+
+      - name: Run feature tests (optional — skip without key)
+        working-directory: packages/laravel
+        run: vendor/bin/phpunit --testsuite=Feature --testdox
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          OPENAI_API_KEY:    ${{ secrets.OPENAI_API_KEY }}
+          GROQ_API_KEY:      ${{ secrets.GROQ_API_KEY }}
+        continue-on-error: true   # never fail CI on missing keys
+
+  coverage:
+    name: Coverage (PHP 8.4 / Laravel 13)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: test
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up PHP 8.4 with Xdebug
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: curl, json, mbstring, xdebug
+          coverage: xdebug
+
+      - name: Require Laravel 13
+        working-directory: packages/laravel
+        run: |
+          composer require "illuminate/support:13.*" \
+                           "illuminate/console:13.*" \
+                           "illuminate/database:13.*" \
+                           "illuminate/cache:13.*" \
+                           "illuminate/contracts:13.*" \
+                           "illuminate/bus:13.*" \
+                           "illuminate/queue:13.*" \
+                           --no-update --no-interaction
+          composer require --dev "orchestra/testbench:^11.0" \
+                                 "laravel/framework:13.*" \
+                                 --no-update --no-interaction
+
+      - name: Install dependencies
+        working-directory: packages/laravel
+        run: composer install --prefer-dist --no-progress --no-interaction --ignore-platform-req=php
+
+      - name: Run tests with coverage
+        working-directory: packages/laravel
+        run: |
+          vendor/bin/phpunit --testsuite=Unit \
+            --coverage-text \
+            --coverage-clover=coverage.xml
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v7
+        with:
+          files: packages/laravel/coverage.xml
+          flags: laravel
+          fail_ci_if_error: false
+        continue-on-error: true

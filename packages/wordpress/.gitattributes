@@ -1,0 +1,12 @@
+.gitattributes         export-ignore
+.github/               export-ignore
+.phpbench/             export-ignore
+.phpunit.result.cache  export-ignore
+benchmarks/            export-ignore
+composer.lock          export-ignore
+phpbench.json          export-ignore
+phpstan.neon           export-ignore
+phpunit.xml            export-ignore
+pint.json              export-ignore
+SECURITY.md            export-ignore
+tests/                 export-ignore

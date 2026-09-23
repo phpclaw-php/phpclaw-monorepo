@@ -1,0 +1,114 @@
+phpclaw.admin.settings:
+  path: '/admin/config/phpclaw/settings'
+  defaults:
+    _form:  'PhpClaw\Drupal\Form\PhpClawSettingsForm'
+    _title: 'Settings'
+  requirements:
+    _permission: 'administer phpclaw'
+
+phpclaw.admin.chat:
+  path: '/admin/config/phpclaw/chat'
+  defaults:
+    _controller: 'PhpClaw\Drupal\Controller\Admin\PhpClawChatController::index'
+    _title: 'Chat'
+  requirements:
+    _permission: 'use phpclaw chat'
+  methods: [GET]
+
+phpclaw.admin.chat.send:
+  path: '/admin/config/phpclaw/chat/send'
+  defaults:
+    _controller: 'PhpClaw\Drupal\Controller\Admin\PhpClawChatController::send'
+    _title: 'Chat Send'
+  requirements:
+    _permission: 'use phpclaw chat'
+  methods: [POST]
+
+phpclaw.admin.chat.stream:
+  path: '/admin/config/phpclaw/chat/stream'
+  defaults:
+    _controller: 'PhpClaw\Drupal\Controller\Admin\PhpClawChatStreamController::stream'
+    _title: 'Chat Stream'
+  requirements:
+    _permission: 'use phpclaw chat'
+  methods: [POST]
+
+phpclaw.admin.chat.load:
+  path: '/admin/config/phpclaw/chat/load'
+  defaults:
+    _controller: 'PhpClaw\Drupal\Controller\Admin\PhpClawChatController::load'
+    _title: 'Chat Load'
+  requirements:
+    _permission: 'use phpclaw chat'
+  methods: [POST]
+
+phpclaw.admin.chat.delete:
+  path: '/admin/config/phpclaw/chat/delete'
+  defaults:
+    _controller: 'PhpClaw\Drupal\Controller\Admin\PhpClawChatController::delete'
+    _title: 'Chat Delete'
+  requirements:
+    _permission: 'use phpclaw chat'
+  methods: [POST]
+
+phpclaw.admin.analytics:
+  path: '/admin/config/phpclaw/analytics'
+  defaults:
+    _controller: 'PhpClaw\Drupal\Controller\Admin\PhpClawAnalyticsController::index'
+    _title: 'Analytics'
+  requirements:
+    _permission: 'use phpclaw chat'
+  methods: [GET]
+
+phpclaw.admin.guide:
+  path: '/admin/config/phpclaw/guide'
+  defaults:
+    _controller: 'PhpClaw\Drupal\Controller\Admin\PhpClawGuideController::index'
+    _title: 'Guide'
+  requirements:
+    _permission: 'use phpclaw chat'
+  methods: [GET]
+
+phpclaw.admin.about:
+  path: '/admin/config/phpclaw/about'
+  defaults:
+    _controller: 'PhpClaw\Drupal\Controller\Admin\PhpClawAboutController::index'
+    _title: 'About'
+  requirements:
+    _permission: 'use phpclaw chat'
+  methods: [GET]
+
+phpclaw.admin.test_connection:
+  path: '/admin/config/phpclaw/test-connection'
+  defaults:
+    _controller: 'PhpClaw\Drupal\Controller\Admin\PhpClawGuideController::testConnection'
+    _title: 'Test Connection'
+  requirements:
+    _permission: 'administer phpclaw'
+  methods: [POST]
+
+
+
+phpclaw.api.send:
+  path: '/api/phpclaw/send'
+  defaults:
+    _controller: 'PhpClaw\Drupal\Controller\Api\PhpClawApiController::send'
+    _title: 'phpClaw API Send'
+  requirements:
+    _permission: 'use phpclaw chat'
+    _csrf_request_header_token: 'TRUE'
+  options:
+    no_cache: 'TRUE'
+  methods: [POST]
+
+phpclaw.api.stream:
+  path: '/api/phpclaw/chat/stream'
+  defaults:
+    _controller: 'PhpClaw\Drupal\Controller\Api\PhpClawApiController::stream'
+    _title: 'phpClaw API Stream'
+  requirements:
+    _permission: 'use phpclaw chat'
+    _csrf_request_header_token: 'TRUE'
+  options:
+    no_cache: 'TRUE'
+  methods: [POST]

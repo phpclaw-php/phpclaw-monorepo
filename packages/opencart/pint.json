@@ -1,0 +1,9 @@
+{
+    "preset": "laravel",
+    "exclude": ["upload", "upload-oc4"],
+    "rules": {
+        "no_superfluous_phpdoc_tags": false,
+        "phpdoc_trim": true,
+        "phpdoc_trim_consecutive_blank_line_separation": true
+    }
+}

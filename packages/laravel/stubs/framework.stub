@@ -1,0 +1,26 @@
+<?php
+
+// PHPStan stub: real signatures for the optional laravel/telescope classes PhpClawWatcher guards with class_exists().
+
+namespace Laravel\Telescope {
+    class IncomingEntry
+    {
+        /**
+         * @param array<string, mixed> $content
+         */
+        public static function make(array $content = []): self
+        {
+        }
+
+        public function type(string $type): self
+        {
+        }
+    }
+
+    class Telescope
+    {
+        public static function recordEvent(IncomingEntry $entry): void
+        {
+        }
+    }
+}

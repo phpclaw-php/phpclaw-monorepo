@@ -1,0 +1,51 @@
+<?xml version="1.0"?>
+<config xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:noNamespaceSchemaLocation="urn:magento:module:Magento_Backend:etc/menu.xsd">
+    <menu>
+        <add id="PhpClaw_Magento::phpclaw"
+             title="phpClaw"
+             module="PhpClaw_Magento"
+             sortOrder="100"
+             resource="PhpClaw_Magento::phpclaw"/>
+
+        <add id="PhpClaw_Magento::phpclaw_settings"
+             title="Settings"
+             module="PhpClaw_Magento"
+             sortOrder="10"
+             parent="PhpClaw_Magento::phpclaw"
+             action="phpclaw/settings/index"
+             resource="PhpClaw_Magento::phpclaw_settings"/>
+
+        <add id="PhpClaw_Magento::phpclaw_chat"
+             title="Chat"
+             module="PhpClaw_Magento"
+             sortOrder="20"
+             parent="PhpClaw_Magento::phpclaw"
+             action="phpclaw/chat/index"
+             resource="PhpClaw_Magento::phpclaw_chat"/>
+
+        <add id="PhpClaw_Magento::phpclaw_analytics"
+             title="Analytics"
+             module="PhpClaw_Magento"
+             sortOrder="40"
+             parent="PhpClaw_Magento::phpclaw"
+             action="phpclaw/analytics/index"
+             resource="PhpClaw_Magento::phpclaw_analytics"/>
+
+        <add id="PhpClaw_Magento::phpclaw_guide"
+             title="Guide"
+             module="PhpClaw_Magento"
+             sortOrder="50"
+             parent="PhpClaw_Magento::phpclaw"
+             action="phpclaw/guide/index"
+             resource="PhpClaw_Magento::phpclaw_guide"/>
+
+        <add id="PhpClaw_Magento::phpclaw_about"
+             title="About"
+             module="PhpClaw_Magento"
+             sortOrder="60"
+             parent="PhpClaw_Magento::phpclaw"
+             action="phpclaw/about/index"
+             resource="PhpClaw_Magento::phpclaw_about"/>
+    </menu>
+</config>

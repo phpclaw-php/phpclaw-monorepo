@@ -1,0 +1,284 @@
+<?php
+
+/**
+ * PHPStan stub declarations for Joomla CMS runtime classes.
+ * Joomla CMS is provided by the live installation - not available via Composer.
+ * Registered via phpstan.neon scanFiles so PHPStan can resolve these types.
+ */
+
+namespace {
+    const JPATH_ADMINISTRATOR = '';
+    const JPATH_ROOT = '';
+    const JPATH_SITE = '';
+}
+
+namespace Joomla\CMS\Application {
+    abstract class CMSApplication
+    {
+        public function getDispatcher(): \Joomla\Event\DispatcherInterface {}
+        public function getIdentity(): ?\Joomla\CMS\User\User {}
+        public function getDocument(): \Joomla\CMS\Document\Document {}
+        public function getContainer(): \Joomla\DI\Container {}
+        public function getName(): string {}
+        public function getInput(): mixed {}
+        public function close(int $code = 0): void {}
+        public function setHeader(string $name, string $value, bool $replace = true): void {}
+        public function sendHeaders(): void {}
+        public function getLanguage(): \Joomla\CMS\Language\Language {}
+    }
+    class ConsoleApplication extends CMSApplication
+    {
+        public function addCommand(\Joomla\Console\Command\AbstractCommand $command): void {}
+    }
+}
+
+namespace Joomla\CMS\Plugin {
+    abstract class CMSPlugin implements \Joomla\CMS\Extension\PluginInterface
+    {
+        /** @var \Joomla\Registry\Registry */
+        protected $params;
+        protected $autoloadLanguage = false;
+        public function __construct(\Joomla\Event\DispatcherInterface $dispatcher, array $config = []) {}
+        public function registerListeners() {}
+        public function setApplication(\Joomla\CMS\Application\CMSApplication $application): void {}
+        protected function getApplication(): ?\Joomla\CMS\Application\CMSApplication {}
+    }
+    class PluginHelper
+    {
+        /** @return object|false */
+        public static function getPlugin(string $type, string $element): object|false {}
+        public static function importPlugin(string $type, ?string $element = null, bool $strict = false, ?\Joomla\Event\DispatcherInterface $dispatcher = null): bool {}
+    }
+}
+
+namespace Joomla\CMS\Form {
+    class Form
+    {
+        public function getName(): string {}
+        public function removeField(string $name, ?string $group = null): bool {}
+        public function getXml(): \SimpleXMLElement {}
+    }
+    abstract class FormField
+    {
+        /** @var string */
+        protected $type = '';
+        protected function getOptions(): array {}
+    }
+}
+
+namespace Joomla\CMS\Form\Field {
+    abstract class ListField extends \Joomla\CMS\Form\FormField
+    {
+        protected function getOptions(): array {}
+    }
+}
+
+namespace Joomla\CMS\MVC\Controller {
+    abstract class BaseController
+    {
+        /** @var string */
+        protected $default_view = '';
+        public function display(bool $cachable = false, array $urlparams = []): static {}
+        public function getModel(string $name = '', string $prefix = '', array $config = []): mixed {}
+    }
+}
+
+namespace Joomla\CMS\MVC\View {
+    abstract class HtmlView
+    {
+        public function display(?string $tpl = null): void {}
+        public function getModel(string $name = ''): mixed {}
+    }
+}
+
+namespace Joomla\CMS\MVC\Model {
+    abstract class BaseDatabaseModel
+    {
+        public function getDatabase(): \Joomla\Database\DatabaseInterface {}
+    }
+}
+
+namespace Joomla\CMS\MVC\Factory {
+    interface MVCFactoryInterface {}
+    class MVCFactory implements MVCFactoryInterface {}
+}
+
+namespace Joomla\CMS\Extension {
+    interface PluginInterface
+    {
+        public function registerListeners();
+    }
+    interface ComponentInterface
+    {
+        public function getDispatcher(\Joomla\CMS\Application\CMSApplication $application): \Joomla\Event\DispatcherInterface;
+    }
+    abstract class MVCComponent implements ComponentInterface
+    {
+        public function __construct(\Joomla\CMS\Dispatcher\ComponentDispatcherFactoryInterface $dispatcherFactory) {}
+        public function getDispatcher(\Joomla\CMS\Application\CMSApplication $application): \Joomla\Event\DispatcherInterface {}
+        public function setMVCFactory(\Joomla\CMS\MVC\Factory\MVCFactoryInterface $mvcFactory) {}
+    }
+    interface BootableExtensionInterface
+    {
+        public function boot(\Psr\Container\ContainerInterface $container): void;
+    }
+    class ExtensionHelper
+    {
+        /** @return object|false */
+        public static function getExtensionRecord(string $element, string $type = 'component', int $clientId = 1, string $folder = ''): object|false {}
+    }
+}
+
+namespace Joomla\CMS\Language {
+    class Language
+    {
+        public function load(string $extension = 'joomla', string $basePath = '', ?string $lang = null, bool $reload = false, bool $default = true): bool {}
+    }
+    class Text
+    {
+        public static function _(string $string, bool $jsSafe = false, bool $interpreteBackSlashes = true): string {}
+        public static function sprintf(string $string, mixed ...$args): string {}
+    }
+}
+
+namespace Joomla\CMS {
+    class Factory
+    {
+        public static ?\Joomla\CMS\Application\CMSApplication $application = null;
+        public static function getApplication(): \Joomla\CMS\Application\CMSApplication {}
+        public static function getContainer(): \Joomla\DI\Container {}
+        public static function getCache(string $group = '', string $handler = 'callback', ?string $storage = null): object {}
+        public static function getSession(): \Joomla\CMS\Session\Session {}
+    }
+}
+
+namespace Joomla\CMS\Session {
+    class Session
+    {
+        public static function checkToken(string $method = 'post'): bool {}
+        public static function getFormToken(bool $forceNew = false): string {}
+        public function get(string $name, mixed $default = null, string $namespace = 'default'): mixed {}
+        public function set(string $name, mixed $value = null, string $namespace = 'default'): mixed {}
+    }
+}
+
+namespace Joomla\CMS\Cache\Exception {
+    interface CacheExceptionInterface extends \Throwable {}
+}
+
+namespace Joomla\CMS\Toolbar {
+    class ToolbarHelper
+    {
+        public static function title(string $title, string $icon = 'generic.png'): void {}
+        public static function preferences(string $component, string $icon = 'options'): void {}
+    }
+}
+
+namespace Joomla\CMS\Document {
+    abstract class Document
+    {
+        public function getWebAssetManager(): \Joomla\CMS\WebAsset\WebAssetManager {}
+    }
+}
+
+namespace Joomla\CMS\WebAsset {
+    class WebAssetManager
+    {
+        public function registerAndUseStyle(string $name, string $uri, array $options = [], array $attribs = [], array $dependencies = []): static {}
+        public function registerAndUseScript(string $name, string $uri, array $options = [], array $attribs = [], array $dependencies = []): static {}
+        public function useScript(string $name): static {}
+        public function useStyle(string $name): static {}
+    }
+}
+
+namespace Joomla\CMS\User {
+    class User
+    {
+        public int $id = 0;
+        public string $name = '';
+        public string $username = '';
+        public function authorise(string $action, string $assetname = 'root.1'): bool {}
+    }
+}
+
+namespace Joomla\Event {
+    class GenericEvent extends \Joomla\Event\Event
+    {
+        public function __construct(string $name, array $arguments = []) {}
+    }
+}
+
+namespace Joomla\CMS\Access\Exception {
+    class NotAllowed extends \RuntimeException {}
+}
+
+namespace Joomla\Database {
+    interface QueryInterface {
+        public function select(mixed $columns): static;
+        public function from(mixed $tables): static;
+        public function where(mixed $conditions, string $glue = 'AND'): static;
+        public function order(mixed $columns): static;
+        public function delete(?string $table = null): static;
+        public function update(string $table): static;
+        public function insert(string $table, bool $incrementField = false): static;
+        public function columns(mixed $columns): static;
+        public function values(string $values): static;
+        public function set(mixed $conditions, string $glue = ','): static;
+        public function innerJoin(string $condition): static;
+        public function join(string $type, string $conditions): static;
+        public function bind(mixed $key, mixed &$value, mixed $dataType = null): static;
+        public function clear(?string $clause = null): static;
+        public function setLimit(int $limit = 0, int $offset = 0): static;
+    }
+}
+
+namespace Joomla\CMS\Extension\Service\Provider {
+    class MVCFactory implements \Joomla\DI\ServiceProviderInterface
+    {
+        public function __construct(string $namespace) {}
+        public function register(\Joomla\DI\Container $container) {}
+    }
+    class ComponentDispatcherFactory implements \Joomla\DI\ServiceProviderInterface
+    {
+        public function __construct(string $namespace) {}
+        public function register(\Joomla\DI\Container $container) {}
+    }
+}
+
+namespace Joomla\CMS\Dispatcher {
+    interface ComponentDispatcherFactoryInterface
+    {
+        public function createDispatcher(\Joomla\CMS\Application\CMSApplication $application, mixed $input = null): \Joomla\Event\DispatcherInterface;
+    }
+}
+
+namespace Joomla\CMS\Installer {
+    abstract class InstallerAdapter
+    {
+        public function getElement(?string $element = null): string {}
+        public function getManifest(): \SimpleXMLElement {}
+        public function getName(): string {}
+    }
+    interface InstallerScriptInterface
+    {
+        public function install(InstallerAdapter $adapter): bool;
+        public function update(InstallerAdapter $adapter): bool;
+        public function uninstall(InstallerAdapter $adapter): bool;
+        public function preflight(string $type, InstallerAdapter $adapter): bool;
+        public function postflight(string $type, InstallerAdapter $adapter): bool;
+    }
+}
+
+namespace Joomla\CMS\Router {
+    class ApiRouter
+    {
+        public function addRoutes(array $routes): void {}
+    }
+}
+
+namespace Joomla\Router {
+    class Route
+    {
+        public function __construct(array $methods, string $pattern, mixed $controller, array $rules = [], array $defaults = []) {}
+    }
+}

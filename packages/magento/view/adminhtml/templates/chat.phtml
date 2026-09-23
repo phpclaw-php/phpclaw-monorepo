@@ -1,0 +1,62 @@
+<?php
+/**
+ * PhpClaw Chat UI template.
+ * @var \PhpClaw\Magento\Block\Adminhtml\Chat $block
+ */
+declare(strict_types=1);
+?>
+<div class="pc-wrap pc-wrap--chat">
+
+    <div class="pc-chat-wrap">
+
+        <div class="pc-chat-sidebar">
+            <div class="pc-chat-sidebar-head">
+                <span class="pc-chat-sidebar-title"><?= $block->escapeHtml(__('Conversations')) ?></span>
+                <button id="pc-new-chat" class="pc-btn pc-btn-sm pc-btn-primary"><?= $block->escapeHtml(__('+ New Chat')) ?></button>
+            </div>
+            <div class="pc-chat-list" id="pc-chat-list" tabindex="0">
+                <div class="pc-chat-placeholder">
+                    <?= $block->escapeHtml(__('Loading…')) ?>
+                </div>
+            </div>
+        </div>
+
+        <div class="pc-chat-main">
+            <div id="pc-messages" class="pc-chat-messages"></div>
+
+            <div class="pc-chat-input-wrap">
+                <div class="pc-chat-input-area">
+                    <textarea
+                        id="pc-message-input"
+                        class="pc-textarea"
+                        placeholder="<?= $block->escapeHtmlAttr(__('Message PhpClaw… (Enter to send, Shift+Enter for new line)')) ?>"
+                        rows="2"
+                    ></textarea>
+                    <button id="pc-send-btn" class="pc-btn pc-btn-primary pc-btn-send" aria-label="<?= $block->escapeHtmlAttr(__('Send message')) ?>">
+                        <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+                            <path d="M12 4l-1.41 1.41L16.17 11H4v2h12.17l-5.58 5.59L12 20l8-8z"/>
+                        </svg>
+                    </button>
+                </div>
+                <div id="pc-chat-meta" class="pc-chat-meta">
+                    <span id="pc-chat-meta-text"><?= $block->escapeHtml(__('Responses are AI-generated. Verify before acting.')) ?></span>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <?= $block->getLayout()->createBlock(\Magento\Backend\Block\Template::class)
+        ->setTemplate('PhpClaw_Magento::footer.phtml')->toHtml() ?>
+</div>
+
+<script type="application/json" id="pc-chat-config">
+<?= /* @noEscape */ json_encode([
+    'send_url'      => $block->getSendUrl(),
+    'stream_url'    => $block->getStreamUrl(),
+    'history_url'   => $block->getHistoryUrl(),
+    'conversations' => $block->getConversations(),
+    'admin_urls'    => $block->getAdminUrls(),
+], JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>
+</script>
+<script src="<?= $block->escapeUrl($block->getViewFileUrl('PhpClaw_Magento::js/phpclaw-chat.js')) ?>"></script>

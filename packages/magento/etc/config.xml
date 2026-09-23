@@ -1,0 +1,30 @@
+<?xml version="1.0"?>
+<!--
+    Default configuration values for PhpClaw_Magento module.
+    Overridden by the PhpClaw -> Settings admin page, which writes phpclaw/general/*
+    into core_config_data. That admin Settings page is the single source of truth for all fields.
+-->
+<config xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:noNamespaceSchemaLocation="urn:magento:module:Magento_Store:etc/config.xsd">
+    <default>
+        <phpclaw>
+            <general>
+                <provider/>
+                <model/>
+                <api_key/>
+                <base_url/>
+                <system_prompt/>
+                <store_messages>1</store_messages>
+                <max_iterations/>
+                <cloud_key/>
+                <cloud_signing_secret/>
+                <cloud_disable/>
+                <remote_skill_urls/>
+            </general>
+            <security>
+                <shell_allowlist/>
+                <tool_deny/>
+            </security>
+        </phpclaw>
+    </default>
+</config>

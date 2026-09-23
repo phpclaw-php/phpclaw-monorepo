@@ -1,0 +1,61 @@
+{
+    "name": "phpclaw/phpclaw",
+    "description": "Universal AI agent engine for PHP. Zero framework dependencies. Anthropic, OpenAI, Groq, Gemini.",
+    "type": "library",
+    "license": "MIT",
+    "keywords": [
+        "ai",
+        "agent",
+        "llm",
+        "php",
+        "anthropic",
+        "openai",
+        "groq",
+        "gemini",
+        "claw",
+        "phpclaw"
+    ],
+    "authors": [
+        {
+            "name": "Akash Patel",
+            "email": "er.akashpatel1908@gmail.com"
+        }
+    ],
+    "require": {
+        "php": "^8.1",
+        "ext-curl": "*",
+        "ext-json": "*",
+        "ext-mbstring": "*"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^10.0|^11.0",
+        "laravel/pint": "^1.0",
+        "phpstan/phpstan": "^1.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "PhpClaw\\": "src/"
+        }
+    },
+    "bin": [
+        "bin/phpclaw-discover"
+    ],
+    "autoload-dev": {
+        "psr-4": {
+            "PhpClaw\\Tests\\": "tests/"
+        }
+    },
+    "scripts": {
+        "test": "vendor/bin/phpunit --no-coverage",
+        "test:coverage": "XDEBUG_MODE=coverage vendor/bin/phpunit --coverage-text",
+        "lint": "vendor/bin/pint",
+        "analyse": "vendor/bin/phpstan analyse --no-progress"
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true,
+    "config": {
+        "platform": {
+            "php": "8.3"
+        }
+    }
+}
