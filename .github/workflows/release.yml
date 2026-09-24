@@ -138,12 +138,20 @@ jobs:
           cp "phpclaw-opencart4-${{ steps.v.outputs.opencart }}.ocmod.zip" phpclaw-opencart4.ocmod.zip
 
       # Rolling latest release: the docs Download buttons resolve to these assets.
+      # Recreated on every release rather than updated: the workflow token can create
+      # a release but is refused when editing an existing one (softprops #836).
+      - name: Drop the previous rolling latest
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release delete latest --repo "${{ github.repository }}" --cleanup-tag --yes || true
+
       - name: Publish rolling latest
         uses: softprops/action-gh-release@v3
         with:
           tag_name: latest
           name: Latest CMS builds
           make_latest: true
+          target_commitish: ${{ github.sha }}
           files: |
             dist/phpclaw-joomla.zip
             dist/phpclaw-wordpress.zip
