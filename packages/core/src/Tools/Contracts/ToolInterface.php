@@ -7,7 +7,7 @@ namespace PhpClaw\Tools\Contracts;
 use PhpClaw\Exceptions\ToolException;
 
 /**
- * Contract every phpClaw tool must implement. Frozen until v2.0.
+ * Contract every phpClaw tool must implement.
  */
 interface ToolInterface
 {

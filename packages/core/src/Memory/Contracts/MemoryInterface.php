@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace PhpClaw\Memory\Contracts;
 
 /**
- * Contract every memory driver must implement. Frozen until v2.0.
+ * Contract every memory driver must implement.
  */
 interface MemoryInterface
 {

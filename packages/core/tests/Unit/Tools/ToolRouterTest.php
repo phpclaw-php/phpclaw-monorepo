@@ -5,7 +5,13 @@ declare(strict_types=1);
 namespace PhpClaw\Tests\Unit\Tools;
 
 use PhpClaw\Claw;
+use PhpClaw\Providers\Contracts\ProviderInterface;
+use PhpClaw\Skills\ArraySkill;
+use PhpClaw\Skills\SkillRegistry;
+use PhpClaw\Tools\Contracts\ToolInterface;
+use PhpClaw\Tools\Contracts\ToolRoutingInterface;
 use PhpClaw\Tools\ToolRouter;
+use PhpClaw\Tools\ToolRoutingMetadata;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
@@ -216,5 +222,82 @@ final class ToolRouterTest extends TestCase
         $sorted = $a;
         sort($sorted);
         $this->assertSame($sorted, $a, 'trimmed output is sorted by name');
+    }
+
+    /**
+     * @param  string[]  $intents
+     */
+    private function routedTool(string $name, string $description, array $intents): ToolInterface
+    {
+        return new class($name, $description, $intents) implements ToolInterface, ToolRoutingInterface
+        {
+            public function __construct(
+                private readonly string $n,
+                private readonly string $d,
+                private readonly array $i,
+            ) {}
+
+            public function name(): string
+            {
+                return $this->n;
+            }
+
+            public function description(): string
+            {
+                return $this->d;
+            }
+
+            public function inputSchema(): array
+            {
+                return ['type' => 'object', 'properties' => []];
+            }
+
+            public function execute(array $input): string
+            {
+                return 'ok';
+            }
+
+            public function isEligibleForRouting(): bool
+            {
+                return true;
+            }
+
+            public function routingMetadata(): ToolRoutingMetadata
+            {
+                return new ToolRoutingMetadata(intents: $this->i);
+            }
+        };
+    }
+
+    public function test_tool_routing_scores_the_user_message_not_the_injected_skill_context(): void
+    {
+        SkillRegistry::reset();
+        $offered = [];
+        $provider = $this->createMock(ProviderInterface::class);
+        $provider->method('name')->willReturn('anthropic');
+        $provider->method('model')->willReturn('claude-haiku-4-5-20251001');
+        $provider->method('send')->willReturnCallback(function (array $messages, array $tools) use (&$offered): array {
+            $offered = $this->names($tools);
+
+            return ['type' => 'text', 'text' => 'ok', 'input_tokens' => 1, 'output_tokens' => 1];
+        });
+
+        $skill = new ArraySkill('publishing', 'how to publish articles', ['publishing'], 'Always call alpha_publish first. alpha_publish handles every publishing step.');
+
+        Claw::builder()
+            ->providerOverride($provider)
+            ->useDefaultGuards(false)
+            ->maxToolsPerTurn(1)
+            ->tools([
+                $this->routedTool('alpha_publish', 'publish an article', []),
+                $this->routedTool('beta_fetch', 'fetch a url', ['fetch url']),
+            ])
+            ->skills([$skill])
+            ->build()
+            ->send('fetch url about publishing');
+
+        SkillRegistry::reset();
+
+        $this->assertSame(['beta_fetch'], $offered);
     }
 }

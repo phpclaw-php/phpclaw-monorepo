@@ -80,15 +80,16 @@ final class Agent
      * @param  string  $message  The user message to send.
      * @param  Message[]  $history  Prior conversation history (empty for single-turn).
      * @param  string  $runId  Optional run identifier propagated to hooks for run correlation.
+     * @param  string  $originalMessage  The user message before memory and skill context were prepended; used for tool routing. Empty falls back to $message.
      * @return AgentResponse The terminal text response produced by the loop.
      *
      * @throws MaxIterationsException When the loop exceeds maxIterations without a text response.
      * @throws ToolException When a tool execution or hallucination cannot be recovered.
      * @throws ProviderException When the upstream provider fails after all retries.
      */
-    public function run(string $message, array $history = [], string $runId = ''): AgentResponse
+    public function run(string $message, array $history = [], string $runId = '', string $originalMessage = ''): AgentResponse
     {
-        return $this->executeIterationLoop($message, $history, $runId, onToken: null);
+        return $this->executeIterationLoop($message, $history, $runId, onToken: null, originalMessage: $originalMessage);
     }
 
     /**
@@ -98,13 +99,14 @@ final class Agent
      * @param  callable(string): void  $onToken  Called with each text chunk as it arrives.
      * @param  Message[]  $history  Prior conversation history (empty for single-turn).
      * @param  string  $runId  Optional run identifier propagated to hooks for run correlation.
+     * @param  string  $originalMessage  The user message before memory and skill context were prepended; used for tool routing. Empty falls back to $message.
      * @return AgentResponse The terminal AgentResponse once streaming completes.
      *
      * @throws MaxIterationsException When the loop exceeds maxIterations without a text response.
      * @throws ToolException When a tool execution fails fatally.
      * @throws ProviderException When the upstream provider fails after all retries.
      */
-    public function stream(string $message, callable $onToken, array $history = [], string $runId = ''): AgentResponse
+    public function stream(string $message, callable $onToken, array $history = [], string $runId = '', string $originalMessage = ''): AgentResponse
     {
         HookDispatcher::streamStart($message, $this->provider->name(), $this->provider->model(), $runId);
 
@@ -115,7 +117,7 @@ final class Agent
             return $this->streamFastPath($message, $onToken, $history, $startNs, $runId);
         }
 
-        return $this->executeIterationLoop($message, $history, $runId, $onToken);
+        return $this->executeIterationLoop($message, $history, $runId, $onToken, $originalMessage);
     }
 
     /**
@@ -125,13 +127,14 @@ final class Agent
      * @param  Message[]  $history  Prior conversation history (may be empty).
      * @param  string  $runId  Optional run identifier propagated to hooks for run correlation.
      * @param  (callable(string): void)|null  $onToken  null = blocking mode, callable = streaming mode.
+     * @param  string  $originalMessage  The user message before memory and skill context were prepended; used for tool routing. Empty falls back to $message.
      * @return AgentResponse The terminal text response produced by the loop.
      *
      * @throws MaxIterationsException
      * @throws ToolException
      * @throws ProviderException
      */
-    private function executeIterationLoop(string $message, array $history, string $runId, ?callable $onToken): AgentResponse
+    private function executeIterationLoop(string $message, array $history, string $runId, ?callable $onToken, string $originalMessage = ''): AgentResponse
     {
         $streaming = $onToken !== null;
         $startNs = hrtime(true);
@@ -143,7 +146,7 @@ final class Agent
         $history[] = Message::user($message);
         $toolSchemas = $this->tools->schemas($this->provider->name());
         if ($this->toolRouter !== null) {
-            $toolSchemas = $this->toolRouter->filter($toolSchemas, $message, $this->provider->model(), $this->tools->routingMetadata());
+            $toolSchemas = $this->toolRouter->filter($toolSchemas, $originalMessage !== '' ? $originalMessage : $message, $this->provider->model(), $this->tools->routingMetadata());
         }
         $hallucinationRetry = false;
 

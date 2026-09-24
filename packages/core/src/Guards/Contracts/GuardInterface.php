@@ -7,7 +7,7 @@ namespace PhpClaw\Guards\Contracts;
 use PhpClaw\Exceptions\GuardException;
 
 /**
- * Contract for all prompt-injection guard implementations. Frozen until v2.0.
+ * Contract for all prompt-injection guard implementations.
  */
 interface GuardInterface
 {

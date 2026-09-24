@@ -54,7 +54,7 @@ final class Claw implements ClawInterface
     /**
      * Assemble the engine from an immutable configuration value object.
      *
-     * @param  ClawConfig  $config  Frozen configuration produced by ClawBuilder::build().
+     * @param  ClawConfig  $config  Immutable configuration produced by ClawBuilder::build().
      */
     public function __construct(private readonly ClawConfig $config)
     {
@@ -102,7 +102,7 @@ final class Claw implements ClawInterface
         return $this->pipeline->execute(
             message: $message,
             streaming: false,
-            invoke: fn (string $augmented, string $runId): AgentResponse => $this->agent->run($augmented, runId: $runId),
+            invoke: fn (string $augmented, string $runId, string $original): AgentResponse => $this->agent->run($augmented, runId: $runId, originalMessage: $original),
         );
     }
 
@@ -124,7 +124,7 @@ final class Claw implements ClawInterface
         return $this->pipeline->execute(
             message: $message,
             streaming: true,
-            invoke: fn (string $augmented, string $runId): AgentResponse => $this->agent->stream($augmented, $onToken, runId: $runId),
+            invoke: fn (string $augmented, string $runId, string $original): AgentResponse => $this->agent->stream($augmented, $onToken, runId: $runId, originalMessage: $original),
         );
     }
 
@@ -175,7 +175,7 @@ final class Claw implements ClawInterface
             message: $message,
             streaming: false,
             beforePersist: null,
-            invoke: fn (string $augmented, array $history, string $runId): AgentResponse => $this->agent->run($augmented, $history, runId: $runId),
+            invoke: fn (string $augmented, array $history, string $runId, string $original): AgentResponse => $this->agent->run($augmented, $history, runId: $runId, originalMessage: $original),
         );
     }
 
@@ -205,7 +205,7 @@ final class Claw implements ClawInterface
             message: $message,
             streaming: true,
             beforePersist: $beforePersist,
-            invoke: fn (string $augmented, array $history, string $runId): AgentResponse => $this->agent->stream($augmented, $onToken, $history, runId: $runId),
+            invoke: fn (string $augmented, array $history, string $runId, string $original): AgentResponse => $this->agent->stream($augmented, $onToken, $history, runId: $runId, originalMessage: $original),
         );
     }
 

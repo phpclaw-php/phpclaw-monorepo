@@ -650,9 +650,9 @@ final class ShellTool implements AuthorizableToolInterface, MutatingToolInterfac
     {
         return new ToolRoutingMetadata(
             domains: ['system'],
-            tags: ['shell', 'command', 'run', 'execute', 'terminal', 'bash'],
+            tags: ['shell', 'command', 'run', 'execute', 'terminal', 'bash', 'disk', 'usage', 'space'],
             intents: ['run command', 'execute shell'],
-            examples: ['run whoami'],
+            examples: ['run whoami', 'check disk usage'],
         );
     }
 }

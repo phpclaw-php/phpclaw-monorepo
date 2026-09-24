@@ -6,7 +6,7 @@ namespace PhpClaw\Providers\Contracts;
 
 use PhpClaw\Agent\Message;
 
-/** Contract every LLM provider must implement. Frozen until v2.0: do not add methods without a major version bump. */
+/** Contract every LLM provider must implement. */
 interface ProviderInterface
 {
     /**
