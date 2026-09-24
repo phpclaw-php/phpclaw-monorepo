@@ -54,7 +54,7 @@ final class Claw implements ClawInterface
     /**
      * Assemble the engine from an immutable configuration value object.
      *
-     * @param  ClawConfig  $config  Frozen configuration produced by ClawBuilder::build().
+     * @param  ClawConfig  $config  Immutable configuration produced by ClawBuilder::build().
      */
     public function __construct(private readonly ClawConfig $config)
     {

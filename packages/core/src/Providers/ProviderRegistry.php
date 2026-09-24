@@ -70,7 +70,7 @@ final class ProviderRegistry
      * Build and return the registered provider for $name.
      *
      * @param  string  $name  Provider name (case-insensitive).
-     * @param  ClawConfig  $config  Frozen config passed to factories or used to instantiate class strings.
+     * @param  ClawConfig  $config  Immutable config passed to factories or used to instantiate class strings.
      * @return ProviderInterface
      *
      * @throws AdapterException When the name is unknown, or a factory does not return ProviderInterface.
@@ -127,7 +127,7 @@ final class ProviderRegistry
      * Instantiate a provider class via its standard 4-argument constructor.
      *
      * @param  class-string<ProviderInterface>  $class  Provider class name.
-     * @param  ClawConfig  $config  Frozen config sourcing apiKey / model.
+     * @param  ClawConfig  $config  Immutable config sourcing apiKey / model.
      * @return ProviderInterface
      */
     private static function buildFromClass(string $class, ClawConfig $config): ProviderInterface
