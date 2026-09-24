@@ -47,7 +47,7 @@ final class InvocationPipeline
             HookDispatcher::agentBefore($message, streaming: $streaming, runId: $runId);
 
             try {
-                $response = $invoke($augmented, $runId);
+                $response = $invoke($augmented, $runId, $message);
             } catch (\Throwable $e) {
                 HookDispatcher::agentError($message, $e->getMessage(), get_class($e), streaming: $streaming, runId: $runId);
                 throw $e;
@@ -89,7 +89,7 @@ final class InvocationPipeline
             HookDispatcher::agentBefore($message, conversationId: $conversation->id, streaming: $streaming, runId: $runId);
 
             try {
-                $response = $invoke($augmented, $conversation->history, $runId);
+                $response = $invoke($augmented, $conversation->history, $runId, $message);
             } catch (\Throwable $e) {
                 HookDispatcher::agentError($message, $e->getMessage(), get_class($e), conversationId: $conversation->id, streaming: $streaming, runId: $runId);
                 throw $e;
