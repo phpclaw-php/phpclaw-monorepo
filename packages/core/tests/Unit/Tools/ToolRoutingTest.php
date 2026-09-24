@@ -7,6 +7,7 @@ namespace PhpClaw\Tests\Unit\Tools;
 use PhpClaw\Tools\Contracts\ToolAuthorizerInterface;
 use PhpClaw\Tools\Contracts\ToolRoutingInterface;
 use PhpClaw\Tools\ProjectTool;
+use PhpClaw\Tools\ShellTool;
 use PhpClaw\Tools\ToolRegistry;
 use PhpClaw\Tools\ToolRouter;
 use PhpClaw\Tools\ToolRoutingMetadata;
@@ -231,5 +232,22 @@ final class ToolRoutingTest extends TestCase
     {
         self::assertTrue(ToolRoutingMetadata::empty()->isEmpty());
         self::assertFalse((new ToolRoutingMetadata(tags: ['x']))->isEmpty());
+    }
+
+    public function test_disk_usage_prompt_keeps_shell_exec_inside_a_five_tool_budget(): void
+    {
+        $shell = new ShellTool;
+        $schemas = [];
+
+        foreach (['cache_inspect', 'config_get', 'db_query', 'file_read', 'file_write', 'queue_status', 'read_log', 'route_list'] as $name) {
+            $schemas[] = ['name' => $name, 'description' => 'unrelated filler tool'];
+        }
+
+        $schemas[] = ['name' => $shell->name(), 'description' => $shell->description()];
+
+        $out = (new ToolRouter(5))->filter($schemas, 'Check disk usage', 'qwen2.5:7b', [$shell->name() => $shell->routingMetadata()]);
+
+        self::assertCount(5, $out);
+        self::assertContains('shell_exec', $this->names($out));
     }
 }
