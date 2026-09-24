@@ -9,6 +9,9 @@ on:
     branches: [0.x]
     paths:
       - 'packages/**'
+  schedule:
+    - cron: '17 12 * * *'
+  workflow_dispatch:
 
 # Serialize so concurrent pushes never race on the mirror repos.
 concurrency:
@@ -33,6 +36,7 @@ jobs:
     steps:
       - name: Publish only when the release pull request is merged
         id: gate
+        if: github.event_name == 'push'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -215,26 +219,46 @@ jobs:
       # installed — a pushed tag on a mirror triggers the update. No extra step is
       # needed here.
 
-      # Refreshes the combined grand-total badge (root README) after a Composer-side
-      # release. Mirrors the ZIP half of this sum computed in release.yml — that
-      # workflow can't see Packagist's numbers, and this one can't see GitHub's
-      # release-asset counts without re-fetching them, so each recomputes the full
-      # total independently rather than trying to share partial state across runs.
-      - name: Refresh combined download badge
-        if: steps.gate.outputs.release == 'true' && (steps.plan.outputs.changed != '' || steps.autobump.outputs.dependency_bumped != '')
+      # Refreshes all five download badges (root README grand total plus the four ZIP
+      # adapter READMEs) on a Composer release, on the daily schedule and on manual dispatch.
+      - name: Refresh download badges
+        if: >-
+          github.event_name == 'schedule' ||
+          github.event_name == 'workflow_dispatch' ||
+          (steps.gate.outputs.release == 'true' && (steps.plan.outputs.changed != '' || steps.autobump.outputs.dependency_bumped != ''))
         env:
           GH_TOKEN: ${{ secrets.GIST_TOKEN }}
           GIST_ID: ${{ vars.DOWNLOAD_BADGE_GIST_ID }}
         run: |
           set -euo pipefail
           if [ -z "$GH_TOKEN" ] || [ -z "$GIST_ID" ]; then
-            echo "GIST_TOKEN/DOWNLOAD_BADGE_GIST_ID not set — download badge not configured yet. Skipping."
+            echo "GIST_TOKEN/DOWNLOAD_BADGE_GIST_ID not set, download badges not configured yet. Skipping."
             exit 0
           fi
+          push_badge() {
+            local filename="$1" total="$2"
+            if [ "$total" -ge 1000000 ]; then
+              msg=$(awk -v t="$total" 'BEGIN{printf "%.1fM", t/1000000}')
+            elif [ "$total" -ge 1000 ]; then
+              msg=$(awk -v t="$total" 'BEGIN{printf "%.1fk", t/1000}')
+            else
+              msg="$total"
+            fi
+            printf '{"schemaVersion":1,"label":"downloads","message":"%s","color":"blue"}\n' \
+              "$msg" > "$RUNNER_TEMP/$filename"
+            gh gist edit "$GIST_ID" --filename "$filename" "$RUNNER_TEMP/$filename"
+            echo "$filename: $total ($msg)"
+          }
 
-          zip_total=$(gh api --paginate "repos/phpclaw-php/phpclaw-monorepo/releases" \
-            --jq '.[] | select(.tag_name != "latest") | .assets[] | .download_count' \
-            | awk '{s+=$1} END {print s+0}')
+          counts=$(gh api --paginate "repos/${{ github.repository }}/releases" \
+            --jq '.[] | select(.tag_name != "latest") | .assets[] | "\(.name)\t\(.download_count)"')
+          zip_total=0
+          for adapter in wordpress joomla opencart prestashop; do
+            adapter_total=$(printf '%s\n' "$counts" \
+              | awk -F'\t' -v p="phpclaw-$adapter" 'index($1,p)==1 {s+=$2} END {print s+0}')
+            push_badge "downloads-$adapter.json" "$adapter_total"
+            zip_total=$((zip_total + adapter_total))
+          done
 
           composer_total=0
           for pkg in phpclaw phpclaw-cloud phpclaw-drupal phpclaw-laravel phpclaw-magento phpclaw-mcp phpclaw-symfony; do
@@ -243,15 +267,4 @@ jobs:
             composer_total=$((composer_total + pkg_total))
           done
 
-          total=$((zip_total + composer_total))
-          if [ "$total" -ge 1000000 ]; then
-            msg=$(awk -v t="$total" 'BEGIN{printf "%.1fM", t/1000000}')
-          elif [ "$total" -ge 1000 ]; then
-            msg=$(awk -v t="$total" 'BEGIN{printf "%.1fk", t/1000}')
-          else
-            msg="$total"
-          fi
-          printf '{"schemaVersion":1,"label":"downloads","message":"%s","color":"blue"}\n' \
-            "$msg" > "$RUNNER_TEMP/downloads-total.json"
-          gh gist edit "$GIST_ID" --filename "downloads-total.json" "$RUNNER_TEMP/downloads-total.json"
-          echo "combined total: $total ($msg)"
+          push_badge "downloads-total.json" "$((zip_total + composer_total))"
