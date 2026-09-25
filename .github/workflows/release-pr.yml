@@ -49,13 +49,13 @@ jobs:
           path: phpclaw
           fetch-depth: 0
 
-      - name: Checkout private build scripts into scripts/
+      - name: Checkout private build scripts into clawscripts/
         if: steps.gate.outputs.skip != 'true'
         uses: actions/checkout@v7
         with:
           repository: erakashpatel/clawscripts
           token: ${{ secrets.BUILD_TOKEN }}
-          path: scripts
+          path: clawscripts
 
       - name: Set up PHP
         if: steps.gate.outputs.skip != 'true'
@@ -67,7 +67,7 @@ jobs:
         if: steps.gate.outputs.skip != 'true'
         env:
           HEAD_SHA: ${{ github.sha }}
-        run: php scripts/release-notes.php collect "${{ runner.temp }}/commits.json"
+        run: php clawscripts/release-notes.php collect "${{ runner.temp }}/commits.json"
 
       - name: Compute versions and write the changelogs
         id: notes
@@ -81,15 +81,15 @@ jobs:
           for pkg in core cloud mcp joomla wordpress prestashop opencart laravel symfony drupal magento; do
             export "CURRENT_$(echo "$pkg" | tr '[:lower:]' '[:upper:]')=$(tag "$pkg")"
           done
-          FILES=$(php scripts/release-notes.php files)
+          FILES=$(php clawscripts/release-notes.php files)
           # One level per package, from the commits that reach it since its own last release.
-          LEVELS=$(php scripts/release-notes.php levels)
+          LEVELS=$(php clawscripts/release-notes.php levels)
           echo "Levels: $LEVELS"
-          CHANGED_FILES="$FILES" BUMP_LEVELS="$LEVELS" php scripts/auto-bump.php
+          CHANGED_FILES="$FILES" BUMP_LEVELS="$LEVELS" php clawscripts/auto-bump.php
           CHANGED_FILES="$FILES" BUMP_LEVELS="$LEVELS" \
             BUMP_PACKAGES='core,cloud,mcp,laravel,symfony,magento,drupal' POLICY_A=off \
-            php scripts/auto-bump.php
-          php scripts/release-notes.php write | tee -a "$GITHUB_OUTPUT"
+            php clawscripts/auto-bump.php
+          php clawscripts/release-notes.php write | tee -a "$GITHUB_OUTPUT"
 
       - name: Nothing to release, close the release PR
         if: steps.gate.outputs.skip != 'true' && steps.notes.outputs.bumped == ''

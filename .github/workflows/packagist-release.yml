@@ -63,13 +63,13 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
-      - name: Checkout private build scripts into scripts/
+      - name: Checkout private build scripts into clawscripts/
         if: steps.gate.outputs.release == 'true'
         uses: actions/checkout@v7
         with:
           repository: erakashpatel/clawscripts
           token: ${{ secrets.BUILD_TOKEN }}
-          path: scripts
+          path: clawscripts
 
       - name: Set up PHP
         if: steps.gate.outputs.release == 'true'
@@ -91,13 +91,13 @@ jobs:
           for pkg in core cloud mcp joomla wordpress prestashop opencart laravel symfony drupal magento; do
             export "CURRENT_$(echo "$pkg" | tr '[:lower:]' '[:upper:]')=$(tag "$pkg")"
           done
-          php scripts/release-notes.php collect "${{ runner.temp }}/commits.json"
+          php clawscripts/release-notes.php collect "${{ runner.temp }}/commits.json"
           export COMMITS_FILE="${{ runner.temp }}/commits.json"
-          FILES=$(php scripts/release-notes.php files)
-          LEVEL=$(php scripts/release-notes.php level)
+          FILES=$(php clawscripts/release-notes.php files)
+          LEVEL=$(php clawscripts/release-notes.php level)
           # One level per package, from the commits that reach it since its own last release.
           # LEVEL stays for the line guards below, which are about the whole run, not one package.
-          LEVELS=$(php scripts/release-notes.php levels)
+          LEVELS=$(php clawscripts/release-notes.php levels)
           LABELS="range"
           echo "Range files: $(echo "$FILES" | wc -l | tr -d ' ') path(s), level=$LEVEL"
           if [ "$LEVEL" != patch ] && [ "$GITHUB_REF_NAME" = "0.x" ]; then
@@ -148,7 +148,7 @@ jobs:
           CURRENT_MCP="$(tag mcp)" \
           CURRENT_LARAVEL="$(tag laravel)" CURRENT_SYMFONY="$(tag symfony)" \
           CURRENT_MAGENTO="$(tag magento)" CURRENT_DRUPAL="$(tag drupal)" \
-          php scripts/auto-bump.php)
+          php clawscripts/auto-bump.php)
           echo "$OUTPUT"
           # Part C: adapters auto-bump.php patch-bumped purely because their require
           # line moved (core/cloud major), not because their own source changed —
