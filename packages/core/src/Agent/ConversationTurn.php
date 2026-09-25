@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace PhpClaw\Agent;
 
 /**
- * Value object returned by PhpClaw::sendInConversation(): pairs the response with the updated Conversation.
+ * Value object returned by Claw::sendInConversation(): pairs the response with the updated Conversation.
  */
 final class ConversationTurn
 {

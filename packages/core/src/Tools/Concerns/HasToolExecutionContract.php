@@ -234,10 +234,6 @@ trait HasToolExecutionContract
             throw $exception;
         }
 
-        if ($attempt > $this->maxRecoveryAttempts()) {
-            throw $exception;
-        }
-
         return ['result' => null];
     }
 
@@ -316,8 +312,8 @@ trait HasToolExecutionContract
                 self::decodeEntitiesRecursively($result),
                 JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES,
             );
-        } catch (\JsonException $e) {
-            throw new ToolException('Unable to encode tool response.', previous: $e);
+        } catch (\JsonException $exception) {
+            throw new ToolException('Unable to encode tool response.', previous: $exception);
         }
     }
 

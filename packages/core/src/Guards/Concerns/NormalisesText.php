@@ -7,7 +7,7 @@ namespace PhpClaw\Guards\Concerns;
 use PhpClaw\Exceptions\GuardException;
 
 /**
- * Normalises prompt text: folds compatibility forms, maps homoglyphs, strips invisible chars, collapses whitespace, lowercases, for guard matching.
+ * Normalises prompt text: folds compatibility forms, strips invisible chars, lowercases, maps homoglyphs, collapses whitespace, for guard matching.
  */
 trait NormalisesText
 {
@@ -42,7 +42,7 @@ trait NormalisesText
     }
 
     /**
-     * Normalise prompt text: NFKC-fold, strip invisible chars, map homoglyphs, collapse whitespace, then lowercase.
+     * Normalise prompt text: NFKC-fold, strip invisible chars, lowercase, map homoglyphs, then collapse whitespace.
      *
      * @param  string  $message  Raw prompt text to normalise.
      * @return string
@@ -63,14 +63,14 @@ trait NormalisesText
             $message = $stripped;
         }
 
-        $message = strtr($message, self::homoglyphMap());
+        $message = strtr(mb_strtolower($message), self::homoglyphMap());
 
         $collapsed = preg_replace('/\s+/u', ' ', $message);
         if ($collapsed !== null) {
             $message = $collapsed;
         }
 
-        return trim(mb_strtolower($message));
+        return trim($message);
     }
 
     /**
@@ -111,7 +111,7 @@ trait NormalisesText
     {
         foreach ($patterns as $pattern) {
             if (str_contains($haystack, $pattern)) {
-                throw new GuardException(sprintf($errorTemplate, $pattern), guardClass: static::class);
+                throw new GuardException(sprintf($errorTemplate, $pattern), guardClass: self::class);
             }
         }
     }

@@ -18,6 +18,20 @@ final class RedisMemory implements MemoryInterface
 {
     private const DRIVER_NAME = 'redis';
 
+    private const DEFAULT_NAMESPACE = 'default';
+
+    private const DEFAULT_TTL = 86400;
+
+    private const DEFAULT_PREFIX = 'phpclaw:';
+
+    private const ENV_KEY_URL = 'REDIS_URL';
+
+    private const DEFAULT_URL = 'redis://127.0.0.1:6379';
+
+    private const DEFAULT_PORT = 6379;
+
+    private const DEFAULT_CONNECT_TIMEOUT = 1.0;
+
     private readonly \Redis $redis;
 
     private readonly string $prefix;
@@ -38,27 +52,29 @@ final class RedisMemory implements MemoryInterface
     public function __construct(
         ?\Redis $redis = null,
         string $url = '',
-        int $defaultTtl = 86400,
-        string $prefix = 'phpclaw:',
+        int $defaultTtl = self::DEFAULT_TTL,
+        string $prefix = self::DEFAULT_PREFIX,
     ) {
         $this->prefix = $prefix;
         $this->defaultTtl = max(0, $defaultTtl);
 
         if ($redis !== null) {
             $this->redis = $redis;
-        } else {
-            if (! extension_loaded('redis')) {
-                throw new MemoryException(
-                    'RedisMemory requires the ext-redis extension. Install it or inject a \\Redis instance.'
-                );
-            }
 
-            $resolved = $url !== ''
-                ? $url
-                : (string) ($_ENV['REDIS_URL'] ?? getenv('REDIS_URL') ?: 'redis://127.0.0.1:6379');
-
-            $this->redis = $this->connect($resolved);
+            return;
         }
+
+        if (! extension_loaded('redis')) {
+            throw new MemoryException(
+                'RedisMemory requires the ext-redis extension. Install it or inject a \\Redis instance.'
+            );
+        }
+
+        $resolved = $url !== ''
+            ? $url
+            : (string) ($_ENV[self::ENV_KEY_URL] ?? getenv(self::ENV_KEY_URL) ?: self::DEFAULT_URL);
+
+        $this->redis = $this->connect($resolved);
     }
 
     /**
@@ -68,26 +84,26 @@ final class RedisMemory implements MemoryInterface
      * @param  string  $namespace  Logical namespace; combined with key to form the Redis key.
      * @return mixed Decoded value on hit, null on miss or invalid JSON.
      */
-    public function get(string $key, string $namespace = 'default'): mixed
+    public function get(string $key, string $namespace = self::DEFAULT_NAMESPACE): mixed
     {
         NamespaceValidator::validate($namespace);
         $raw = $this->redis->get($this->key($namespace, $key));
 
         if ($raw === false) {
-            HookDispatcher::memoryRead($key, $namespace, self::DRIVER_NAME, false);
+            HookDispatcher::memoryRead($key, $namespace, self::DRIVER_NAME, hit: false);
 
             return null;
         }
 
         try {
-            $value = json_decode((string) $raw, associative: true, flags: JSON_THROW_ON_ERROR);
+            $value = $this->decode((string) $raw);
         } catch (\JsonException) {
-            HookDispatcher::memoryRead($key, $namespace, self::DRIVER_NAME, false);
+            HookDispatcher::memoryRead($key, $namespace, self::DRIVER_NAME, hit: false);
 
             return null;
         }
 
-        HookDispatcher::memoryRead($key, $namespace, self::DRIVER_NAME, true);
+        HookDispatcher::memoryRead($key, $namespace, self::DRIVER_NAME, hit: true);
 
         return $value;
     }
@@ -106,7 +122,7 @@ final class RedisMemory implements MemoryInterface
     public function set(
         string $key,
         mixed $value,
-        string $namespace = 'default',
+        string $namespace = self::DEFAULT_NAMESPACE,
         ?int $ttl = null,
     ): void {
         NamespaceValidator::validate($namespace);
@@ -130,7 +146,7 @@ final class RedisMemory implements MemoryInterface
      * @param  string  $namespace  Logical namespace; combined with key to form the Redis key.
      * @return void
      */
-    public function forget(string $key, string $namespace = 'default'): void
+    public function forget(string $key, string $namespace = self::DEFAULT_NAMESPACE): void
     {
         NamespaceValidator::validate($namespace);
         $this->redis->del($this->key($namespace, $key));
@@ -144,7 +160,7 @@ final class RedisMemory implements MemoryInterface
      * @param  string  $namespace  Namespace whose keys should be wiped.
      * @return void
      */
-    public function flush(string $namespace = 'default'): void
+    public function flush(string $namespace = self::DEFAULT_NAMESPACE): void
     {
         NamespaceValidator::validate($namespace);
         $keys = $this->redis->keys($this->namespacePattern($namespace));
@@ -160,7 +176,7 @@ final class RedisMemory implements MemoryInterface
      * @param  string  $namespace  Namespace to enumerate.
      * @return array<string, mixed> Map of short-key → decoded value.
      */
-    public function all(string $namespace = 'default'): array
+    public function all(string $namespace = self::DEFAULT_NAMESPACE): array
     {
         NamespaceValidator::validate($namespace);
         $keys = $this->redis->keys($this->namespacePattern($namespace));
@@ -184,7 +200,7 @@ final class RedisMemory implements MemoryInterface
             }
 
             try {
-                $value = json_decode((string) $raw, associative: true, flags: JSON_THROW_ON_ERROR);
+                $value = $this->decode((string) $raw);
             } catch (\JsonException) {
                 continue;
             }
@@ -202,7 +218,7 @@ final class RedisMemory implements MemoryInterface
      * @param  string  $namespace  Logical namespace; combined with key to form the Redis key.
      * @return bool True when Redis reports the key exists (count > 0).
      */
-    public function has(string $key, string $namespace = 'default'): bool
+    public function has(string $key, string $namespace = self::DEFAULT_NAMESPACE): bool
     {
         NamespaceValidator::validate($namespace);
 
@@ -236,9 +252,22 @@ final class RedisMemory implements MemoryInterface
      * @param  string  $namespace  Logical namespace; combined with key to form the Redis key.
      * @return int Remaining seconds, -1 (no TTL), or -2 (missing key).
      */
-    public function ttl(string $key, string $namespace = 'default'): int
+    public function ttl(string $key, string $namespace = self::DEFAULT_NAMESPACE): int
     {
         return (int) $this->redis->ttl($this->key($namespace, $key));
+    }
+
+    /**
+     * Decode a JSON-encoded Redis value into a mixed PHP value.
+     *
+     * @param  string  $raw  JSON string returned by Redis.
+     * @return mixed
+     *
+     * @throws \JsonException When the string is not valid JSON.
+     */
+    private function decode(string $raw): mixed
+    {
+        return json_decode($raw, associative: true, flags: JSON_THROW_ON_ERROR);
     }
 
     /**
@@ -283,26 +312,26 @@ final class RedisMemory implements MemoryInterface
         $redis = new \Redis;
 
         try {
-            $ok = $redis->connect(
+            $connected = $redis->connect(
                 (string) $parsed['host'],
-                (int) ($parsed['port'] ?? 6379),
-                1.0,
+                (int) ($parsed['port'] ?? self::DEFAULT_PORT),
+                self::DEFAULT_CONNECT_TIMEOUT,
             );
-        } catch (\Throwable $e) {
-            Log::error('[phpClaw] RedisMemory: connect failed: '.$e->getMessage());
-            throw new MemoryException("RedisMemory: could not connect to host '".($parsed['host'] ?? '')."'.");
+        } catch (\Throwable $exception) {
+            Log::error('[phpClaw] RedisMemory: connect failed: '.$exception->getMessage());
+            throw new MemoryException("RedisMemory: could not connect to host '{$parsed['host']}'.");
         }
 
-        if (! $ok) {
-            throw new MemoryException("RedisMemory: could not connect to host '".($parsed['host'] ?? '')."'.");
+        if (! $connected) {
+            throw new MemoryException("RedisMemory: could not connect to host '{$parsed['host']}'.");
         }
 
         if (isset($parsed['pass']) && $parsed['pass'] !== '') {
             $redis->auth((string) $parsed['pass']);
         }
 
-        if (isset($parsed['path']) && preg_match('#^/(\d+)$#', $parsed['path'], $m) === 1) {
-            $redis->select((int) $m[1]);
+        if (isset($parsed['path']) && preg_match('#^/(\d+)$#', $parsed['path'], $matches) === 1) {
+            $redis->select((int) $matches[1]);
         }
 
         return $redis;

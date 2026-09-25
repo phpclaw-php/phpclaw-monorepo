@@ -16,6 +16,7 @@ use PhpClaw\Contracts\ClawInterface;
 use PhpClaw\Exceptions\GuardException;
 use PhpClaw\Exceptions\MaxIterationsException;
 use PhpClaw\Exceptions\ProviderException;
+use PhpClaw\Exceptions\ToolException;
 use PhpClaw\Guards\GuardRegistry;
 use PhpClaw\Memory\Contracts\MemoryInterface;
 use PhpClaw\Providers\Contracts\SupportsWebSearchInterface;
@@ -41,6 +42,8 @@ final class Claw implements ClawInterface
         Only write your final plain-text answer when the goal is fully achieved and no step remains. Then summarise what you did.
         DOCTRINE;
 
+    private readonly ClawConfig $config;
+
     private readonly Agent $agent;
 
     private readonly ?MemoryInterface $memory;
@@ -49,15 +52,16 @@ final class Claw implements ClawInterface
 
     private readonly InvocationPipeline $pipeline;
 
-    private bool $cloudBooted = false;
+    private bool $isCloudBooted = false;
 
     /**
      * Assemble the engine from an immutable configuration value object.
      *
      * @param  ClawConfig  $config  Immutable configuration produced by ClawBuilder::build().
      */
-    public function __construct(private readonly ClawConfig $config)
+    public function __construct(ClawConfig $config)
     {
+        $this->config = $config;
         $this->memory = $config->memory;
         $this->storeMessages = $config->storeMessages;
         $this->agent = $this->buildAgent();
@@ -78,7 +82,7 @@ final class Claw implements ClawInterface
     /**
      * Entry point for the fluent configuration API.
      *
-     * @return ClawBuilder A fresh builder; chain setters then call build() to get a PhpClaw instance.
+     * @return ClawBuilder A fresh builder; chain setters then call build() to get a Claw instance.
      */
     public static function builder(): ClawBuilder
     {
@@ -94,6 +98,7 @@ final class Claw implements ClawInterface
      * @throws GuardException If prompt injection is detected.
      * @throws MaxIterationsException If the ReAct loop cap is hit.
      * @throws ProviderException If the LLM API call fails.
+     * @throws ToolException If the model calls an unregistered tool after the no-tools retry.
      */
     public function send(string $message): AgentResponse
     {
@@ -116,6 +121,7 @@ final class Claw implements ClawInterface
      * @throws GuardException If prompt injection is detected.
      * @throws MaxIterationsException If the ReAct loop cap is hit.
      * @throws ProviderException If the LLM API call fails.
+     * @throws ToolException If the model calls an unregistered tool after the no-tools retry.
      */
     public function stream(string $message, callable $onToken): AgentResponse
     {
@@ -146,13 +152,13 @@ final class Claw implements ClawInterface
             }
         }
 
-        $conv = Conversation::start($metadata);
+        $conversation = Conversation::start($metadata);
 
         if ($this->memory !== null) {
-            $this->memory->set($conv->id, $conv->toArray(), Conversation::MEMORY_NAMESPACE);
+            $this->memory->set($conversation->id, $conversation->toArray(), Conversation::MEMORY_NAMESPACE);
         }
 
-        return $conv;
+        return $conversation;
     }
 
     /**
@@ -165,6 +171,7 @@ final class Claw implements ClawInterface
      * @throws GuardException If prompt injection is detected.
      * @throws MaxIterationsException If the ReAct loop cap is hit.
      * @throws ProviderException If the LLM API call fails.
+     * @throws ToolException If the model calls an unregistered tool after the no-tools retry.
      */
     public function sendInConversation(Conversation $conversation, string $message): ConversationTurn
     {
@@ -191,6 +198,7 @@ final class Claw implements ClawInterface
      * @throws GuardException If prompt injection is detected.
      * @throws MaxIterationsException If the ReAct loop cap is hit.
      * @throws ProviderException If the LLM API call fails.
+     * @throws ToolException If the model calls an unregistered tool after the no-tools retry.
      */
     public function streamInConversation(
         Conversation $conversation,
@@ -222,7 +230,7 @@ final class Claw implements ClawInterface
     /**
      * Whether message content should be persisted.
      *
-     * @return bool True on success.
+     * @return bool True when message content should be persisted to memory and cloud payloads.
      */
     public function storeMessages(): bool
     {
@@ -305,11 +313,11 @@ final class Claw implements ClawInterface
      */
     private function ensureCloudBooted(): void
     {
-        if ($this->cloudBooted) {
+        if ($this->isCloudBooted) {
             return;
         }
         $this->bootCloud();
-        $this->cloudBooted = true;
+        $this->isCloudBooted = true;
     }
 
     /**

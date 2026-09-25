@@ -6,8 +6,6 @@ namespace PhpClaw\Tools;
 
 /**
  * Per-turn tool relevance filter: pins message-named tools, ranks the rest by ordered weighted signals, slices to the budget unless the budget is unlimited, and returns the trimmed set sorted by name so an identical selection is byte-identical across messages.
- *
- * @internal
  */
 final class ToolRouter
 {
@@ -23,7 +21,7 @@ final class ToolRouter
         'some', 'each', 'every', 'per', 'via', 'too', 'very', 'just', 'also', 'only',
         'more', 'most', 'less', 'least', 'such', 'same', 'own', 'how', 'what', 'when',
         'where', 'which', 'who', 'whom', 'why', 'does', 'did', 'done', 'let', 'please',
-        'them', 'they', 'its', 'one', 'two', 'out', 'off', 'over', 'under', 'again',
+        'them', 'they', 'one', 'two', 'out', 'off', 'over', 'under', 'again',
     ];
 
     private const DEFAULT_LIMIT = 10;
@@ -89,7 +87,7 @@ final class ToolRouter
             $scorable[] = $schema;
         }
 
-        $ranked = $this->rank($scorable, $message, $metadata);
+        $ranked = $this->rankByScore($scorable, $message, $metadata);
         $slots = max(0, $limit - count($pinned));
         $chosen = array_merge($pinned, array_slice($ranked, 0, $slots));
 
@@ -111,10 +109,10 @@ final class ToolRouter
         $best = 0;
 
         foreach ($allSchemas as $schema) {
-            $best = max($best, $this->score($schema, $this->keywords($message), $metadata));
+            $best = max($best, $this->calculateScore($schema, $this->keywords($message), $metadata));
         }
 
-        return $best === 0 ? 0.0 : round(min(1.0, $best / $this->maxPossibleScore()), 4);
+        return $best === 0 ? 0.0 : round(min(1.0, $best / $this->computeMaxPossibleScore()), 4);
     }
 
     /**
@@ -126,7 +124,7 @@ final class ToolRouter
      * @param  array<string, ToolRoutingMetadata>  $metadata  Routing metadata keyed by lowercased tool name.
      * @return array<int, array<string, mixed>> Schemas in ranked order.
      */
-    private function rank(array $schemas, string $message, array $metadata): array
+    private function rankByScore(array $schemas, string $message, array $metadata): array
     {
         $words = $this->keywords($message);
         $rows = [];
@@ -134,7 +132,7 @@ final class ToolRouter
         foreach ($schemas as $schema) {
             $rows[] = [
                 'schema' => $schema,
-                'score' => $this->score($schema, $words, $metadata),
+                'score' => $this->calculateScore($schema, $words, $metadata),
                 'name' => $this->schemaName($schema),
             ];
         }
@@ -154,18 +152,18 @@ final class ToolRouter
      * @param  array<string, ToolRoutingMetadata>  $metadata  Routing metadata keyed by lowercased tool name.
      * @return int Weighted score.
      */
-    private function score(array $schema, array $words, array $metadata): int
+    private function calculateScore(array $schema, array $words, array $metadata): int
     {
         $name = $this->schemaName($schema);
         $routing = $metadata[$name] ?? ToolRoutingMetadata::empty();
 
         $score = 0;
-        $score += self::WEIGHTS['intent'] * $this->overlap($words, $routing->intents);
-        $score += self::WEIGHTS['domain'] * $this->overlap($words, $routing->domains);
-        $score += self::WEIGHTS['tag'] * $this->overlap($words, $routing->tags);
-        $score += self::WEIGHTS['example'] * $this->overlap($words, $routing->examples);
-        $score += self::WEIGHTS['name'] * $this->overlap($words, [$name]);
-        $score += self::WEIGHTS['description'] * $this->overlap($words, [$this->schemaDescription($schema)]);
+        $score += self::WEIGHTS['intent'] * $this->countOverlap($words, $routing->intents);
+        $score += self::WEIGHTS['domain'] * $this->countOverlap($words, $routing->domains);
+        $score += self::WEIGHTS['tag'] * $this->countOverlap($words, $routing->tags);
+        $score += self::WEIGHTS['example'] * $this->countOverlap($words, $routing->examples);
+        $score += self::WEIGHTS['name'] * $this->countOverlap($words, [$name]);
+        $score += self::WEIGHTS['description'] * $this->countOverlap($words, [$this->schemaDescription($schema)]);
 
         return $score;
     }
@@ -177,7 +175,7 @@ final class ToolRouter
      * @param  string[]  $signals  Raw signal strings from routing metadata or the schema.
      * @return int Number of distinct overlapping tokens.
      */
-    private function overlap(array $words, array $signals): int
+    private function countOverlap(array $words, array $signals): int
     {
         if ($signals === [] || $words === []) {
             return 0;
@@ -191,7 +189,7 @@ final class ToolRouter
      *
      * @return int
      */
-    private function maxPossibleScore(): int
+    private function computeMaxPossibleScore(): int
     {
         return array_sum(self::WEIGHTS);
     }
@@ -228,13 +226,13 @@ final class ToolRouter
     {
         $found = [];
 
-        preg_match_all('/\b(?:use|using|with|via)\s+([A-Za-z][A-Za-z0-9]*Tool)\b/i', $message, $m1);
-        foreach ($m1[1] as $camel) {
+        preg_match_all('/\b(?:use|using|with|via)\s+([A-Za-z][A-Za-z0-9]*Tool)\b/i', $message, $camelMatches);
+        foreach ($camelMatches[1] as $camel) {
             $found[] = strtolower((string) preg_replace('/(?<!^)[A-Z]/', '_$0', substr($camel, 0, -4)));
         }
 
-        preg_match_all('/\b([a-z][a-z0-9]*(?:_[a-z0-9]+)+)\b/', strtolower($message), $m2);
-        foreach ($m2[1] as $snake) {
+        preg_match_all('/\b([a-z][a-z0-9]*(?:_[a-z0-9]+)+)\b/', strtolower($message), $snakeMatches);
+        foreach ($snakeMatches[1] as $snake) {
             $found[] = $snake;
         }
 
@@ -283,7 +281,7 @@ final class ToolRouter
 
         $model = strtolower($model);
         foreach (self::MODEL_LIMITS as $fragment => $limit) {
-            if ($fragment !== '' && $this->modelMatchesFragment($model, (string) $fragment)) {
+            if ($this->modelMatchesFragment($model, $fragment)) {
                 return $limit;
             }
         }
@@ -308,10 +306,10 @@ final class ToolRouter
     }
 
     /**
-     * Lowercase, split, drop stopwords and short tokens, and dedupe a string into keyword tokens; snake_case words also contribute their parts so a tool name matches the plain word.
+     * Lowercase, split, drop stopwords and short tokens, singularise, and dedupe a string into keyword tokens; snake_case words also contribute their parts so a tool name matches the plain word.
      *
      * @param  string  $text  Source text.
-     * @return string[] Unique tokens of at least MIN_KEYWORD_LEN characters.
+     * @return string[] Unique singularised tokens from words of at least MIN_KEYWORD_LEN characters.
      */
     private function keywords(string $text): array
     {
@@ -325,10 +323,31 @@ final class ToolRouter
             }
         }
 
-        return array_values(array_unique(array_filter(
+        $kept = array_filter(
             $tokens,
             static fn (string $w): bool => strlen($w) >= self::MIN_KEYWORD_LEN
                 && ! in_array($w, self::STOPWORDS, true),
-        )));
+        );
+
+        return array_values(array_unique(array_map(self::singular(...), $kept)));
+    }
+
+    /**
+     * Reduce a plural keyword to its singular so "editors" matches the tag "editor" and "categories" matches "category".
+     *
+     * @param  string  $word  Lowercased keyword.
+     * @return string The singular form, or the word unchanged when it is too short or not plural.
+     */
+    private static function singular(string $word): string
+    {
+        if (strlen($word) <= self::MIN_KEYWORD_LEN || ! str_ends_with($word, 's')) {
+            return $word;
+        }
+
+        if (str_ends_with($word, 'ies')) {
+            return substr($word, 0, -3).'y';
+        }
+
+        return substr($word, 0, -1);
     }
 }

@@ -67,13 +67,13 @@ enum LifecycleEvent: string
      */
     public static function all(): array
     {
-        return array_map(static fn (self $e): string => $e->value, self::cases());
+        return array_map(static fn (self $case): string => $case->value, self::cases());
     }
 
     /**
      * Whether this event belongs to the agent lifecycle group.
      *
-     * @return bool True on success.
+     * @return bool True when this event belongs to the named group.
      */
     public function isAgent(): bool
     {
@@ -83,7 +83,7 @@ enum LifecycleEvent: string
     /**
      * Whether this event belongs to the provider group.
      *
-     * @return bool True on success.
+     * @return bool True when this event belongs to the named group.
      */
     public function isProvider(): bool
     {
@@ -93,7 +93,7 @@ enum LifecycleEvent: string
     /**
      * Whether this event belongs to the tool group.
      *
-     * @return bool True on success.
+     * @return bool True when this event belongs to the named group.
      */
     public function isTool(): bool
     {
@@ -103,7 +103,7 @@ enum LifecycleEvent: string
     /**
      * Whether this event belongs to the guard group.
      *
-     * @return bool True on success.
+     * @return bool True when this event belongs to the named group.
      */
     public function isGuard(): bool
     {
@@ -113,7 +113,7 @@ enum LifecycleEvent: string
     /**
      * Whether this event belongs to the conversation group.
      *
-     * @return bool True on success.
+     * @return bool True when this event belongs to the named group.
      */
     public function isConversation(): bool
     {
@@ -123,7 +123,7 @@ enum LifecycleEvent: string
     /**
      * Whether this event belongs to the streaming group.
      *
-     * @return bool True on success.
+     * @return bool True when this event belongs to the named group.
      */
     public function isStream(): bool
     {
@@ -133,7 +133,7 @@ enum LifecycleEvent: string
     /**
      * Whether this event belongs to the memory group.
      *
-     * @return bool True on success.
+     * @return bool True when this event belongs to the named group.
      */
     public function isMemory(): bool
     {
@@ -143,7 +143,7 @@ enum LifecycleEvent: string
     /**
      * Whether this event belongs to the shell group.
      *
-     * @return bool True on success.
+     * @return bool True when this event belongs to the named group.
      */
     public function isShell(): bool
     {
@@ -153,7 +153,7 @@ enum LifecycleEvent: string
     /**
      * Whether this event belongs to the job group.
      *
-     * @return bool True on success.
+     * @return bool True when this event belongs to the named group.
      */
     public function isJob(): bool
     {
@@ -163,7 +163,7 @@ enum LifecycleEvent: string
     /**
      * Whether this event belongs to the skill group.
      *
-     * @return bool True on success.
+     * @return bool True when this event belongs to the named group.
      */
     public function isSkill(): bool
     {

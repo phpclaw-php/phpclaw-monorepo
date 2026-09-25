@@ -10,8 +10,6 @@ use PhpClaw\Support\Log;
 
 /**
  * Summarises the oldest half of conversation history when it grows past a configured ceiling, then fires the `context.overflow` hook.
- *
- * @internal
  */
 final class HistoryCompactor
 {
@@ -47,10 +45,10 @@ final class HistoryCompactor
             return $history;
         }
 
-        $countOverflow = $this->maxHistoryLength > 0 && count($history) > $this->maxHistoryLength;
-        $tokenOverflow = $this->maxTokens > 0 && $this->estimateTokens($history) > $this->maxTokens;
+        $isCountOverflow = $this->maxHistoryLength > 0 && count($history) > $this->maxHistoryLength;
+        $isTokenOverflow = $this->maxTokens > 0 && $this->estimateTokens($history) > $this->maxTokens;
 
-        if (! $countOverflow && ! $tokenOverflow) {
+        if (! $isCountOverflow && ! $isTokenOverflow) {
             return $history;
         }
 
@@ -125,21 +123,19 @@ final class HistoryCompactor
     {
         $chars = 0;
 
-        foreach ($history as $msg) {
-            $chars += strlen($msg->content);
+        foreach ($history as $message) {
+            $chars += strlen($message->content);
 
-            if ($msg->toolInput !== null) {
-                $chars += strlen((string) json_encode($msg->toolInput));
+            if ($message->toolInput !== null) {
+                $chars += strlen((string) json_encode($message->toolInput));
             }
 
-            if ($msg->batchCalls !== null) {
-                $chars += strlen((string) json_encode($msg->batchCalls));
+            if ($message->batchCalls !== null) {
+                $chars += strlen((string) json_encode($message->batchCalls));
             }
 
-            if ($msg->batchResults !== null) {
-                foreach ($msg->batchResults as $result) {
-                    $chars += strlen((string) $result);
-                }
+            if ($message->batchResults !== null) {
+                $chars += array_sum(array_map('strlen', $message->batchResults));
             }
         }
 

@@ -11,14 +11,14 @@ use PhpClaw\Skills\SkillRegistry;
 
 /**
  * Augments a user message with memory context and skill context before it reaches the LLM.
- *
- * @internal
  */
 final class MessageAugmenter
 {
     private const MIN_KEYWORD_LENGTH = 3;
 
     private const MAX_MEMORY_HITS = 3;
+
+    private const SKILL_EXCERPT_LENGTH = 200;
 
     /**
      * Build a MessageAugmenter.
@@ -67,7 +67,7 @@ final class MessageAugmenter
         $scored = [];
 
         foreach ($entries as $key => $value) {
-            $text = is_string($value) ? $value : (string) json_encode($value);
+            $text = $this->stringify($value);
             $score = count(array_intersect($messageWords, $this->keywords($text)));
 
             if ($score > 0) {
@@ -84,8 +84,7 @@ final class MessageAugmenter
 
         $context = "Relevant memory context:\n";
         foreach ($top as $key => $item) {
-            $val = is_string($item['value']) ? $item['value'] : (string) json_encode($item['value']);
-            $context .= "- {$key}: {$val}\n";
+            $context .= "- {$key}: {$this->stringify($item['value'])}\n";
         }
 
         return "[Context from memory]\n{$context}\n[User message]\n{$message}";
@@ -101,7 +100,7 @@ final class MessageAugmenter
     private function injectSkillContext(string $augmented, string $original): string
     {
         $matched = SkillRegistry::match($original, $this->skillMatchLimit);
-        $excerpt = mb_substr($original, 0, 200);
+        $excerpt = mb_substr($original, 0, self::SKILL_EXCERPT_LENGTH);
         $runId = HookDispatcher::currentRunId();
 
         if (empty($matched)) {
@@ -110,7 +109,7 @@ final class MessageAugmenter
             return $augmented;
         }
 
-        SkillEventDispatcher::matched(array_map(static fn ($s) => $s->name(), $matched), $excerpt, runId: $runId);
+        SkillEventDispatcher::matched(array_map(static fn ($skill) => $skill->name(), $matched), $excerpt, runId: $runId);
 
         $context = '';
         foreach ($matched as $skill) {
@@ -121,9 +120,20 @@ final class MessageAugmenter
     }
 
     /**
+     * Coerce a memory value to a plain string for keyword extraction and context rendering.
+     *
+     * @param  mixed  $value  Memory entry value (string or JSON-serialisable).
+     * @return string String representation of $value.
+     */
+    private function stringify(mixed $value): string
+    {
+        return is_string($value) ? $value : (string) json_encode($value);
+    }
+
+    /**
      * Lowercase keyword list from a string, filtered to words of MIN_KEYWORD_LENGTH+.
      *
-     * @param  string  $text  Assistant response text.
+     * @param  string  $text  Input text to tokenize (user message or memory value).
      * @return list<string>
      */
     private function keywords(string $text): array

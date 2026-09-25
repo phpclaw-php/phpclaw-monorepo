@@ -7,14 +7,13 @@ namespace PhpClaw\Guards;
 use PhpClaw\AutoDiscovery\Attributes\Guard;
 use PhpClaw\Exceptions\GuardException;
 use PhpClaw\Guards\Concerns\NormalisesText;
-use PhpClaw\Guards\Contracts\GuardInterface;
 use PhpClaw\Guards\Contracts\PromptOnlyGuardInterface;
 
 /**
  * Blocks PHP code-execution patterns (eval, exec, shell_exec, etc.) in prompt text.
  */
 #[Guard(priority: 5, name: 'code_injection', label: 'Code Injection', enabledByDefault: true, since: '1.0.0')]
-final class CodeInjectionGuard implements GuardInterface, PromptOnlyGuardInterface
+final class CodeInjectionGuard implements PromptOnlyGuardInterface
 {
     use NormalisesText;
 
@@ -47,7 +46,7 @@ final class CodeInjectionGuard implements GuardInterface, PromptOnlyGuardInterfa
      * @param  string  $message  The user message to scan.
      * @return void
      *
-     * @throws GuardException When the message matches a raw code pattern or
+     * @throws GuardException When the message contains a PHP code or code-injection pattern.
      */
     public function scan(string $message): void
     {

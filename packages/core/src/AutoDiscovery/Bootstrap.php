@@ -31,6 +31,8 @@ final class Bootstrap
         GuardCatalogue::class,
     ];
 
+    private const DEFAULT_PRIORITY = 100;
+
     /**
      * Snapshot every catalogue's attribute-discovered entries into its registry.
      *
@@ -130,7 +132,7 @@ final class Bootstrap
         $out = [];
         foreach ($byEvent as $event => $entries) {
             $out[$event] = array_map(
-                static fn (array $e): string => $e['class'],
+                static fn (array $entry): string => $entry['class'],
                 self::sortByPriority($entries),
             );
         }
@@ -164,7 +166,7 @@ final class Bootstrap
      */
     private static function priorityOf(array $attr): int
     {
-        return (int) ($attr['priority'] ?? 100);
+        return (int) ($attr['priority'] ?? self::DEFAULT_PRIORITY);
     }
 
     /**

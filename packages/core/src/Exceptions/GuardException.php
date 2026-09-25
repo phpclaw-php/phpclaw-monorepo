@@ -5,10 +5,12 @@ declare(strict_types=1);
 namespace PhpClaw\Exceptions;
 
 /**
- * Thrown by GuardRegistry when a prompt injection pattern is detected.
+ * Thrown by any guard that blocks a message.
  */
 final class GuardException extends PhpClawException
 {
+    private readonly ?string $guardClass;
+
     /**
      * Create a new GuardException instance.
      *
@@ -22,9 +24,10 @@ final class GuardException extends PhpClawException
         string $message = '',
         int $code = 0,
         ?\Throwable $previous = null,
-        private readonly ?string $guardClass = null,
+        ?string $guardClass = null,
     ) {
         parent::__construct($message, $code, $previous);
+        $this->guardClass = $guardClass;
     }
 
     /**

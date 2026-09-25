@@ -25,6 +25,18 @@ final class RemoteSkillLoader
 
     private const MAX_TAGS = 25;
 
+    private const FORMAT_AUTO = 'auto';
+
+    private const FORMAT_JSON = 'json';
+
+    private const HTTPS_PREFIX = 'https://';
+
+    private const CACHE_DIR_MODE = 0700;
+
+    private const CACHE_FILE_MODE = 0600;
+
+    private const FALLBACK_CACHE_BASE = '/tmp';
+
     /**
      * Load a remote skill collection or single markdown skill into the registry.
      *
@@ -32,9 +44,9 @@ final class RemoteSkillLoader
      * @param  string  $format  'auto', 'json', or 'markdown'.
      * @return int Number of skills registered.
      */
-    public static function load(string $url, string $format = 'auto'): int
+    public static function load(string $url, string $format = self::FORMAT_AUTO): int
     {
-        if (! str_starts_with($url, 'https://')) {
+        if (! str_starts_with($url, self::HTTPS_PREFIX)) {
             Log::warning("[phpClaw] RemoteSkillLoader: HTTPS required, skipped: {$url}");
 
             return 0;
@@ -42,8 +54,8 @@ final class RemoteSkillLoader
 
         try {
             $resolved = SsrfValidator::resolveValidated($url);
-        } catch (\Throwable $e) {
-            Log::warning('[phpClaw] RemoteSkillLoader: '.$e->getMessage());
+        } catch (\Throwable $exception) {
+            Log::warning('[phpClaw] RemoteSkillLoader: '.$exception->getMessage());
 
             return 0;
         }
@@ -53,8 +65,8 @@ final class RemoteSkillLoader
             return 0;
         }
 
-        $isJson = $format === 'json'
-            || ($format === 'auto' && str_starts_with(ltrim($raw), '{'));
+        $isJson = $format === self::FORMAT_JSON
+            || ($format === self::FORMAT_AUTO && str_starts_with(ltrim($raw), '{'));
 
         return $isJson
             ? self::loadFromJson($raw)
@@ -100,7 +112,7 @@ final class RemoteSkillLoader
      */
     private static function loadFromJson(string $json): int
     {
-        $data = json_decode($json, true);
+        $data = json_decode($json, associative: true);
         if (! is_array($data) || ! is_array($data['skills'] ?? null)) {
             Log::warning('[phpClaw] RemoteSkillLoader: invalid JSON collection.');
 
@@ -135,8 +147,8 @@ final class RemoteSkillLoader
     {
         $name = self::deriveName($url);
 
-        preg_match('/^#{1,2}\s+(.+)$/m', $markdown, $h);
-        $headingDescription = trim($h[1] ?? $name);
+        preg_match('/^#{1,2}\s+(.+)$/m', $markdown, $headingMatches);
+        $headingDescription = trim($headingMatches[1] ?? $name);
 
         $frontmatterDescription = self::extractFrontmatterDescription($markdown);
 
@@ -144,6 +156,24 @@ final class RemoteSkillLoader
             ? $headingDescription
             : $headingDescription.' '.$frontmatterDescription;
 
+        SkillRegistry::register(new ArraySkill(
+            name: $name,
+            description: $description,
+            tags: self::deriveTags($markdown),
+            content: $markdown,
+        ));
+
+        return 1;
+    }
+
+    /**
+     * Derive keyword tags from markdown headings and bold phrases.
+     *
+     * @param  string  $markdown  Raw markdown body.
+     * @return list<string>
+     */
+    private static function deriveTags(string $markdown): array
+    {
         preg_match_all('/^#{2,3}\s+(.+)$/m', $markdown, $heads);
         preg_match_all('/\*\*([^*\n]{3,30})\*\*/', $markdown, $bolds);
 
@@ -158,16 +188,7 @@ final class RemoteSkillLoader
             }
         }
 
-        $tags = array_slice(array_keys($tags), 0, self::MAX_TAGS);
-
-        SkillRegistry::register(new ArraySkill(
-            name: $name,
-            description: $description,
-            tags: $tags,
-            content: $markdown,
-        ));
-
-        return 1;
+        return array_slice(array_keys($tags), 0, self::MAX_TAGS);
     }
 
     /**
@@ -225,7 +246,7 @@ final class RemoteSkillLoader
         $dir = self::cacheDir();
         $cache = $dir.'/'.md5($url).'.cache';
         if (! is_dir($dir)) {
-            @mkdir($dir, 0700, true);
+            @mkdir($dir, self::CACHE_DIR_MODE, recursive: true);
         }
         if (is_file($cache) && (time() - (int) filemtime($cache)) < self::CACHE_TTL) {
             $hit = file_get_contents($cache);
@@ -241,7 +262,7 @@ final class RemoteSkillLoader
         }
 
         if (@file_put_contents($cache, $raw) !== false) {
-            @chmod($cache, 0600);
+            @chmod($cache, self::CACHE_FILE_MODE);
         }
 
         return $raw;
@@ -261,10 +282,6 @@ final class RemoteSkillLoader
         $raw = curl_exec($ch);
         curl_close($ch);
 
-        if ($raw === false) {
-            return null;
-        }
-
         return is_string($raw) ? $raw : null;
     }
 
@@ -275,7 +292,7 @@ final class RemoteSkillLoader
      */
     private static function cacheDir(): string
     {
-        $base = EnvVars::get(EnvVars::PHPCLAW_CACHE_DIR, '/tmp');
+        $base = EnvVars::get(EnvVars::PHPCLAW_CACHE_DIR, self::FALLBACK_CACHE_BASE);
 
         return rtrim($base, '/').'/'.self::CACHE_SUBDIR;
     }

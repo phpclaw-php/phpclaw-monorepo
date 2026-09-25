@@ -9,6 +9,10 @@ namespace PhpClaw\Exceptions;
  */
 final class HumanDeniedException extends PhpClawException
 {
+    public readonly string $toolName;
+
+    public readonly array $toolInput;
+
     /**
      * Create a new HumanDeniedException instance.
      *
@@ -16,9 +20,11 @@ final class HumanDeniedException extends PhpClawException
      * @param  array<string, mixed>  $toolInput  Input that was denied, retained for audit.
      */
     public function __construct(
-        public readonly string $toolName,
-        public readonly array $toolInput = [],
+        string $toolName,
+        array $toolInput = [],
     ) {
+        $this->toolName = $toolName;
+        $this->toolInput = $toolInput;
         parent::__construct("Action denied by human: {$toolName}");
     }
 }

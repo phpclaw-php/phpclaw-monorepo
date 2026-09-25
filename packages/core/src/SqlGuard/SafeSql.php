@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace PhpClaw\SqlGuard;
 
 /**
- * Immutable carrier for a query that has passed SqlReadOnlyGuard validation, only the guard and this class's own controlled rewrites (e.g. withLimit) may construct one, so a caller can never validate one string then execute a different one; the only runnable string is the validated one returned by sql().
+ * Immutable carrier for a validated query string; by convention only SqlReadOnlyGuard and this class's own controlled rewrites construct it, so the validated string and the executed string stay identical.
  */
 final class SafeSql
 {

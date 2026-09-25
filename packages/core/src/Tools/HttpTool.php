@@ -29,7 +29,11 @@ final class HttpTool implements AuthorizableToolInterface, ToolInterface, ToolRo
 
     public const DEFAULT_TIMEOUT_SECONDS = 10;
 
+    private const DEFAULT_METHOD = 'GET';
+
     private const ALLOWED_METHODS = ['GET', 'POST'];
+
+    private const ALLOWED_SCHEMES = ['http', 'https'];
 
     private const USER_AGENT = 'phpClaw/1.0';
 
@@ -115,7 +119,7 @@ final class HttpTool implements AuthorizableToolInterface, ToolInterface, ToolRo
         }
 
         $url = trim((string) ($input['url'] ?? ''));
-        $method = strtoupper(trim((string) ($input['method'] ?? 'GET')));
+        $method = strtoupper(trim((string) ($input['method'] ?? self::DEFAULT_METHOD)));
 
         $this->validateUrl($url);
         $this->validateMethod($method);
@@ -218,7 +222,7 @@ final class HttpTool implements AuthorizableToolInterface, ToolInterface, ToolRo
 
         $scheme = strtolower(parse_url($url, PHP_URL_SCHEME) ?? '');
 
-        if (! in_array($scheme, ['http', 'https'], true)) {
+        if (! in_array($scheme, self::ALLOWED_SCHEMES, true)) {
             throw new ToolException(
                 "URL scheme '{$scheme}' is not allowed. Only http:// and https:// are permitted."
             );

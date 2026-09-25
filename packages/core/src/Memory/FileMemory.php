@@ -273,26 +273,25 @@ final class FileMemory implements MemoryInterface
 
         $lock = $this->acquireLock($namespace, LOCK_EX);
 
-        $tmp = tempnam($this->storageDir, self::TEMP_FILE_PREFIX);
+        try {
+            $tmp = tempnam($this->storageDir, self::TEMP_FILE_PREFIX);
 
-        if ($tmp === false) {
+            if ($tmp === false) {
+                throw new MemoryException("Could not create temp file in '{$this->storageDir}'.");
+            }
+
+            if (file_put_contents($tmp, $encoded) === false) {
+                unlink($tmp);
+                throw new MemoryException("Failed to write temp memory file for namespace '{$namespace}'.");
+            }
+
+            if (! rename($tmp, $file)) {
+                unlink($tmp);
+                throw new MemoryException("Failed to atomically move memory file for namespace '{$namespace}'.");
+            }
+        } finally {
             $this->releaseLock($lock);
-            throw new MemoryException("Could not create temp file in '{$this->storageDir}'.");
         }
-
-        if (file_put_contents($tmp, $encoded) === false) {
-            unlink($tmp);
-            $this->releaseLock($lock);
-            throw new MemoryException("Failed to write temp memory file for namespace '{$namespace}'.");
-        }
-
-        if (! rename($tmp, $file)) {
-            unlink($tmp);
-            $this->releaseLock($lock);
-            throw new MemoryException("Failed to atomically move memory file for namespace '{$namespace}'.");
-        }
-
-        $this->releaseLock($lock);
     }
 
     /**

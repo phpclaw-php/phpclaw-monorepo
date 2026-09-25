@@ -20,7 +20,7 @@ use PhpClaw\Tools\Contracts\ToolRoutingInterface;
  * Executes read-only SQL SELECT queries via an injected PDO connection.
  */
 #[Tool(
-    name: 'db_query',
+    name: self::TOOL_NAME,
     description: 'Run read-only SQL SELECT against the live DB and return rows as JSON.',
     since: '1.0.0',
     default: false,

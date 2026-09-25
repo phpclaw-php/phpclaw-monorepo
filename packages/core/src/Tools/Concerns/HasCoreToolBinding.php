@@ -105,8 +105,8 @@ trait HasCoreToolBinding
     {
         try {
             return json_encode($result, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-        } catch (\JsonException $e) {
-            throw new ToolException('Unable to encode tool response.', previous: $e);
+        } catch (\JsonException $exception) {
+            throw new ToolException('Unable to encode tool response.', previous: $exception);
         }
     }
 

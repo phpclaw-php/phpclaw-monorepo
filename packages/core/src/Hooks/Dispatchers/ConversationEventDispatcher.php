@@ -10,16 +10,14 @@ use PhpClaw\Hooks\LifecycleEvent;
 
 /**
  * Typed dispatchers for conversation lifecycle events.
- *
- * @internal
  */
 final class ConversationEventDispatcher
 {
     /**
-     * Fires when a brand-new conversation is created via PhpClaw::conversation().
+     * Fires when a brand-new conversation is created via Claw::conversation().
      *
      * @param  string  $conversationId  Conversation identifier, if any.
-     * @param  array<string, mixed>  $metadata  Metadata.
+     * @param  array<string, mixed>  $metadata  Optional key-value pairs attached to the conversation start event.
      * @return void
      */
     public static function start(string $conversationId, array $metadata = []): void
@@ -32,7 +30,7 @@ final class ConversationEventDispatcher
     }
 
     /**
-     * Fires after each turn in PhpClaw::sendInConversation() completes successfully.
+     * Fires after each turn in Claw::sendInConversation() completes successfully.
      *
      * @param  string  $conversationId  Conversation identifier, if any.
      * @param  int  $turnCount  Number of turns in the conversation.

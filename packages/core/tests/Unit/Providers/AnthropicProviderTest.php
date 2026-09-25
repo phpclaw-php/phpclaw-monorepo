@@ -54,6 +54,19 @@ final class AnthropicProviderTest extends TestCase
         $this->assertSame(5, $result['output_tokens']);
     }
 
+    public function test_send_unrecognised_response_error_names_keys_not_body(): void
+    {
+        $this->mockHttp->method('post')->willReturn([
+            'content' => [['type' => 'redacted_block', 'data' => 'private model output']],
+            'stop_reason' => 'max_tokens',
+        ]);
+
+        $this->expectException(ProviderException::class);
+        $this->expectExceptionMessage('Unexpected Anthropic response structure (keys: content, stop_reason).');
+
+        $this->provider->send([Message::user('Hi')]);
+    }
+
     public function test_send_returns_tool_use_batch_for_single_call(): void
     {
         $this->mockHttp->method('post')->willReturn([

@@ -4,8 +4,11 @@ declare(strict_types=1);
 
 namespace PhpClaw\Tests\Unit\Guards;
 
+use PhpClaw\Guards\InjectionGuard;
+use PhpClaw\Guards\RoleSwitchGuard;
 use PhpClaw\Guards\ToolOutputGuard;
 use PhpClaw\Hooks\HookRegistry;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
 final class ToolOutputGuardTest extends TestCase
@@ -200,5 +203,68 @@ final class ToolOutputGuardTest extends TestCase
         $this->assertTrue($fired, 'homoglyph match must still fire the audit hook');
         $this->assertStringNotContainsString('[REDACTED]', $result, 'known residual gap: redact() cannot neutralise a homoglyph-obscured match yet');
         $this->assertStringContainsString("j\u{0430}ilbreak", $result, 'payload text is unchanged: detected, not redacted');
+    }
+
+    public static function allPatterns(): array
+    {
+        $cases = [];
+        foreach ([...InjectionGuard::PATTERNS, ...RoleSwitchGuard::PATTERNS, '<?php', '<?=', '?>'] as $pattern) {
+            $cases[$pattern] = [$pattern];
+        }
+
+        return $cases;
+    }
+
+    public static function sharedTextPatterns(): array
+    {
+        $cases = [];
+        foreach ([...InjectionGuard::PATTERNS, ...RoleSwitchGuard::PATTERNS] as $pattern) {
+            $cases[$pattern] = [$pattern];
+        }
+
+        return $cases;
+    }
+
+    #[DataProvider('allPatterns')]
+    public function test_redacts_every_pattern_and_reports_it(string $pattern): void
+    {
+        $reported = [];
+        HookRegistry::on('guard.tool_output_redacted', function (array $ctx) use (&$reported): void {
+            $reported[] = $ctx['pattern'];
+        });
+
+        $result = $this->guard->sanitise("before {$pattern} after", 'probe_tool');
+
+        $this->assertStringNotContainsStringIgnoringCase($pattern, $result);
+        $this->assertStringContainsString('[REDACTED]', $result);
+        $this->assertSame([$pattern], $reported);
+    }
+
+    #[DataProvider('sharedTextPatterns')]
+    public function test_detects_every_text_pattern_disguised_with_a_homoglyph(string $pattern): void
+    {
+        $disguised = preg_replace_callback(
+            '/[aeopcxy]/',
+            static fn (array $m): string => ['a' => "\u{0430}", 'e' => "\u{0435}", 'o' => "\u{043E}", 'p' => "\u{0440}", 'c' => "\u{0441}", 'x' => "\u{0445}", 'y' => "\u{0443}"][$m[0]],
+            $pattern,
+            1,
+        );
+        $reported = [];
+        HookRegistry::on('guard.tool_output_redacted', function (array $ctx) use (&$reported): void {
+            $reported[] = $ctx['pattern'];
+        });
+
+        $this->assertNotSame($pattern, $disguised);
+
+        $this->guard->sanitise("before {$disguised} after", 'probe_tool');
+
+        $this->assertSame([$pattern], $reported);
+    }
+
+    public function test_pattern_list_has_no_duplicates(): void
+    {
+        $patterns = [...InjectionGuard::PATTERNS, ...RoleSwitchGuard::PATTERNS, '<?php', '<?=', '?>'];
+
+        $this->assertSame($patterns, array_values(array_unique($patterns)));
     }
 }

@@ -79,13 +79,13 @@ class RawHttpClient
      */
     public function post(string $url, array $headers, array $body): array
     {
-        $ch = $this->prepareRequest($url, $headers, $body);
+        $curlHandle = $this->prepareRequest($url, $headers, $body);
 
-        curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER => true]);
+        curl_setopt_array($curlHandle, [CURLOPT_RETURNTRANSFER => true]);
 
-        $response = curl_exec($ch);
-        $httpStatus = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        $curlError = curl_error($ch);
+        $response = curl_exec($curlHandle);
+        $httpStatus = (int) curl_getinfo($curlHandle, CURLINFO_HTTP_CODE);
+        $curlError = curl_error($curlHandle);
 
         if ($response === false || $curlError !== '') {
             throw new ProviderException("cURL error: {$curlError}");
@@ -122,11 +122,11 @@ class RawHttpClient
      */
     public function stream(string $url, array $headers, array $body, callable $onChunk): void
     {
-        $ch = $this->prepareRequest($url, $headers, $body);
+        $curlHandle = $this->prepareRequest($url, $headers, $body);
         $buffer = '';
 
-        curl_setopt_array($ch, [
-            CURLOPT_WRITEFUNCTION => function ($ch, string $data) use ($onChunk, &$buffer): int {
+        curl_setopt_array($curlHandle, [
+            CURLOPT_WRITEFUNCTION => function ($handle, string $data) use ($onChunk, &$buffer): int {
                 $buffer .= $data;
                 self::drainBufferedLines($buffer, $onChunk);
 
@@ -134,8 +134,8 @@ class RawHttpClient
             },
         ]);
 
-        $result = curl_exec($ch);
-        $curlError = curl_error($ch);
+        $result = curl_exec($curlHandle);
+        $curlError = curl_error($curlHandle);
 
         if ($result === false || $curlError !== '') {
             throw new ProviderException("cURL stream error: {$curlError}");
@@ -160,15 +160,15 @@ class RawHttpClient
     {
         set_time_limit(0);
 
-        $ch = curl_init($url);
+        $curlHandle = curl_init($url);
 
-        if ($ch === false) {
-            throw new ProviderException("Failed to initialise cURL for URL: {$url}");
+        if ($curlHandle === false) {
+            throw new ProviderException('Failed to initialise cURL.');
         }
 
         $encodedBody = json_encode($body, JSON_THROW_ON_ERROR);
 
-        curl_setopt_array($ch, [
+        curl_setopt_array($curlHandle, [
             CURLOPT_POST => true,
             CURLOPT_POSTFIELDS => $encodedBody,
             CURLOPT_HTTPHEADER => self::buildCurlHeaders($headers),
@@ -177,7 +177,7 @@ class RawHttpClient
             CURLOPT_FOLLOWLOCATION => false,
         ]);
 
-        return $ch;
+        return $curlHandle;
     }
 
     /**
@@ -208,9 +208,9 @@ class RawHttpClient
      */
     private static function drainBufferedLines(string &$buffer, callable $onChunk): void
     {
-        while (($pos = strpos($buffer, self::SSE_LINE_TERMINATOR)) !== false) {
-            $line = substr($buffer, 0, $pos);
-            $buffer = substr($buffer, $pos + 1);
+        while (($position = strpos($buffer, self::SSE_LINE_TERMINATOR)) !== false) {
+            $line = substr($buffer, 0, $position);
+            $buffer = substr($buffer, $position + 1);
             $line = rtrim($line, self::SSE_LINE_TRIM_CHARS);
 
             if ($line !== '') {
@@ -228,9 +228,9 @@ class RawHttpClient
      */
     private static function resolveEnvInt(string $name, int $default): int
     {
-        $v = getenv($name);
+        $envValue = getenv($name);
 
-        return ($v !== false && is_numeric($v) && (int) $v > 0) ? (int) $v : $default;
+        return ($envValue !== false && is_numeric($envValue) && (int) $envValue > 0) ? (int) $envValue : $default;
     }
 
     /**
@@ -251,7 +251,7 @@ class RawHttpClient
         }
 
         if (isset($decoded['error']['status'])) {
-            return (string) ($decoded['error']['status'] ?? $httpStatus);
+            return (string) $decoded['error']['status'];
         }
 
         return "HTTP {$httpStatus}";

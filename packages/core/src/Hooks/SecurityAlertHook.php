@@ -22,7 +22,13 @@ use PhpClaw\Support\SsrfValidator;
 )]
 class SecurityAlertHook implements HookInterface
 {
+    public const DEFAULT_TIMEOUT = 3;
+
     private const DEFAULT_EVENTS = ['guard.blocked'];
+
+    private readonly string $webhookUrl;
+
+    private readonly int $timeout;
 
     private readonly array $events;
 
@@ -38,11 +44,13 @@ class SecurityAlertHook implements HookInterface
      * @return void
      */
     public function __construct(
-        private readonly string $webhookUrl = '',
-        private readonly int $timeout = 3,
+        string $webhookUrl = '',
+        int $timeout = self::DEFAULT_TIMEOUT,
         array $events = self::DEFAULT_EVENTS,
         ?\Closure $payloadFormatter = null,
     ) {
+        $this->webhookUrl = $webhookUrl;
+        $this->timeout = $timeout;
         $this->events = array_values($events);
         $this->payloadFormatter = $payloadFormatter;
     }
@@ -86,8 +94,8 @@ class SecurityAlertHook implements HookInterface
             return;
         }
 
-        $iso = (new \DateTimeImmutable)->format(\DateTimeInterface::ATOM);
-        $payload = $this->buildPayload($event, $payload, $iso);
+        $isoTimestamp = (new \DateTimeImmutable)->format(\DateTimeInterface::ATOM);
+        $payload = $this->buildPayload($event, $payload, $isoTimestamp);
 
         $body = json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 
@@ -137,9 +145,9 @@ class SecurityAlertHook implements HookInterface
      */
     protected function sendWebhook(string $url, string $body): void
     {
-        $ctx = stream_context_create($this->buildWebhookContext($body));
+        $streamContext = stream_context_create($this->buildWebhookContext($body));
 
-        @file_get_contents($url, false, $ctx);
+        @file_get_contents($url, false, $streamContext);
     }
 
     /**
@@ -167,21 +175,21 @@ class SecurityAlertHook implements HookInterface
      * Build the alert payload: uses payloadFormatter if provided, otherwise the default shape.
      *
      * @param  string  $event  Lifecycle event name that triggered the alert.
-     * @param  array<string, mixed>  $payload  Original hook context payload.
-     * @param  string  $iso  ISO-8601 / ATOM timestamp for the alert.
+     * @param  array<string, mixed>  $payload  Hook context payload carrying the guard and reason keys.
+     * @param  string  $isoTimestamp  ISO-8601 / ATOM timestamp for the alert.
      * @return array<string, mixed> Formatted alert payload ready for JSON encoding.
      */
-    private function buildPayload(string $event, array $payload, string $iso): array
+    private function buildPayload(string $event, array $payload, string $isoTimestamp): array
     {
         if ($this->payloadFormatter !== null) {
-            return ($this->payloadFormatter)($event, $payload, $iso);
+            return ($this->payloadFormatter)($event, $payload, $isoTimestamp);
         }
 
         return [
             'alert' => 'phpClaw: Attack blocked',
-            'guard' => (string) ($payload['guard'] ?? 'unknown'),
-            'reason' => (string) ($payload['reason'] ?? 'unknown'),
-            'at' => $iso,
+            'guard' => $payload['guard'],
+            'reason' => $payload['reason'],
+            'at' => $isoTimestamp,
         ];
     }
 

@@ -10,7 +10,7 @@ use PhpClaw\Guards\Contracts\GuardInterface;
 use PhpClaw\Hooks\HookDispatcher;
 
 /**
- * Sliding-window rate limiter guard: enforces a maximum number of calls per time window per caller identity.
+ * Fixed-window rate limiter guard: enforces a maximum number of calls per time window per caller identity.
  */
 #[Guard(priority: -1, name: 'rate_limit', label: 'Rate Limit', enabledByDefault: false, since: '1.0.0')]
 final class RateLimitGuard implements GuardInterface
@@ -31,7 +31,7 @@ final class RateLimitGuard implements GuardInterface
      * Configure the rate-limit guard.
      *
      * @param  int  $maxRequests  Maximum requests allowed per window.
-     * @param  int  $windowSeconds  Length of the sliding window in seconds.
+     * @param  int  $windowSeconds  Duration of the fixed window in seconds.
      * @param  callable|null  $callerIdResolver  Returns a string caller ID.
      * @return void
      */

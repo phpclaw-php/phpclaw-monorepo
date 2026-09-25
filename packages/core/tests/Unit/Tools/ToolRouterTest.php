@@ -71,6 +71,50 @@ final class ToolRouterTest extends TestCase
         $this->assertContains('product_tool', $this->names($out));
     }
 
+    public function test_plural_message_words_match_singular_tags(): void
+    {
+        $out = (new ToolRouter(1))->filter(
+            $this->tiedSchemas('user_tool'),
+            'List the editors with their logins.',
+            'qwen2.5:7b',
+            ['user_tool' => new ToolRoutingMetadata(tags: ['editor', 'login'])],
+        );
+
+        $this->assertSame(['user_tool'], $this->names($out));
+    }
+
+    public function test_ies_plural_matches_y_singular_tag(): void
+    {
+        $out = (new ToolRouter(1))->filter(
+            $this->tiedSchemas('category_tool'),
+            'List the categories.',
+            'qwen2.5:7b',
+            ['category_tool' => new ToolRoutingMetadata(tags: ['category'])],
+        );
+
+        $this->assertSame(['category_tool'], $this->names($out));
+    }
+
+    public function test_three_letter_word_ending_in_s_is_not_trimmed(): void
+    {
+        $out = (new ToolRouter(1))->filter(
+            $this->tiedSchemas('gas_tool'),
+            'List the gas readings.',
+            'qwen2.5:7b',
+            ['gas_tool' => new ToolRoutingMetadata(tags: ['gas'])],
+        );
+
+        $this->assertSame(['gas_tool'], $this->names($out));
+    }
+
+    private function tiedSchemas(string $target): array
+    {
+        return array_map(
+            static fn (string $n): array => ['name' => $n, 'description' => 'list records', 'input_schema' => ['type' => 'object']],
+            ['alpha_tool', 'beta_tool', 'delta_tool', $target],
+        );
+    }
+
     public function test_list_at_or_below_limit_is_returned_unchanged(): void
     {
         $few = array_slice($this->schemas(), 0, 4);

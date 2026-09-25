@@ -21,7 +21,7 @@ final class ProviderRegistry
      * Register a custom provider under a case-insensitive name.
      *
      * @param  string  $name  e.g. 'myai'. Stored lowercased.
-     * @param  string|callable  $provider  Class name (must implement ProviderInterface),
+     * @param  string|callable  $provider  Class name (must implement ProviderInterface) or factory callable.
      * @return void
      *
      * @throws AdapterException When a class-string registration does not implement ProviderInterface.

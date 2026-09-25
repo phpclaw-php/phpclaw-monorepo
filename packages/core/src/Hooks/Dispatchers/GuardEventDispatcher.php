@@ -9,8 +9,6 @@ use PhpClaw\Hooks\LifecycleEvent;
 
 /**
  * Typed dispatchers for security-guard events.
- *
- * @internal
  */
 final class GuardEventDispatcher
 {

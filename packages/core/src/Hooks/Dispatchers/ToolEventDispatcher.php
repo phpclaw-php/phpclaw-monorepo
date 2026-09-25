@@ -9,8 +9,6 @@ use PhpClaw\Hooks\LifecycleEvent;
 
 /**
  * Typed dispatchers for tool-execution lifecycle events.
- *
- * @internal
  */
 final class ToolEventDispatcher
 {

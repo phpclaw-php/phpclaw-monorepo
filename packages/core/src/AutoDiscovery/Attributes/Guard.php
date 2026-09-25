@@ -12,6 +12,8 @@ use Attribute;
 #[Attribute(Attribute::TARGET_CLASS)]
 final class Guard
 {
+    public const DEFAULT_PRIORITY = 100;
+
     /**
      * Create a new Guard instance.
      *
@@ -23,7 +25,7 @@ final class Guard
      * @param  bool  $deprecated  Marked deprecated: discovered but flagged for adapter warnings.
      */
     public function __construct(
-        public readonly int $priority = 100,
+        public readonly int $priority = self::DEFAULT_PRIORITY,
         public readonly string $name = '',
         public readonly string $label = '',
         public readonly bool $enabledByDefault = false,

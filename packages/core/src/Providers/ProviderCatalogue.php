@@ -52,7 +52,7 @@ final class ProviderCatalogue implements CatalogueInterface
      *
      * @param  string  $key  Storage key.
      * @param  string  $label  Human-readable label, if any.
-     * @param  class-string<ProviderInterface>  $class  Exception class name.
+     * @param  class-string<ProviderInterface>  $class  FQCN of the ProviderInterface implementation.
      * @return void
      */
     public static function register(string $key, string $label, string $class): void
@@ -102,9 +102,9 @@ final class ProviderCatalogue implements CatalogueInterface
     }
 
     /**
-     * Providers are not admin-toggleable: adapters always show every registered provider in the dropdown, so this hook is intentionally a no-op. Required by {@see CatalogueInterface}.
+     * Required by {@see CatalogueInterface} but always a no-op: providers are always active and not user-toggleable.
      *
-     * @param  array<string, mixed>  $settings  Settings.
+     * @param  array<string, mixed>  $settings  Adapter settings (unused).
      * @return list<string>
      */
     public static function activateFromSettings(array $settings): array
@@ -129,7 +129,7 @@ final class ProviderCatalogue implements CatalogueInterface
     }
 
     /**
-     * Pull attribute-discovered providers out of {@see DiscoveryCache} and normalise into the `{slug => {label, class}}` shape this Catalogue exposes.
+     * Pull attribute-discovered providers out of {@see DiscoveryCache} and return them in the catalogue's slug-keyed shape.
      *
      * @return array<string, array{label: string, class: class-string<ProviderInterface>}>
      */
@@ -137,8 +137,8 @@ final class ProviderCatalogue implements CatalogueInterface
     {
         $out = [];
 
-        foreach (DiscoveryCache::load()['providers'] as $class => $attr) {
-            $slug = (string) ($attr['name'] ?? '');
+        foreach (DiscoveryCache::load()['providers'] as $class => $attributes) {
+            $slug = (string) ($attributes['name'] ?? '');
             if ($slug === '') {
                 continue;
             }
@@ -151,7 +151,7 @@ final class ProviderCatalogue implements CatalogueInterface
                 continue;
             }
 
-            $label = (string) ($attr['label'] ?? '');
+            $label = (string) ($attributes['label'] ?? '');
             if ($label === '') {
                 $label = ucfirst($slug);
             }

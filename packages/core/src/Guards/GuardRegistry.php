@@ -20,7 +20,7 @@ final class GuardRegistry
 
     private static array $guards = [];
 
-    private static bool $sorted = true;
+    private static bool $isSorted = true;
 
     private static bool $defaultsRegistered = false;
 
@@ -48,7 +48,7 @@ final class GuardRegistry
         }
 
         self::$guards[] = ['priority' => $priority, 'guard' => $guard];
-        self::$sorted = false;
+        self::$isSorted = false;
     }
 
     /**
@@ -67,8 +67,8 @@ final class GuardRegistry
     /**
      * Whether a guard of the given class is already registered.
      *
-     * @param  class-string<GuardInterface>  $class  Exception class name.
-     * @return bool True on success.
+     * @param  class-string<GuardInterface>  $class  Fully-qualified class name to look up.
+     * @return bool
      */
     public static function hasClass(string $class): bool
     {
@@ -170,7 +170,7 @@ final class GuardRegistry
     public static function reset(): void
     {
         self::$guards = [];
-        self::$sorted = true;
+        self::$isSorted = true;
         self::$defaultsRegistered = false;
     }
 
@@ -181,11 +181,11 @@ final class GuardRegistry
      */
     private static function ensureSorted(): void
     {
-        if (self::$sorted) {
+        if (self::$isSorted) {
             return;
         }
 
-        usort(self::$guards, static fn (array $a, array $b): int => $a['priority'] <=> $b['priority']);
-        self::$sorted = true;
+        usort(self::$guards, static fn (array $left, array $right): int => $left['priority'] <=> $right['priority']);
+        self::$isSorted = true;
     }
 }

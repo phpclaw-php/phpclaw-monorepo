@@ -10,7 +10,7 @@ namespace PhpClaw\AutoDiscovery;
 interface CatalogueInterface
 {
     /**
-     * Snapshot attribute-discovered entries into the catalogue's registry, idempotent.
+     * Register Composer-declared (extra.phpclaw) entries into this catalogue, idempotent.
      *
      * @return void
      */
@@ -19,7 +19,7 @@ interface CatalogueInterface
     /**
      * Activate the subset of entries the admin has enabled in settings.
      *
-     * @param  array<string, mixed>  $settings  Settings.
+     * @param  array<string, mixed>  $settings  Admin settings array forwarded from Bootstrap::activateFromSettings().
      * @return list<string>
      */
     public static function activateFromSettings(array $settings): array;

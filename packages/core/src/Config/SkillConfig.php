@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace PhpClaw\Config;
 
 use PhpClaw\Skills\Contracts\SkillInterface;
+use PhpClaw\Skills\SkillRegistry;
 
 /**
  * Skill registration and matching settings for ClawConfig.
@@ -27,7 +28,7 @@ final class SkillConfig
      */
     public function __construct(
         array $skills = [],
-        int $skillMatchLimit = 3,
+        int $skillMatchLimit = SkillRegistry::DEFAULT_MATCH_LIMIT,
         array $remoteSkillUrls = [],
     ) {
         $this->skills = $skills;

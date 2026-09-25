@@ -14,6 +14,8 @@ final class Hook
 {
     public const ANY_EVENT = '*';
 
+    public const DEFAULT_PRIORITY = 100;
+
     /**
      * Create a new Hook instance.
      *
@@ -27,7 +29,7 @@ final class Hook
      */
     public function __construct(
         public readonly string $event,
-        public readonly int $priority = 100,
+        public readonly int $priority = self::DEFAULT_PRIORITY,
         public readonly string $name = '',
         public readonly string $label = '',
         public readonly bool $enabledByDefault = false,

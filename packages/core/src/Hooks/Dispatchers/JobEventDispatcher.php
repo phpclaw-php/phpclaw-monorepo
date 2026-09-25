@@ -10,8 +10,6 @@ use PhpClaw\Hooks\LifecycleEvent;
 
 /**
  * Typed dispatchers for queue-job lifecycle events.
- *
- * @internal
  */
 final class JobEventDispatcher
 {

@@ -45,13 +45,13 @@ final class SkillCatalogue implements CatalogueInterface
     }
 
     /**
-     * Return the registered skill class names.
+     * Return the registered skill keys.
      *
      * @return list<string>
      */
     public static function keys(): array
     {
-        return array_map(static fn (array $e): string => $e['key'], self::all());
+        return array_map(static fn (array $entry): string => $entry['key'], self::all());
     }
 
     /**
@@ -66,7 +66,7 @@ final class SkillCatalogue implements CatalogueInterface
     {
         self::$custom = array_values(array_filter(
             self::$custom,
-            static fn (array $e): bool => $e['key'] !== $key,
+            static fn (array $entry): bool => $entry['key'] !== $key,
         ));
 
         $entry = ['class' => $class, 'key' => $key];
@@ -140,7 +140,7 @@ final class SkillCatalogue implements CatalogueInterface
     }
 
     /**
-     * Convenience: activate the default-enabled subset. Returns the same shape as {@see activateEnabled()}.
+     * Activate every discovered skill and return the resulting instances.
      *
      * @return list<SkillInterface>
      */
@@ -184,7 +184,7 @@ final class SkillCatalogue implements CatalogueInterface
     /**
      * Derive a snake_case key from a class FQCN.
      *
-     * @param  class-string  $fqcn  Fqcn.
+     * @param  class-string  $fqcn  Fully-qualified class name to derive a key from.
      * @return string
      */
     private static function keyFromClass(string $fqcn): string

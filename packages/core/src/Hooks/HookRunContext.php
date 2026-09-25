@@ -6,8 +6,6 @@ namespace PhpClaw\Hooks;
 
 /**
  * Active run-ID context for the current call stack, consumed by {@see HookDispatcher} for typed event dispatch.
- *
- * @internal
  */
 final class HookRunContext
 {
@@ -59,16 +57,5 @@ final class HookRunContext
     public static function currentParentRunId(): string
     {
         return self::$currentParentRunId;
-    }
-
-    /**
-     * Reset active run context. Tests call this between cases for isolation.
-     *
-     * @return void
-     */
-    public static function reset(): void
-    {
-        self::$currentRunId = '';
-        self::$currentParentRunId = '';
     }
 }

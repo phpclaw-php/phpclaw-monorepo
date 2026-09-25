@@ -12,6 +12,10 @@ use PhpClaw\Memory\Contracts\MemoryInterface;
  */
 final class MemoryRegistry
 {
+    private const DRIVER_FILE = 'file';
+
+    private const DRIVER_ARRAY = 'array';
+
     private static array $drivers = [];
 
     private static bool $booted = false;
@@ -20,7 +24,7 @@ final class MemoryRegistry
      * Register a custom memory driver.
      *
      * @param  string  $name  Driver name (e.g. 'redis'). Case-insensitive.
-     * @param  string|callable  $driver  Class name (must implement MemoryInterface and have a zero-arg constructor)
+     * @param  string|callable  $driver  Class name implementing MemoryInterface with a zero-arg constructor, or a callable factory returning a MemoryInterface instance.
      * @return void
      *
      * @throws MemoryException If $driver is a class string that does not exist or does not implement MemoryInterface.
@@ -52,7 +56,7 @@ final class MemoryRegistry
      *
      * @throws MemoryException If the name is not registered, or the factory returns a non-MemoryInterface.
      */
-    public static function build(string $name = 'file'): MemoryInterface
+    public static function build(string $name = self::DRIVER_FILE): MemoryInterface
     {
         self::boot();
 
@@ -130,8 +134,8 @@ final class MemoryRegistry
         }
 
         self::$drivers = [
-            'file' => fn () => new FileMemory,
-            'array' => fn () => new ArrayMemory,
+            self::DRIVER_FILE => fn () => new FileMemory,
+            self::DRIVER_ARRAY => fn () => new ArrayMemory,
         ];
 
         self::$booted = true;

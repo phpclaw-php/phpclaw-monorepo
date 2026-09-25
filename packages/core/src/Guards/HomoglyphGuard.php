@@ -17,22 +17,7 @@ final class HomoglyphGuard implements GuardInterface
 {
     use NormalisesText;
 
-    private const PATTERNS = [
-        'ignore previous instructions',
-        'ignore all instructions',
-        'disregard your',
-        'forget your',
-        'system prompt',
-        'jailbreak',
-        'override instructions',
-        'as a developer mode',
-        'dan mode',
-        'do anything now',
-        'new persona',
-        'you are now',
-        'act as if',
-        'pretend you are',
-    ];
+    private const PATTERNS = [...InjectionGuard::PATTERNS, ...RoleSwitchGuard::PATTERNS];
 
     private const ERROR_PATTERN = "Prompt injection detected: homoglyph-substituted pattern '%s' found.";
 

@@ -5,9 +5,7 @@ declare(strict_types=1);
 namespace PhpClaw\AutoDiscovery;
 
 /**
- * On-disk cache for {@see AttributeScanner} output: fast-paths via `require` on warm OPcache, degrades to in-memory scan on cache failure. The process-wide `$memoryCache` is an accepted static memoization cache (Point F memoization exemption), cleared via reset() for test isolation.
- *
- * @internal Use {@see Bootstrap} typed accessors. This class is a building block.
+ * On-disk cache for {@see AttributeScanner} output: fast-paths via `require` on warm OPcache, degrades to in-memory scan on cache failure. The process-wide `$memoryCache` is an accepted static memoization cache, cleared via reset() for test isolation.
  */
 final class DiscoveryCache
 {
@@ -38,15 +36,7 @@ final class DiscoveryCache
             }
         }
 
-        $scan = AttributeScanner::scan();
-
-        if ($cachePath !== '') {
-            self::writeAtomic($cachePath, $scan);
-        }
-
-        self::$memoryCache = $scan;
-
-        return $scan;
+        return self::rebuild($cachePath);
     }
 
     /**
@@ -73,7 +63,7 @@ final class DiscoveryCache
      * Whether the cache file is present and newer than `installed.json`.
      *
      * @param  string  $cachePath  Filesystem path to the cache file.
-     * @return bool True on success.
+     * @return bool True when the cache file exists and is newer than installed.json.
      */
     public static function isFresh(string $cachePath): bool
     {
@@ -99,17 +89,11 @@ final class DiscoveryCache
     /**
      * Resolve the canonical cache path under `vendor/composer/`.
      *
-     * @return string The resulting value.
+     * @return string Absolute path to the cache file under vendor/composer/ or in system temp.
      */
     public static function defaultPath(): string
     {
-        $candidates = [
-            __DIR__.'/../../vendor/composer/'.self::CACHE_FILENAME,
-            __DIR__.'/../../../../../vendor/composer/'.self::CACHE_FILENAME,
-            __DIR__.'/../../../../../../vendor/composer/'.self::CACHE_FILENAME,
-        ];
-
-        foreach ($candidates as $path) {
+        foreach (AttributeScanner::composerVendorPaths(self::CACHE_FILENAME) as $path) {
             $dir = dirname($path);
             if (is_dir($dir) && is_writable($dir)) {
                 return $path;
@@ -159,7 +143,7 @@ final class DiscoveryCache
      * Write the cache file atomically via a temp file + rename; swallows failures so the cache degrades to in-memory.
      *
      * @param  string  $cachePath  Filesystem path to the cache file.
-     * @param  array  $data  Data to write.
+     * @param  array<string, mixed>  $data  Discovery map produced by AttributeScanner::scan().
      * @return void
      */
     private static function writeAtomic(string $cachePath, array $data): void
@@ -191,7 +175,7 @@ final class DiscoveryCache
      * Sanity-check a loaded cache file has the expected top-level shape.
      *
      * @param  mixed  $loaded  Loaded cache payload to validate.
-     * @return bool True on success.
+     * @return bool True when the loaded value has the expected bucket structure.
      */
     private static function isWellFormed(mixed $loaded): bool
     {
@@ -199,7 +183,7 @@ final class DiscoveryCache
             return false;
         }
 
-        foreach (['tools', 'providers', 'memory', 'skills', 'hooks', 'guards'] as $key) {
+        foreach (AttributeScanner::BUCKET_KEYS as $key) {
             if (! array_key_exists($key, $loaded) || ! is_array($loaded[$key])) {
                 return false;
             }

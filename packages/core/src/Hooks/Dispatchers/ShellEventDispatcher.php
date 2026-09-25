@@ -9,8 +9,6 @@ use PhpClaw\Hooks\LifecycleEvent;
 
 /**
  * Typed dispatchers for ShellTool execution events.
- *
- * @internal
  */
 final class ShellEventDispatcher
 {

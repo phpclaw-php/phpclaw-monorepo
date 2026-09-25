@@ -17,6 +17,8 @@ final class GuardCatalogue implements CatalogueInterface
 {
     public const DEFAULT_ENTRY_PRIORITY = 50;
 
+    private const GUARDS_ENABLED_KEY = 'guards_enabled';
+
     private static array $custom = [];
 
     /**
@@ -47,13 +49,13 @@ final class GuardCatalogue implements CatalogueInterface
     }
 
     /**
-     * Return the registered guard class names.
+     * Return every registered guard key.
      *
      * @return list<string>
      */
     public static function keys(): array
     {
-        return array_map(static fn (array $e): string => $e['key'], self::all());
+        return array_map(static fn (array $entry): string => $entry['key'], self::all());
     }
 
     /**
@@ -92,7 +94,7 @@ final class GuardCatalogue implements CatalogueInterface
     ): void {
         self::$custom = array_values(array_filter(
             self::$custom,
-            static fn (array $e): bool => $e['key'] !== $key,
+            static fn (array $entry): bool => $entry['key'] !== $key,
         ));
 
         $entry = [
@@ -178,7 +180,7 @@ final class GuardCatalogue implements CatalogueInterface
                 continue;
             }
 
-            $priority = $entry['priority'] ?? self::DEFAULT_ENTRY_PRIORITY;
+            $priority = $entry['priority'];
 
             $instance = new $class;
             GuardRegistry::register($instance, $priority);
@@ -201,13 +203,13 @@ final class GuardCatalogue implements CatalogueInterface
     /**
      * Bootstrap integration: invoked by {@see Bootstrap::activateFromSettings()}.
      *
-     * @param  array<string, mixed>  $settings  Settings.
+     * @param  array<string, mixed>  $settings  Adapter settings; reads `guards_enabled` key.
      * @return list<string> Always empty (guards register into GuardRegistry).
      */
     public static function activateFromSettings(array $settings): array
     {
-        if (array_key_exists('guards_enabled', $settings) && is_array($settings['guards_enabled'])) {
-            $keys = array_values(array_filter($settings['guards_enabled'], 'is_string'));
+        if (array_key_exists(self::GUARDS_ENABLED_KEY, $settings) && is_array($settings[self::GUARDS_ENABLED_KEY])) {
+            $keys = array_values(array_filter($settings[self::GUARDS_ENABLED_KEY], 'is_string'));
         } else {
             $keys = self::defaultEnabledKeys();
         }
@@ -230,7 +232,7 @@ final class GuardCatalogue implements CatalogueInterface
     /**
      * Derive a snake_case key from a class FQCN.
      *
-     * @param  class-string  $fqcn  Fqcn.
+     * @param  class-string  $fqcn  Fully-qualified class name to convert.
      * @return string
      */
     private static function keyFromClass(string $fqcn): string
@@ -252,7 +254,7 @@ final class GuardCatalogue implements CatalogueInterface
     {
         $out = [];
 
-        foreach (DiscoveryCache::load()['guards'] as $class => $attr) {
+        foreach (DiscoveryCache::load()['guards'] as $class => $attributes) {
             if (! is_string($class) || ! class_exists($class)) {
                 continue;
             }
@@ -261,7 +263,7 @@ final class GuardCatalogue implements CatalogueInterface
                 continue;
             }
 
-            $key = (string) ($attr['name'] ?? '');
+            $key = (string) ($attributes['name'] ?? '');
             if ($key === '') {
                 $key = self::keyFromClass($class);
             }
@@ -269,11 +271,11 @@ final class GuardCatalogue implements CatalogueInterface
             $entry = [
                 'class' => $class,
                 'key' => $key,
-                'priority' => (int) ($attr['priority'] ?? self::DEFAULT_ENTRY_PRIORITY),
-                'enabled_by_default' => (bool) ($attr['enabledByDefault'] ?? false),
+                'priority' => (int) ($attributes['priority'] ?? self::DEFAULT_ENTRY_PRIORITY),
+                'enabled_by_default' => (bool) ($attributes['enabledByDefault'] ?? false),
             ];
 
-            $label = (string) ($attr['label'] ?? '');
+            $label = (string) ($attributes['label'] ?? '');
             if ($label !== '') {
                 $entry['label'] = $label;
             }

@@ -10,8 +10,6 @@ use PhpClaw\Hooks\LifecycleEvent;
 
 /**
  * Typed dispatchers for LLM provider lifecycle events.
- *
- * @internal
  */
 final class ProviderEventDispatcher
 {
@@ -137,7 +135,7 @@ final class ProviderEventDispatcher
      *
      * @param  string  $provider  Provider name.
      * @param  string  $model  Model identifier.
-     * @param  int  $cacheReadTokens  Cache-read token count, if reported.
+     * @param  int  $cacheReadTokens  Cache-read token count.
      * @param  int|null  $cacheWriteTokens  Cache-write token count, if reported.
      * @param  string  $runId  Active run ID, if any.
      * @param  string  $parentRunId  Parent run ID, if any.
