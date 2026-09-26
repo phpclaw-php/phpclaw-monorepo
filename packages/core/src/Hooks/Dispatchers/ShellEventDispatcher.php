@@ -4,7 +4,8 @@ declare(strict_types=1);
 
 namespace PhpClaw\Hooks\Dispatchers;
 
-use PhpClaw\Hooks\HookRegistry;
+use PhpClaw\Hooks\EventPayload;
+use PhpClaw\Hooks\HookRunContext;
 use PhpClaw\Hooks\LifecycleEvent;
 
 /**
@@ -37,7 +38,12 @@ final class ShellEventDispatcher
             $ctx['file'] = $file;
         }
 
-        HookRegistry::fire(LifecycleEvent::ShellDenied->value, $ctx);
+        EventPayload::fire(
+            LifecycleEvent::ShellDenied->value,
+            $ctx,
+            runId: HookRunContext::currentRunId(),
+            parentRunId: HookRunContext::currentParentRunId(),
+        );
     }
 
     /**
@@ -49,9 +55,14 @@ final class ShellEventDispatcher
      */
     public static function exec(string $command, string $cmdName): void
     {
-        HookRegistry::fire(LifecycleEvent::ShellExec->value, [
-            'command' => $command,
-            'cmd_name' => $cmdName,
-        ]);
+        EventPayload::fire(
+            LifecycleEvent::ShellExec->value,
+            [
+                'command' => $command,
+                'cmd_name' => $cmdName,
+            ],
+            runId: HookRunContext::currentRunId(),
+            parentRunId: HookRunContext::currentParentRunId(),
+        );
     }
 }

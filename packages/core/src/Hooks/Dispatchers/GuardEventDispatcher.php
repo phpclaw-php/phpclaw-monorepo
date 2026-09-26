@@ -4,7 +4,8 @@ declare(strict_types=1);
 
 namespace PhpClaw\Hooks\Dispatchers;
 
-use PhpClaw\Hooks\HookRegistry;
+use PhpClaw\Hooks\EventPayload;
+use PhpClaw\Hooks\HookRunContext;
 use PhpClaw\Hooks\LifecycleEvent;
 
 /**
@@ -22,11 +23,16 @@ final class GuardEventDispatcher
      */
     public static function blocked(string $message, string $reason, ?string $guard = null): void
     {
-        HookRegistry::fire(LifecycleEvent::GuardBlocked->value, [
-            'message' => $message,
-            'reason' => $reason,
-            'guard' => $guard,
-        ]);
+        EventPayload::fire(
+            LifecycleEvent::GuardBlocked->value,
+            [
+                'message' => $message,
+                'reason' => $reason,
+                'guard' => $guard,
+            ],
+            runId: HookRunContext::currentRunId(),
+            parentRunId: HookRunContext::currentParentRunId(),
+        );
     }
 
     /**
@@ -44,12 +50,17 @@ final class GuardEventDispatcher
         int $maxRequests,
         int $windowSeconds,
     ): void {
-        HookRegistry::fire(LifecycleEvent::GuardRateLimitExceeded->value, [
-            'caller_id' => $callerId,
-            'count' => $count,
-            'max_requests' => $maxRequests,
-            'window_seconds' => $windowSeconds,
-        ]);
+        EventPayload::fire(
+            LifecycleEvent::GuardRateLimitExceeded->value,
+            [
+                'caller_id' => $callerId,
+                'count' => $count,
+                'max_requests' => $maxRequests,
+                'window_seconds' => $windowSeconds,
+            ],
+            runId: HookRunContext::currentRunId(),
+            parentRunId: HookRunContext::currentParentRunId(),
+        );
     }
 
     /**
@@ -61,10 +72,15 @@ final class GuardEventDispatcher
      */
     public static function toolOutputRedacted(string $toolName, string $pattern): void
     {
-        HookRegistry::fire(LifecycleEvent::GuardToolOutputRedacted->value, [
-            'tool_name' => $toolName,
-            'pattern' => $pattern,
-        ]);
+        EventPayload::fire(
+            LifecycleEvent::GuardToolOutputRedacted->value,
+            [
+                'tool_name' => $toolName,
+                'pattern' => $pattern,
+            ],
+            runId: HookRunContext::currentRunId(),
+            parentRunId: HookRunContext::currentParentRunId(),
+        );
     }
 
     /**
@@ -75,7 +91,12 @@ final class GuardEventDispatcher
      */
     public static function outputPhpTagRemoved(string $tag): void
     {
-        HookRegistry::fire(LifecycleEvent::GuardOutputPhpTagRemoved->value, ['tag' => $tag]);
+        EventPayload::fire(
+            LifecycleEvent::GuardOutputPhpTagRemoved->value,
+            ['tag' => $tag],
+            runId: HookRunContext::currentRunId(),
+            parentRunId: HookRunContext::currentParentRunId(),
+        );
     }
 
     /**
@@ -86,6 +107,11 @@ final class GuardEventDispatcher
      */
     public static function outputFunctionRedacted(string $function): void
     {
-        HookRegistry::fire(LifecycleEvent::GuardOutputFunctionRedacted->value, ['function' => $function]);
+        EventPayload::fire(
+            LifecycleEvent::GuardOutputFunctionRedacted->value,
+            ['function' => $function],
+            runId: HookRunContext::currentRunId(),
+            parentRunId: HookRunContext::currentParentRunId(),
+        );
     }
 }
