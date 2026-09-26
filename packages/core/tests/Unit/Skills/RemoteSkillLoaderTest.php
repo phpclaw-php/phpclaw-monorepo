@@ -333,4 +333,40 @@ final class RemoteSkillLoaderTest extends TestCase
         }
         @rmdir($dir);
     }
+
+    public function test_markdown_yaml_header_is_read_for_the_description_and_dropped_from_the_content(): void
+    {
+        $md = "---\nname: header-skill\ndescription: Turns notes into pages\nallowed-tools: Bash, Read\n---\n# Header Skill\n\nBody line one.";
+
+        $this->invoke('loadFromMarkdown', 'https://example.com/skills/header-skill/SKILL.md', $md);
+
+        $skill = SkillRegistry::all()[0];
+        self::assertStringStartsWith('# Header Skill', $skill->content());
+        self::assertStringNotContainsString('allowed-tools', $skill->content());
+        self::assertStringContainsString('Turns notes into pages', $skill->description());
+    }
+
+    public function test_markdown_without_a_header_keeps_its_content_unchanged(): void
+    {
+        $md = "# Plain Skill\n\nBody line one.";
+
+        $this->invoke('loadFromMarkdown', 'https://example.com/skills/plain-skill/SKILL.md', $md);
+
+        self::assertSame($md, SkillRegistry::all()[0]->content());
+    }
+
+    public function test_json_collection_content_is_registered_unchanged_even_when_it_starts_with_a_header(): void
+    {
+        $content = "---\nnote: kept\n---\nJSON body.";
+        $json = json_encode([
+            'collection' => 'demo',
+            'skills' => [
+                ['name' => 'gamma', 'description' => 'g', 'tags' => ['z'], 'content' => $content],
+            ],
+        ]);
+
+        $this->invoke('loadFromJson', $json);
+
+        self::assertSame($content, SkillRegistry::all()[0]->content());
+    }
 }

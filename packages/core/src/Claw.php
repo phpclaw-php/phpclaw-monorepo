@@ -23,6 +23,7 @@ use PhpClaw\Providers\Contracts\SupportsWebSearchInterface;
 use PhpClaw\Providers\Tools\WebSearch;
 use PhpClaw\Skills\RemoteSkillLoader;
 use PhpClaw\Skills\SkillRegistry;
+use PhpClaw\Tools\ToolProfileResolver;
 use PhpClaw\Tools\ToolRegistry;
 use PhpClaw\Tools\ToolRouter;
 
@@ -66,7 +67,7 @@ final class Claw implements ClawInterface
         $this->storeMessages = $config->storeMessages;
         $this->agent = $this->buildAgent();
         $this->pipeline = new InvocationPipeline(
-            new MessageAugmenter($this->memory, $this->config->skillMatchLimit),
+            new MessageAugmenter($this->memory, $this->config->skillMatchLimit, ToolProfileResolver::skillContextChars($this->profile())),
             $this->memory,
         );
 
@@ -248,6 +249,16 @@ final class Claw implements ClawInterface
     }
 
     /**
+     * Tool profile for the configured provider and model, the same resolution the adapters use for the tool cap.
+     *
+     * @return string One of the ToolProfileResolver PROFILE_* constants.
+     */
+    private function profile(): string
+    {
+        return ToolProfileResolver::resolve($this->config->providerName, $this->config->model);
+    }
+
+    /**
      * Build the underlying Agent from config: provider + tools + retry/history settings.
      *
      * @return Agent The result.
@@ -276,9 +287,12 @@ final class Claw implements ClawInterface
             outputSanitiser: new OutputSanitiser($this->config->sanitiseOutput),
             compactHistory: $this->config->compactHistory,
             approvalGate: $this->config->approvalGate,
-            toolRouter: new ToolRouter($this->config->maxToolsPerTurn),
+            toolRouter: new ToolRouter($this->config->maxToolsPerTurn, $this->profile() === ToolProfileResolver::PROFILE_MINIMAL ? 0.2 : 0.0),
             maxHistoryTokens: $this->config->maxHistoryTokens,
             maxToolResultTokens: $this->config->maxToolResultTokens,
+            leanToolSchemas: $this->profile() === ToolProfileResolver::PROFILE_MINIMAL,
+            requestBudgetTokens: ToolProfileResolver::requestBudget($this->profile()),
+            fixedPromptTokens: (int) ceil(strlen($this->config->systemPrompt) / 4),
         );
     }
 

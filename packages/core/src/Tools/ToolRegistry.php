@@ -150,16 +150,19 @@ final class ToolRegistry
      * Return all registered tools formatted for the given provider.
      *
      * @param  string  $providerName  Target provider name.
+     * @param  bool  $lean  True to send only the first line of each description, for small-model profiles.
      * @return array<int, array<string, mixed>>
      */
-    public function schemas(string $providerName): array
+    public function schemas(string $providerName, bool $lean = false): array
     {
         if (empty($this->tools)) {
             return [];
         }
 
-        if (isset($this->schemasCache[$providerName])) {
-            return $this->schemasCache[$providerName];
+        $cacheKey = $providerName.($lean ? ':lean' : '');
+
+        if (isset($this->schemasCache[$cacheKey])) {
+            return $this->schemasCache[$cacheKey];
         }
 
         $eligible = array_filter(
@@ -167,8 +170,8 @@ final class ToolRegistry
             static fn (ToolInterface $tool): bool => ! $tool instanceof ToolRoutingInterface || $tool->isEligibleForRouting(),
         );
 
-        return $this->schemasCache[$providerName] = array_values(array_map(
-            fn (ToolInterface $tool): array => $this->formatForProvider($tool, $providerName),
+        return $this->schemasCache[$cacheKey] = array_values(array_map(
+            fn (ToolInterface $tool): array => $this->formatForProvider($tool, $providerName, $lean),
             $eligible,
         ));
     }
@@ -200,17 +203,19 @@ final class ToolRegistry
      *
      * @param  ToolInterface  $tool  Tool whose schema is being formatted.
      * @param  string  $providerName  Target provider name.
+     * @param  bool  $lean  True to send only the first line of the description.
      * @return array<string, mixed>
      */
-    private function formatForProvider(ToolInterface $tool, string $providerName): array
+    private function formatForProvider(ToolInterface $tool, string $providerName, bool $lean = false): array
     {
         $schema = $this->normalizeSchema($tool->inputSchema());
+        $description = $lean ? trim((string) strtok($tool->description(), "\n")) : $tool->description();
 
         if (in_array($providerName, self::OPENAI_COMPATIBLE_PROVIDERS, strict: true)) {
-            return $this->openAiFunctionShape($tool, $schema);
+            return $this->openAiFunctionShape($tool, $schema, $description);
         }
 
-        return $this->anthropicNativeShape($tool, $schema);
+        return $this->anthropicNativeShape($tool, $schema, $description);
     }
 
     /**
@@ -218,13 +223,14 @@ final class ToolRegistry
      *
      * @param  ToolInterface  $tool  Tool being serialised.
      * @param  array<string, mixed>  $schema  Normalised input schema.
+     * @param  string  $description  Description to send, full or first line.
      * @return array<string, mixed>
      */
-    private function anthropicNativeShape(ToolInterface $tool, array $schema): array
+    private function anthropicNativeShape(ToolInterface $tool, array $schema, string $description): array
     {
         return [
             'name' => $tool->name(),
-            'description' => $tool->description(),
+            'description' => $description,
             'input_schema' => $schema,
         ];
     }
@@ -234,15 +240,16 @@ final class ToolRegistry
      *
      * @param  ToolInterface  $tool  Tool being serialised.
      * @param  array<string, mixed>  $schema  Normalised input schema.
+     * @param  string  $description  Description to send, full or first line.
      * @return array<string, mixed>
      */
-    private function openAiFunctionShape(ToolInterface $tool, array $schema): array
+    private function openAiFunctionShape(ToolInterface $tool, array $schema, string $description): array
     {
         return [
             'type' => 'function',
             'function' => [
                 'name' => $tool->name(),
-                'description' => $tool->description(),
+                'description' => $description,
                 'parameters' => $schema,
             ],
         ];

@@ -347,4 +347,19 @@ final class ToolRegistryTest extends TestCase
 
         return implode("\n", $lines);
     }
+
+    public function test_lean_schemas_send_only_the_first_description_line(): void
+    {
+        $registry = new ToolRegistry;
+        $registry->register([$this->makeTool('lean_probe', "Read the thing.\nMODES\n  long explanation follows")]);
+
+        $anthropicLean = $registry->schemas('anthropic', lean: true);
+        $anthropicFull = $registry->schemas('anthropic');
+        $openAiLean = $registry->schemas('openai', lean: true);
+
+        $this->assertSame('Read the thing.', $anthropicLean[0]['description']);
+        $this->assertStringContainsString('long explanation follows', $anthropicFull[0]['description']);
+        $this->assertSame('Read the thing.', $openAiLean[0]['function']['description']);
+        $this->assertSame($anthropicFull[0]['input_schema'], $anthropicLean[0]['input_schema']);
+    }
 }

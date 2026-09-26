@@ -256,4 +256,18 @@ final class ToolProfileResolverTest extends TestCase
             }
         };
     }
+
+    public function test_request_budget_per_profile(): void
+    {
+        self::assertSame(3000, ToolProfileResolver::requestBudget(ToolProfileResolver::PROFILE_MINIMAL));
+        self::assertSame(6000, ToolProfileResolver::requestBudget(ToolProfileResolver::PROFILE_STANDARD));
+        self::assertSame(0, ToolProfileResolver::requestBudget(ToolProfileResolver::PROFILE_FULL));
+    }
+
+    public function test_skill_context_chars_per_profile(): void
+    {
+        self::assertSame(4000, ToolProfileResolver::skillContextChars(ToolProfileResolver::PROFILE_MINIMAL));
+        self::assertSame(8000, ToolProfileResolver::skillContextChars(ToolProfileResolver::PROFILE_STANDARD));
+        self::assertSame(0, ToolProfileResolver::skillContextChars(ToolProfileResolver::PROFILE_FULL));
+    }
 }

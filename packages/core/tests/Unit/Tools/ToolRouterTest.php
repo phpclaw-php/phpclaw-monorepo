@@ -344,4 +344,177 @@ final class ToolRouterTest extends TestCase
 
         $this->assertSame(['beta_fetch'], $offered);
     }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    private function listHeavyRegistry(): array
+    {
+        $schemas = [];
+        foreach (['a_list', 'b_list', 'c_list', 'd_list', 'e_list', 'f_list', 'g_list', 'h_list'] as $name) {
+            $schemas[] = ['name' => $name, 'description' => 'generic helper'];
+        }
+        $schemas[] = ['name' => 'x_posts', 'description' => 'generic helper'];
+        $schemas[] = ['name' => 'y_posts', 'description' => 'generic helper'];
+
+        return $schemas;
+    }
+
+    /**
+     * @return array<string, ToolRoutingMetadata>
+     */
+    private function listHeavyMetadata(): array
+    {
+        $metadata = [];
+        foreach (['a_list', 'b_list', 'c_list', 'd_list', 'e_list', 'f_list', 'g_list', 'h_list'] as $name) {
+            $metadata[$name] = new ToolRoutingMetadata(intents: ['list items']);
+        }
+        $metadata['x_posts'] = new ToolRoutingMetadata(intents: ['show posts']);
+        $metadata['y_posts'] = new ToolRoutingMetadata(intents: ['show posts']);
+
+        return $metadata;
+    }
+
+    public function test_a_word_most_tools_carry_weighs_less_than_a_rare_one(): void
+    {
+        $out = (new ToolRouter(2))->filter($this->listHeavyRegistry(), 'list posts', 'qwen2.5:7b', $this->listHeavyMetadata());
+
+        $this->assertSame(['x_posts', 'y_posts'], $this->names($out));
+    }
+
+    public function test_confidence_rates_a_word_most_tools_carry_below_a_rare_one(): void
+    {
+        $router = new ToolRouter(2);
+
+        $common = $router->confidence($this->listHeavyRegistry(), 'list', $this->listHeavyMetadata());
+        $rare = $router->confidence($this->listHeavyRegistry(), 'posts', $this->listHeavyMetadata());
+
+        $this->assertGreaterThan(0.0, $common);
+        $this->assertLessThan($rare, $common);
+    }
+
+    public function test_registries_under_three_tools_weigh_every_word_equally(): void
+    {
+        $schemas = [
+            ['name' => 'alpha', 'description' => 'generic helper'],
+            ['name' => 'beta', 'description' => 'generic helper'],
+        ];
+        $metadata = [
+            'alpha' => new ToolRoutingMetadata(intents: ['list items']),
+            'beta' => new ToolRoutingMetadata(intents: ['list items']),
+        ];
+
+        $this->assertGreaterThan(0.0, (new ToolRouter(5))->confidence($schemas, 'list', $metadata));
+    }
+
+    public function test_score_floor_drops_tools_far_below_the_best_match(): void
+    {
+        $schemas = [
+            ['name' => 'invoice_lookup', 'description' => 'generic helper'],
+            ['name' => 'beta_tool', 'description' => 'generic helper'],
+            ['name' => 'gamma_tool', 'description' => 'generic helper'],
+            ['name' => 'delta_tool', 'description' => 'generic helper'],
+            ['name' => 'epsilon_tool', 'description' => 'generic helper'],
+            ['name' => 'zeta_tool', 'description' => 'generic helper'],
+        ];
+        $metadata = ['invoice_lookup' => new ToolRoutingMetadata(intents: ['look up an invoice'])];
+
+        $withFloor = (new ToolRouter(5, minScoreShare: 0.2))->filter($schemas, 'look up an invoice', 'qwen2.5:7b', $metadata);
+        $withoutFloor = (new ToolRouter(5))->filter($schemas, 'look up an invoice', 'qwen2.5:7b', $metadata);
+
+        $this->assertSame(['invoice_lookup'], $this->names($withFloor));
+        $this->assertCount(5, $withoutFloor);
+    }
+
+    public function test_score_floor_still_fills_the_cap_when_nothing_matches(): void
+    {
+        $schemas = [
+            ['name' => 'alpha_tool', 'description' => 'generic helper'],
+            ['name' => 'beta_tool', 'description' => 'generic helper'],
+            ['name' => 'gamma_tool', 'description' => 'generic helper'],
+        ];
+
+        $out = (new ToolRouter(2, minScoreShare: 0.2))->filter($schemas, 'completely unrelated words', 'qwen2.5:7b');
+
+        $this->assertCount(2, $out);
+    }
+
+    public function test_score_floor_keeps_an_explicitly_named_tool(): void
+    {
+        $schemas = [
+            ['name' => 'invoice_lookup', 'description' => 'generic helper'],
+            ['name' => 'order_export', 'description' => 'generic helper'],
+            ['name' => 'gamma_tool', 'description' => 'generic helper'],
+        ];
+        $metadata = ['invoice_lookup' => new ToolRoutingMetadata(intents: ['look up an invoice'])];
+
+        $out = (new ToolRouter(2, minScoreShare: 0.2))->filter($schemas, 'look up an invoice with order_export', 'qwen2.5:7b', $metadata);
+
+        $this->assertContains('order_export', $this->names($out));
+        $this->assertContains('invoice_lookup', $this->names($out));
+    }
+
+    public function test_last_ranked_names_keep_rank_order_while_the_result_is_alphabetical(): void
+    {
+        $router = new ToolRouter(2);
+        $out = $router->filter($this->listHeavyRegistry(), 'show posts please', 'qwen2.5:7b', $this->listHeavyMetadata());
+
+        $this->assertSame(['x_posts', 'y_posts'], $this->names($out));
+        $this->assertSame('x_posts', $router->lastRankedNames()[0]);
+        $this->assertCount(2, $router->lastRankedNames());
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    private function pasteRegistry(): array
+    {
+        return [
+            ['name' => 'wp_query', 'description' => 'generic helper'],
+            ['name' => 'wc_get_customer', 'description' => 'generic helper'],
+            ['name' => 'wc_reviews', 'description' => 'generic helper'],
+            ['name' => 'wp_menus', 'description' => 'generic helper'],
+        ];
+    }
+
+    /**
+     * @return array<string, ToolRoutingMetadata>
+     */
+    private function pasteMetadata(): array
+    {
+        return [
+            'wp_query' => new ToolRoutingMetadata(intents: ['list posts']),
+            'wc_get_customer' => new ToolRoutingMetadata(intents: ['customer statistics']),
+            'wc_reviews' => new ToolRoutingMetadata(intents: ['customer feedback']),
+            'wp_menus' => new ToolRoutingMetadata(intents: ['navigation notes']),
+        ];
+    }
+
+    private function paste(int $chars): string
+    {
+        return substr(str_repeat('Meeting notes: customer feedback and navigation plans for the quarter. ', 400), 0, $chars);
+    }
+
+    public function test_long_paste_after_the_request_does_not_outrank_it(): void
+    {
+        $out = (new ToolRouter(1))->filter($this->pasteRegistry(), 'List the latest posts. My notes: '.$this->paste(6000), 'qwen2.5:7b', $this->pasteMetadata());
+
+        $this->assertSame(['wp_query'], $this->names($out));
+    }
+
+    public function test_long_paste_before_the_request_does_not_outrank_it(): void
+    {
+        $out = (new ToolRouter(1))->filter($this->pasteRegistry(), $this->paste(6000).' Ignore the notes above. List the latest posts.', 'qwen2.5:7b', $this->pasteMetadata());
+
+        $this->assertSame(['wp_query'], $this->names($out));
+    }
+
+    public function test_messages_up_to_the_threshold_are_scored_whole(): void
+    {
+        $neutral = str_repeat('lorem ipsum dolor sit amet. ', 30);
+        $out = (new ToolRouter(1))->filter($this->pasteRegistry(), $neutral.'List the latest posts. '.$neutral, 'qwen2.5:7b', $this->pasteMetadata());
+
+        $this->assertLessThanOrEqual(2000, strlen($neutral.'List the latest posts. '.$neutral));
+        $this->assertSame(['wp_query'], $this->names($out));
+    }
 }

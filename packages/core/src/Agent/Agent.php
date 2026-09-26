@@ -53,6 +53,12 @@ final class Agent
 
     private readonly int $maxToolResultTokens;
 
+    private readonly bool $leanToolSchemas;
+
+    private readonly int $requestBudgetTokens;
+
+    private readonly int $fixedPromptTokens;
+
     private readonly ToolOutputGuard $toolOutputGuard;
 
     private readonly OutputSanitiser $outputSanitiser;
@@ -76,6 +82,9 @@ final class Agent
      * @param  ?ToolRouter  $toolRouter  Optional router that selects the tool subset offered per iteration.
      * @param  int  $maxHistoryTokens  Compact history when its token estimate exceeds this value. 0 = disabled.
      * @param  int  $maxToolResultTokens  Cut a single tool result at this estimated-token ceiling and append a marker. 0 = disabled.
+     * @param  bool  $leanToolSchemas  When true, tool schemas are sent in their lean form.
+     * @param  int  $requestBudgetTokens  Drop the lowest-ranked routed tools until the estimated request fits this budget. 0 = disabled.
+     * @param  int  $fixedPromptTokens  Estimated tokens of the fixed prompt parts, counted against the request budget.
      */
     public function __construct(
         ProviderInterface $provider,
@@ -90,6 +99,9 @@ final class Agent
         ?ToolRouter $toolRouter = null,
         int $maxHistoryTokens = 0,
         int $maxToolResultTokens = 0,
+        bool $leanToolSchemas = false,
+        int $requestBudgetTokens = 0,
+        int $fixedPromptTokens = 0,
     ) {
         $this->provider = $provider;
         $this->tools = $tools;
@@ -101,6 +113,9 @@ final class Agent
         $this->approvalGate = $approvalGate;
         $this->toolRouter = $toolRouter;
         $this->maxToolResultTokens = $maxToolResultTokens;
+        $this->leanToolSchemas = $leanToolSchemas;
+        $this->requestBudgetTokens = $requestBudgetTokens;
+        $this->fixedPromptTokens = $fixedPromptTokens;
         $this->historyCompactor = new HistoryCompactor($this->provider, $this->maxHistoryLength, $compactHistory, $maxHistoryTokens);
         $this->retryLoop = new ProviderRetryLoop($this->provider, $this->maxRetries);
     }
@@ -152,6 +167,41 @@ final class Agent
     }
 
     /**
+     * Drop the lowest-ranked tools until the estimated request fits the profile budget; never below one tool.
+     *
+     * @param  array<int, array<string, mixed>>  $toolSchemas  Routed schemas.
+     * @param  Message[]  $history  History including the current user message.
+     * @return array<int, array<string, mixed>> Schemas that fit, in the router's alphabetical order.
+     */
+    private function fitToolsToBudget(array $toolSchemas, array $history): array
+    {
+        if ($this->requestBudgetTokens <= 0 || $this->toolRouter === null) {
+            return $toolSchemas;
+        }
+
+        $order = array_flip($this->toolRouter->lastRankedNames());
+        $byName = [];
+        foreach ($toolSchemas as $schema) {
+            $byName[strtolower((string) ($schema['name'] ?? ($schema['function']['name'] ?? '')))] = $schema;
+        }
+        uksort($byName, static fn (string $a, string $b): int => ($order[$a] ?? PHP_INT_MAX) <=> ($order[$b] ?? PHP_INT_MAX));
+
+        $base = $this->fixedPromptTokens + $this->historyCompactor->estimateTokens($history);
+        while (count($byName) > 1) {
+            $estimate = $base + (int) ceil(strlen((string) json_encode(array_values($byName))) / self::CHARS_PER_TOKEN_ESTIMATE);
+            if ($estimate <= $this->requestBudgetTokens) {
+                break;
+            }
+            array_pop($byName);
+        }
+
+        $kept = array_values($byName);
+        usort($kept, static fn (array $a, array $b): int => strcmp((string) ($a['name'] ?? $a['function']['name']), (string) ($b['name'] ?? $b['function']['name'])));
+
+        return $kept;
+    }
+
+    /**
      * Shared ReAct loop body. When $onToken is non-null, hooks fire with streaming:true, the final text is chunked through $onToken, and stream.end fires at completion.
      *
      * @param  string  $message  Current user message to append before the loop runs.
@@ -175,9 +225,10 @@ final class Agent
         $this->tools->resetRunState();
 
         $history[] = Message::user($message);
-        $toolSchemas = $this->tools->schemas($this->provider->name());
+        $toolSchemas = $this->tools->schemas($this->provider->name(), $this->leanToolSchemas);
         if ($this->toolRouter !== null) {
             $toolSchemas = $this->toolRouter->filter($toolSchemas, $originalMessage !== '' ? $originalMessage : $message, $this->provider->model(), $this->tools->routingMetadata());
+            $toolSchemas = $this->fitToolsToBudget($toolSchemas, $history);
         }
         $isHallucinationRetry = false;
 

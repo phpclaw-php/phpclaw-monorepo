@@ -156,11 +156,13 @@ final class RemoteSkillLoader
             ? $headingDescription
             : $headingDescription.' '.$frontmatterDescription;
 
+        $body = trim((string) preg_replace('/^---\s*\n(.*?)\n---\s*\n/s', '', $markdown, 1));
+
         SkillRegistry::register(new ArraySkill(
             name: $name,
             description: $description,
             tags: self::deriveTags($markdown),
-            content: $markdown,
+            content: $body,
         ));
 
         return 1;

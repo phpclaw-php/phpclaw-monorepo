@@ -119,7 +119,7 @@ final class HistoryCompactor
      * @param  Message[]  $history  Conversation history.
      * @return int Estimated token count.
      */
-    private function estimateTokens(array $history): int
+    public function estimateTokens(array $history): int
     {
         $chars = 0;
 
