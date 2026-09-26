@@ -270,6 +270,19 @@ final class Agent
             $this->fireProviderResponseHooks($response, streaming: $streaming, runId: $runId, iterationId: $iterationId);
 
             if ($response['type'] === self::RESPONSE_TYPE_TEXT) {
+                if ($this->isLostToolCall($response, $toolSchemas) && ! $isHallucinationRetry) {
+                    $this->triggerHallucinationRetry(
+                        $isHallucinationRetry,
+                        $toolSchemas,
+                        '(empty-response)',
+                        'Model spent output tokens but returned no text and no tool call; retrying once with no tools.',
+                        $runId,
+                        $iterationId,
+                    );
+
+                    continue;
+                }
+
                 return $this->finaliseTextResponse($response, $message, $iteration, $startNs, $toolsCalled, $runId, $onToken);
             }
 
@@ -477,6 +490,20 @@ final class Agent
             runId: $runId,
             parentRunId: $iterationId,
         );
+    }
+
+    /**
+     * Report whether a text reply is empty although the model spent output tokens while tools were offered.
+     *
+     * @param  array<string, mixed>  $response  Parsed provider response of type text.
+     * @param  array<int, array<string, mixed>>  $toolSchemas  Tool schemas offered on this request.
+     * @return bool True when the reply looks like a tool call the provider dropped.
+     */
+    private function isLostToolCall(array $response, array $toolSchemas): bool
+    {
+        return $toolSchemas !== []
+            && trim((string) ($response['text'] ?? '')) === ''
+            && (int) ($response['output_tokens'] ?? 0) > 0;
     }
 
     /**

@@ -7,8 +7,11 @@ namespace PhpClaw\Tests\Unit\Agent;
 use PhpClaw\Agent\Agent;
 use PhpClaw\Agent\AgentResponse;
 use PhpClaw\Agent\Message;
+use PhpClaw\Claw;
 use PhpClaw\Exceptions\MaxIterationsException;
 use PhpClaw\Exceptions\ToolException;
+use PhpClaw\Hooks\HookRegistry;
+use PhpClaw\Hooks\LifecycleEvent;
 use PhpClaw\Providers\Contracts\ProviderInterface;
 use PhpClaw\Tools\Contracts\ToolInterface;
 use PhpClaw\Tools\ToolRegistry;
@@ -634,5 +637,149 @@ final class AgentTest extends TestCase
     public function test_zero_budget_disables_the_cut(): void
     {
         $this->assertSame(str_repeat('x', 4000), $this->runOneToolRound(str_repeat('x', 4000), 0));
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $responses
+     * @param  list<array<int, array<string, mixed>>>|null  $toolsPerCall
+     */
+    private function makeToolRecordingProvider(array $responses, ?array &$toolsPerCall): ProviderInterface
+    {
+        $toolsPerCall = [];
+        $mock = $this->createMock(ProviderInterface::class);
+        $mock->method('name')->willReturn('anthropic');
+        $mock->method('model')->willReturn('claude-haiku-4-5-20251001');
+        $mock->method('send')->willReturnCallback(function (array $messages, array $tools = []) use ($responses, &$toolsPerCall): array {
+            $toolsPerCall[] = $tools;
+
+            return $responses[count($toolsPerCall) - 1] ?? ['type' => 'text', 'text' => 'fallback'];
+        });
+
+        return $mock;
+    }
+
+    private function registryWithOneTool(): ToolRegistry
+    {
+        $registry = new ToolRegistry;
+        $registry->register([$this->makeTool('code_search')]);
+
+        return $registry;
+    }
+
+    public function test_empty_reply_after_spending_tokens_with_tools_offered_retries_once_without_tools(): void
+    {
+        $provider = $this->makeToolRecordingProvider([
+            ['type' => 'text', 'text' => '', 'output_tokens' => 51],
+            ['type' => 'text', 'text' => 'Use prepared statements.', 'output_tokens' => 900],
+        ], $toolsPerCall);
+
+        $response = (new Agent($provider, $this->registryWithOneTool()))->run('Review this PHP code');
+
+        $this->assertSame('Use prepared statements.', $response->text);
+        $this->assertCount(2, $toolsPerCall);
+        $this->assertCount(1, $toolsPerCall[0]);
+        $this->assertSame([], $toolsPerCall[1]);
+    }
+
+    public function test_whitespace_only_reply_after_spending_tokens_counts_as_empty(): void
+    {
+        $provider = $this->makeToolRecordingProvider([
+            ['type' => 'text', 'text' => "  \n", 'output_tokens' => 20],
+            ['type' => 'text', 'text' => 'Answer.', 'output_tokens' => 30],
+        ], $toolsPerCall);
+
+        $response = (new Agent($provider, $this->registryWithOneTool()))->run('Review this PHP code');
+
+        $this->assertSame('Answer.', $response->text);
+        $this->assertCount(2, $toolsPerCall);
+    }
+
+    public function test_empty_reply_with_zero_output_tokens_is_returned_as_is(): void
+    {
+        $provider = $this->makeToolRecordingProvider([
+            ['type' => 'text', 'text' => '', 'output_tokens' => 0],
+        ], $toolsPerCall);
+
+        $response = (new Agent($provider, $this->registryWithOneTool()))->run('Review this PHP code');
+
+        $this->assertSame('', $response->text);
+        $this->assertCount(1, $toolsPerCall);
+    }
+
+    public function test_empty_reply_without_tools_offered_is_returned_as_is(): void
+    {
+        $provider = $this->makeToolRecordingProvider([
+            ['type' => 'text', 'text' => '', 'output_tokens' => 51],
+        ], $toolsPerCall);
+
+        $response = (new Agent($provider, new ToolRegistry))->run('Review this PHP code');
+
+        $this->assertSame('', $response->text);
+        $this->assertCount(1, $toolsPerCall);
+    }
+
+    public function test_non_empty_reply_with_tools_offered_is_returned_without_a_retry(): void
+    {
+        $provider = $this->makeToolRecordingProvider([
+            ['type' => 'text', 'text' => 'Direct answer.', 'output_tokens' => 12],
+        ], $toolsPerCall);
+
+        $response = (new Agent($provider, $this->registryWithOneTool()))->run('Review this PHP code');
+
+        $this->assertSame('Direct answer.', $response->text);
+        $this->assertCount(1, $toolsPerCall);
+    }
+
+    public function test_empty_reply_retries_only_once(): void
+    {
+        $provider = $this->makeToolRecordingProvider([
+            ['type' => 'text', 'text' => '', 'output_tokens' => 51],
+            ['type' => 'text', 'text' => '', 'output_tokens' => 40],
+        ], $toolsPerCall);
+
+        $response = (new Agent($provider, $this->registryWithOneTool()))->run('Review this PHP code');
+
+        $this->assertSame('', $response->text);
+        $this->assertCount(2, $toolsPerCall);
+    }
+
+    public function test_empty_reply_retry_fires_tool_error_with_the_empty_response_marker(): void
+    {
+        HookRegistry::reset();
+        $errors = [];
+        HookRegistry::on(LifecycleEvent::ToolError->value, function (array $context) use (&$errors): void {
+            $errors[] = $context;
+        });
+        $provider = $this->makeToolRecordingProvider([
+            ['type' => 'text', 'text' => '', 'output_tokens' => 51],
+            ['type' => 'text', 'text' => 'Answer.', 'output_tokens' => 30],
+        ], $toolsPerCall);
+
+        try {
+            (new Agent($provider, $this->registryWithOneTool()))->run('Review this PHP code');
+        } finally {
+            HookRegistry::reset();
+        }
+
+        $this->assertCount(1, $errors);
+        $this->assertSame('(empty-response)', $errors[0]['tool_name']);
+    }
+
+    public function test_claw_send_turns_a_lost_tool_call_into_a_real_answer(): void
+    {
+        $provider = $this->makeToolRecordingProvider([
+            ['type' => 'text', 'text' => '', 'output_tokens' => 72],
+            ['type' => 'text', 'text' => 'Use prepared statements.', 'output_tokens' => 531],
+        ], $toolsPerCall);
+
+        $response = Claw::builder()
+            ->providerOverride($provider)
+            ->tools([$this->makeTool('code_search')])
+            ->build()
+            ->send('Review this PHP code');
+
+        $this->assertSame('Use prepared statements.', $response->text);
+        $this->assertNotSame([], $toolsPerCall[0]);
+        $this->assertSame([], $toolsPerCall[1]);
     }
 }
