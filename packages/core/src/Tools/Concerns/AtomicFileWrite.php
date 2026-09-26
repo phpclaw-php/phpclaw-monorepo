@@ -27,14 +27,14 @@ trait AtomicFileWrite
      */
     private function writeAtomically(string $absolutePath, string $content, string $relativePath, string $toolLabel, string $tempPrefix): void
     {
-        $dir = dirname($absolutePath);
-        $tempPath = tempnam($dir, ".phpclaw-{$tempPrefix}-");
+        $directory = dirname($absolutePath);
+        $tempPath = tempnam($directory, ".phpclaw-{$tempPrefix}-");
 
         if ($tempPath === false) {
             throw new ToolException("{$toolLabel}: failed to create temp file for write.");
         }
 
-        if (dirname($tempPath) !== $dir) {
+        if (dirname($tempPath) !== $directory) {
             @unlink($tempPath);
             throw new ToolException("{$toolLabel}: cannot write atomically: target directory is not writable.");
         }
@@ -46,20 +46,7 @@ trait AtomicFileWrite
                 throw new ToolException("{$toolLabel}: failed to write: ".$this->sanitizeForMessage($relativePath));
             }
 
-            $perms = @fileperms($absolutePath);
-            if ($perms !== false) {
-                @chmod($tempPath, $perms & 0777);
-            }
-
-            $owner = @fileowner($absolutePath);
-            if ($owner !== false) {
-                @chown($tempPath, $owner);
-            }
-
-            $group = @filegroup($absolutePath);
-            if ($group !== false) {
-                @chgrp($tempPath, $group);
-            }
+            $this->copyFileMetadata($absolutePath, $tempPath);
 
             if (! rename($tempPath, $absolutePath)) {
                 throw new ToolException("{$toolLabel}: failed to finalize write: ".$this->sanitizeForMessage($relativePath));
@@ -68,6 +55,31 @@ trait AtomicFileWrite
             if (file_exists($tempPath)) {
                 @unlink($tempPath);
             }
+        }
+    }
+
+    /**
+     * Copy filesystem metadata (mode, owner, group) from one path to another, best-effort.
+     *
+     * @param  string  $source  Path to read metadata from.
+     * @param  string  $target  Path to apply metadata to.
+     * @return void
+     */
+    private function copyFileMetadata(string $source, string $target): void
+    {
+        $permissions = @fileperms($source);
+        if ($permissions !== false) {
+            @chmod($target, $permissions & 0777);
+        }
+
+        $owner = @fileowner($source);
+        if ($owner !== false) {
+            @chown($target, $owner);
+        }
+
+        $group = @filegroup($source);
+        if ($group !== false) {
+            @chgrp($target, $group);
         }
     }
 }

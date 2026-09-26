@@ -23,13 +23,25 @@ use PhpClaw\Providers\OpenAIProvider;
 use PhpClaw\Providers\ProviderRegistry;
 
 /**
- * Immutable configuration value object: produced by ClawBuilder and consumed by PhpClaw.
+ * Immutable configuration value object: produced by ClawBuilder and consumed by Claw.
  */
 final class ClawConfig
 {
     public const DEFAULT_MAX_ITERATIONS = LoopConfig::DEFAULT_MAX_ITERATIONS;
 
     public const DEFAULT_SHELL_ALLOWLIST = ToolConfig::DEFAULT_SHELL_ALLOWLIST;
+
+    private const DEFAULT_MEMORY_DRIVER = 'file';
+
+    private const PROVIDER_ENV_MAP = [
+        EnvVars::ANTHROPIC_API_KEY => 'anthropic',
+        EnvVars::OPENAI_API_KEY => 'openai',
+        EnvVars::GROQ_API_KEY => 'groq',
+        EnvVars::GEMINI_API_KEY => 'gemini',
+        EnvVars::MISTRAL_API_KEY => 'mistral',
+        EnvVars::DEEPSEEK_API_KEY => 'deepseek',
+        EnvVars::OLLAMA_HOST => 'ollama',
+    ];
 
     public readonly string $apiKey;
 
@@ -127,7 +139,7 @@ final class ClawConfig
             ? $provider->apiKey
             : $this->resolveApiKey($this->providerName);
 
-        $this->model = $provider->model !== '' ? $provider->model : $this->env(EnvVars::PHPCLAW_MODEL);
+        $this->model = $provider->model !== '' ? $provider->model : EnvVars::get(EnvVars::PHPCLAW_MODEL);
         $this->systemPrompt = $provider->systemPrompt;
         $this->maxTokens = $provider->maxTokens;
         $this->promptCache = $provider->promptCache;
@@ -178,7 +190,7 @@ final class ClawConfig
      *
      * @return ProviderInterface Fully wired provider matching $providerName, ready to send/stream.
      *
-     * @throws AdapterException If no API key is found (built-in) or provider is unknown.
+     * @throws AdapterException When no API key is found, the provider slug is unknown, or fromConfig() returns an invalid type.
      */
     public function buildProvider(): ProviderInterface
     {
@@ -222,7 +234,7 @@ final class ClawConfig
      *
      * @throws MemoryException If the driver is not registered in MemoryRegistry.
      */
-    public function buildMemory(string $driver = 'file'): MemoryInterface
+    public function buildMemory(string $driver = self::DEFAULT_MEMORY_DRIVER): MemoryInterface
     {
         return MemoryRegistry::build($driver);
     }
@@ -268,7 +280,7 @@ final class ClawConfig
     private function resolvePresetEndpoint(string $slug, array $preset): string
     {
         if ($slug === 'custom') {
-            $base = $this->env(EnvVars::OPENAI_BASE_URL);
+            $base = EnvVars::get(EnvVars::OPENAI_BASE_URL);
             if ($base === '') {
                 throw new AdapterException(
                     'Custom provider requires a base URL. Set OPENAI_BASE_URL to the full /chat/completions endpoint.'
@@ -279,7 +291,7 @@ final class ClawConfig
         }
 
         if ($slug === 'ollama') {
-            $host = $this->env(EnvVars::OLLAMA_HOST);
+            $host = EnvVars::get(EnvVars::OLLAMA_HOST);
             if ($host !== '') {
                 return rtrim($host, '/').'/v1/chat/completions';
             }
@@ -295,31 +307,15 @@ final class ClawConfig
      */
     private function detectProviderName(): string
     {
-        $override = $this->env(EnvVars::PHPCLAW_PROVIDER);
+        $override = EnvVars::get(EnvVars::PHPCLAW_PROVIDER);
         if ($override !== '') {
             return strtolower($override);
         }
 
-        if ($this->env(EnvVars::ANTHROPIC_API_KEY) !== '') {
-            return 'anthropic';
-        }
-        if ($this->env(EnvVars::OPENAI_API_KEY) !== '') {
-            return 'openai';
-        }
-        if ($this->env(EnvVars::GROQ_API_KEY) !== '') {
-            return 'groq';
-        }
-        if ($this->env(EnvVars::GEMINI_API_KEY) !== '') {
-            return 'gemini';
-        }
-        if ($this->env(EnvVars::MISTRAL_API_KEY) !== '') {
-            return 'mistral';
-        }
-        if ($this->env(EnvVars::DEEPSEEK_API_KEY) !== '') {
-            return 'deepseek';
-        }
-        if ($this->env(EnvVars::OLLAMA_HOST) !== '') {
-            return 'ollama';
+        foreach (self::PROVIDER_ENV_MAP as $envKey => $slug) {
+            if (EnvVars::get($envKey) !== '') {
+                return $slug;
+            }
         }
 
         return 'anthropic';
@@ -334,28 +330,17 @@ final class ClawConfig
     private function resolveApiKey(string $providerName): string
     {
         if ($providerName === 'anthropic') {
-            return $this->env(EnvVars::ANTHROPIC_API_KEY);
+            return EnvVars::get(EnvVars::ANTHROPIC_API_KEY);
         }
         if ($providerName === 'gemini') {
-            return $this->env(EnvVars::GEMINI_API_KEY);
+            return EnvVars::get(EnvVars::GEMINI_API_KEY);
         }
 
         $preset = OpenAIPresets::find($providerName);
         if ($preset !== null) {
-            return $preset['keyEnv'] !== '' ? $this->env($preset['keyEnv']) : '';
+            return $preset['keyEnv'] !== '' ? EnvVars::get($preset['keyEnv']) : '';
         }
 
         return '';
-    }
-
-    /**
-     * Read an environment variable via EnvVars::get() ($_ENV, $_SERVER, then getenv()).
-     *
-     * @param  string  $name  Environment variable name.
-     * @return string Non-empty value when found, otherwise ''.
-     */
-    private function env(string $name): string
-    {
-        return EnvVars::get($name);
     }
 }

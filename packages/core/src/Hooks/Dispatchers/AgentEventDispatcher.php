@@ -9,8 +9,6 @@ use PhpClaw\Hooks\LifecycleEvent;
 
 /**
  * Typed dispatchers for agent-lifecycle and context events.
- *
- * @internal
  */
 final class AgentEventDispatcher
 {
@@ -47,7 +45,7 @@ final class AgentEventDispatcher
      * @param  string  $model  Model identifier.
      * @param  bool  $streaming  Whether the request is streaming.
      * @param  string  $runId  Active run ID, if any.
-     * @param  array<int, mixed>  $history  History.
+     * @param  array<int, mixed>  $history  Conversation history sent this iteration.
      * @param  string  $parentRunId  Parent run ID, if any.
      * @return void
      */
@@ -85,7 +83,7 @@ final class AgentEventDispatcher
      * @param  string  $model  Model identifier.
      * @param  int  $iterations  Total iterations run.
      * @param  int  $durationMs  Duration in milliseconds.
-     * @param  array<int, mixed>  $toolsCalled  Tools called.
+     * @param  array<int, mixed>  $toolsCalled  List of tool names called during the run.
      * @param  bool  $streaming  Whether the request is streaming.
      * @param  string  $conversationId  Conversation identifier, if any.
      * @param  int|null  $cacheReadTokens  Cache-read token count, if reported.

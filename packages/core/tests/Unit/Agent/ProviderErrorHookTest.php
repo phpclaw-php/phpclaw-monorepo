@@ -196,4 +196,18 @@ final class ProviderErrorHookTest extends TestCase
 
         $agent->run('hello');
     }
+
+    public function test_negative_max_retries_still_attempts_once_and_throws_provider_exception(): void
+    {
+        $agent = new Agent(
+            provider: $this->makeFailingProvider('upstream down'),
+            tools: new ToolRegistry,
+            maxRetries: -1,
+        );
+
+        $this->expectException(ProviderException::class);
+        $this->expectExceptionMessage('upstream down');
+
+        $agent->run('hello');
+    }
 }

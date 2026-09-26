@@ -82,15 +82,15 @@ final class OutputSanitiser
     {
         $lower = mb_strtolower($text);
 
-        foreach (self::DANGEROUS_OUTPUT_FUNCTIONS as $fn) {
-            if (! str_contains($lower, $fn)) {
+        foreach (self::DANGEROUS_OUTPUT_FUNCTIONS as $functionName) {
+            if (! str_contains($lower, $functionName)) {
                 continue;
             }
 
-            HookDispatcher::guardOutputFunctionRedacted($fn);
+            HookDispatcher::guardOutputFunctionRedacted($functionName);
 
             $text = (string) preg_replace(
-                '/'.preg_quote($fn, '/').'/i',
+                '/'.preg_quote($functionName, '/').'/i',
                 self::DANGEROUS_FUNCTION_REPLACEMENT,
                 $text,
             );

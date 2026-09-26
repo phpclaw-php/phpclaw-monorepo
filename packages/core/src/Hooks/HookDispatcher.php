@@ -11,14 +11,11 @@ use PhpClaw\Hooks\Dispatchers\JobEventDispatcher;
 use PhpClaw\Hooks\Dispatchers\MemoryEventDispatcher;
 use PhpClaw\Hooks\Dispatchers\ProviderEventDispatcher;
 use PhpClaw\Hooks\Dispatchers\ShellEventDispatcher;
-use PhpClaw\Hooks\Dispatchers\SkillEventDispatcher;
 use PhpClaw\Hooks\Dispatchers\StreamEventDispatcher;
 use PhpClaw\Hooks\Dispatchers\ToolEventDispatcher;
 
 /**
  * Thin façade over the domain-specific event dispatchers in {@see PhpClaw\Hooks\Dispatchers}.
- *
- * @internal
  */
 final class HookDispatcher
 {
@@ -45,26 +42,6 @@ final class HookDispatcher
     public static function currentRunId(): string
     {
         return HookRunContext::currentRunId();
-    }
-
-    /**
-     * Return the active parent run ID from the hook run context.
-     *
-     * @return string The active parent run ID, or '' when none is set.
-     */
-    public static function currentParentRunId(): string
-    {
-        return HookRunContext::currentParentRunId();
-    }
-
-    /**
-     * Clear the active run ID context.
-     *
-     * @return void
-     */
-    public static function resetCurrentRunId(): void
-    {
-        HookRunContext::reset();
     }
 
     /**
@@ -781,79 +758,5 @@ final class HookDispatcher
         string $class,
     ): void {
         JobEventDispatcher::failed($jobId, $message, $error, $class);
-    }
-
-    /**
-     * Fires the skill.registered event via SkillEventDispatcher.
-     *
-     * @param  string  $key  Unique skill key.
-     * @param  string  $class  FQCN of the skill implementation.
-     * @param  string|null  $label  Optional human-readable label.
-     * @param  string  $runId  Active run ID, if any.
-     * @param  string  $parentRunId  Parent run ID, if any.
-     * @return void
-     */
-    public static function skillRegistered(
-        string $key,
-        string $class,
-        ?string $label = null,
-        string $runId = '',
-        string $parentRunId = '',
-    ): void {
-        SkillEventDispatcher::registered($key, $class, $label, $runId, $parentRunId);
-    }
-
-    /**
-     * Fires the skill.loaded event via SkillEventDispatcher.
-     *
-     * @param  string  $skillName  Registered skill name.
-     * @param  string  $skillClass  FQCN of the skill implementation.
-     * @param  string  $runId  Active run ID, if any.
-     * @param  string  $parentRunId  Parent run ID, if any.
-     * @return void
-     */
-    public static function skillLoaded(
-        string $skillName,
-        string $skillClass,
-        string $runId = '',
-        string $parentRunId = '',
-    ): void {
-        SkillEventDispatcher::loaded($skillName, $skillClass, $runId, $parentRunId);
-    }
-
-    /**
-     * Fires the skill.matched event via SkillEventDispatcher.
-     *
-     * @param  list<string>  $matchedSkills  Skills activated for this message.
-     * @param  string  $messageExcerpt  First 200 chars of the user message.
-     * @param  string  $runId  Active run ID, if any.
-     * @param  string  $parentRunId  Parent run ID, if any.
-     * @return void
-     */
-    public static function skillMatched(
-        array $matchedSkills,
-        string $messageExcerpt,
-        string $runId = '',
-        string $parentRunId = '',
-    ): void {
-        SkillEventDispatcher::matched($matchedSkills, $messageExcerpt, $runId, $parentRunId);
-    }
-
-    /**
-     * Fires the skill.not_matched event via SkillEventDispatcher.
-     *
-     * @param  string  $messageExcerpt  First 200 chars of the user message.
-     * @param  list<string>  $availableSkills  All registered skill names.
-     * @param  string  $runId  Active run ID, if any.
-     * @param  string  $parentRunId  Parent run ID, if any.
-     * @return void
-     */
-    public static function skillNotMatched(
-        string $messageExcerpt,
-        array $availableSkills,
-        string $runId = '',
-        string $parentRunId = '',
-    ): void {
-        SkillEventDispatcher::notMatched($messageExcerpt, $availableSkills, $runId, $parentRunId);
     }
 }

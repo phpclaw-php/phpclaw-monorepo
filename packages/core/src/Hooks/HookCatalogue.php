@@ -30,9 +30,9 @@ final class HookCatalogue implements CatalogueInterface
     }
 
     /**
-     * Look up a single hook by key.
+     * Look up a single hook by its registration key.
      *
-     * @param  string  $key  Storage key.
+     * @param  string  $key  Hook registration key.
      * @return array{event: string, class: class-string<HookInterface>, key: string, priority?: int, enabled_by_default?: bool, label?: string}|null
      */
     public static function find(string $key): ?array
@@ -47,13 +47,13 @@ final class HookCatalogue implements CatalogueInterface
     }
 
     /**
-     * Return the registered hook class names.
+     * Return every registered hook storage key.
      *
      * @return list<string>
      */
     public static function keys(): array
     {
-        return array_map(static fn (array $e): string => $e['key'], self::all());
+        return array_map(static fn (array $entry): string => $entry['key'], self::all());
     }
 
     /**
@@ -94,7 +94,7 @@ final class HookCatalogue implements CatalogueInterface
     ): void {
         self::$custom = array_values(array_filter(
             self::$custom,
-            static fn (array $e): bool => $e['key'] !== $key,
+            static fn (array $entry): bool => $entry['key'] !== $key,
         ));
 
         $entry = [
@@ -206,7 +206,7 @@ final class HookCatalogue implements CatalogueInterface
     /**
      * Bootstrap integration: invoked by {@see Bootstrap::activateFromSettings()}.
      *
-     * @param  array<string, mixed>  $settings  Settings.
+     * @param  array<string, mixed>  $settings  Adapter settings array; reads the 'hooks_enabled' key.
      * @return list<string> Always empty (hooks attach via HookRegistry::on).
      */
     public static function activateFromSettings(array $settings): array
@@ -235,7 +235,7 @@ final class HookCatalogue implements CatalogueInterface
     /**
      * Derive a snake_case key from a class FQCN.
      *
-     * @param  class-string  $fqcn  Fqcn.
+     * @param  class-string  $fqcn  Fully-qualified class name to derive the key from.
      * @return string
      */
     private static function keyFromClass(string $fqcn): string
@@ -266,37 +266,53 @@ final class HookCatalogue implements CatalogueInterface
                 continue;
             }
 
-            foreach ($entries as $i => $attr) {
-                $event = (string) ($attr['event'] ?? '');
-                if ($event === '') {
-                    continue;
+            foreach ($entries as $attr) {
+                $entry = self::normaliseAttributeEntry($class, $attr, count($entries));
+                if ($entry !== null) {
+                    $out[] = $entry;
                 }
-
-                $name = (string) ($attr['name'] ?? '');
-                if ($name === '') {
-                    $name = self::keyFromClass($class);
-                    if (count($entries) > 1) {
-                        $name .= '_'.str_replace('.', '_', $event);
-                    }
-                }
-
-                $entry = [
-                    'event' => $event,
-                    'class' => $class,
-                    'key' => $name,
-                    'priority' => (int) ($attr['priority'] ?? self::DEFAULT_PRIORITY),
-                    'enabled_by_default' => (bool) ($attr['enabledByDefault'] ?? false),
-                ];
-
-                $label = (string) ($attr['label'] ?? '');
-                if ($label !== '') {
-                    $entry['label'] = $label;
-                }
-
-                $out[] = $entry;
             }
         }
 
         return $out;
+    }
+
+    /**
+     * Normalise a single hook attribute into a catalogue entry, or return null when the event is missing.
+     *
+     * @param  class-string<HookInterface>  $class  Declaring class FQCN.
+     * @param  array<string, mixed>  $attr  Raw attribute data from the discovery cache.
+     * @param  int  $entryCount  Total number of attribute entries on $class (used to suffix duplicate keys).
+     * @return array{event: string, class: class-string<HookInterface>, key: string, priority: int, enabled_by_default: bool, label?: string}|null
+     */
+    private static function normaliseAttributeEntry(string $class, array $attr, int $entryCount): ?array
+    {
+        $event = (string) ($attr['event'] ?? '');
+        if ($event === '') {
+            return null;
+        }
+
+        $name = (string) ($attr['name'] ?? '');
+        if ($name === '') {
+            $name = self::keyFromClass($class);
+            if ($entryCount > 1) {
+                $name .= '_'.str_replace('.', '_', $event);
+            }
+        }
+
+        $entry = [
+            'event' => $event,
+            'class' => $class,
+            'key' => $name,
+            'priority' => (int) ($attr['priority'] ?? self::DEFAULT_PRIORITY),
+            'enabled_by_default' => (bool) ($attr['enabledByDefault'] ?? false),
+        ];
+
+        $label = (string) ($attr['label'] ?? '');
+        if ($label !== '') {
+            $entry['label'] = $label;
+        }
+
+        return $entry;
     }
 }

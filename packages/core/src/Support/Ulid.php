@@ -9,9 +9,9 @@ namespace PhpClaw\Support;
  */
 final class Ulid
 {
-    private const ENCODING = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
-
     public const LENGTH = 26;
+
+    private const ENCODING = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
 
     private const TIMESTAMP_LENGTH = 10;
 
@@ -43,16 +43,16 @@ final class Ulid
      */
     public static function generate(): string
     {
-        $ms = (int) (microtime(true) * self::MS_PER_SECOND);
+        $milliseconds = (int) (microtime(true) * self::MS_PER_SECOND);
 
-        if ($ms === self::$lastMs && self::$lastRandom !== '') {
+        if ($milliseconds === self::$lastMs && self::$lastRandom !== '') {
             self::$lastRandom = self::incrementRandom(self::$lastRandom);
         } else {
-            self::$lastMs = $ms;
+            self::$lastMs = $milliseconds;
             self::$lastRandom = self::encodeRandom();
         }
 
-        return self::encodeMs($ms).self::$lastRandom;
+        return self::encodeMs($milliseconds).self::$lastRandom;
     }
 
     /**
@@ -73,25 +73,25 @@ final class Ulid
     /**
      * Encode the given millisecond timestamp as 10 Base32 characters (big-endian).
      *
-     * @param  int  $ms  Millisecond timestamp.
+     * @param  int  $milliseconds  Millisecond timestamp.
      * @return string
      */
-    private static function encodeMs(int $ms): string
+    private static function encodeMs(int $milliseconds): string
     {
-        $enc = '';
+        $encoded = '';
 
         for ($i = self::TIMESTAMP_LENGTH - 1; $i >= 0; $i--) {
-            $enc = self::ENCODING[$ms & self::BASE32_MASK].$enc;
-            $ms >>= self::BASE32_BITS_PER_CHAR;
+            $encoded = self::ENCODING[$milliseconds & self::BASE32_MASK].$encoded;
+            $milliseconds >>= self::BASE32_BITS_PER_CHAR;
         }
 
-        return $enc;
+        return $encoded;
     }
 
     /**
      * Increment a 16-char Crockford Base32 string by 1 with carry.
      *
-     * @param  string  $random  Random component bytes.
+     * @param  string  $random  Current random component (16-char Crockford Base32 string).
      * @return string
      */
     private static function incrementRandom(string $random): string
@@ -100,12 +100,12 @@ final class Ulid
         $alphabet = self::ENCODING;
 
         for ($i = self::RANDOM_LENGTH - 1; $i >= 0; $i--) {
-            $pos = strpos($alphabet, $chars[$i]);
-            if ($pos === false) {
+            $position = strpos($alphabet, $chars[$i]);
+            if ($position === false) {
                 return self::encodeRandom();
             }
-            if ($pos < self::ENCODING_MAX_INDEX) {
-                $chars[$i] = self::ENCODING[$pos + 1];
+            if ($position < self::ENCODING_MAX_INDEX) {
+                $chars[$i] = self::ENCODING[$position + 1];
 
                 return implode('', $chars);
             }
@@ -122,12 +122,12 @@ final class Ulid
      */
     private static function encodeRandom(): string
     {
-        $enc = '';
+        $encoded = '';
 
         for ($i = 0; $i < self::RANDOM_LENGTH; $i++) {
-            $enc .= self::ENCODING[random_int(0, self::ENCODING_MAX_INDEX)];
+            $encoded .= self::ENCODING[random_int(0, self::ENCODING_MAX_INDEX)];
         }
 
-        return $enc;
+        return $encoded;
     }
 }

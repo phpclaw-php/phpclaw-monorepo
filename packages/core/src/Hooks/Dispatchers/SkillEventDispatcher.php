@@ -9,8 +9,6 @@ use PhpClaw\Hooks\LifecycleEvent;
 
 /**
  * Typed dispatchers for skill-activation lifecycle events.
- *
- * @internal
  */
 final class SkillEventDispatcher
 {
@@ -31,7 +29,12 @@ final class SkillEventDispatcher
         string $runId = '',
         string $parentRunId = '',
     ): void {
-        self::dispatch(LifecycleEvent::SkillRegistered, ['key' => $key, 'class' => $class, 'label' => $label], $runId, $parentRunId);
+        EventPayload::fire(
+            LifecycleEvent::SkillRegistered->value,
+            ['key' => $key, 'class' => $class, 'label' => $label],
+            runId: $runId,
+            parentRunId: $parentRunId,
+        );
     }
 
     /**
@@ -49,7 +52,12 @@ final class SkillEventDispatcher
         string $runId = '',
         string $parentRunId = '',
     ): void {
-        self::dispatch(LifecycleEvent::SkillLoaded, ['skill_name' => $skillName, 'skill_class' => $skillClass], $runId, $parentRunId);
+        EventPayload::fire(
+            LifecycleEvent::SkillLoaded->value,
+            ['skill_name' => $skillName, 'skill_class' => $skillClass],
+            runId: $runId,
+            parentRunId: $parentRunId,
+        );
     }
 
     /**
@@ -67,11 +75,16 @@ final class SkillEventDispatcher
         string $runId = '',
         string $parentRunId = '',
     ): void {
-        self::dispatch(LifecycleEvent::SkillMatched, [
-            'matched_skills' => $matchedSkills,
-            'message_excerpt' => $messageExcerpt,
-            'matched_count' => count($matchedSkills),
-        ], $runId, $parentRunId);
+        EventPayload::fire(
+            LifecycleEvent::SkillMatched->value,
+            [
+                'matched_skills' => $matchedSkills,
+                'message_excerpt' => $messageExcerpt,
+                'matched_count' => count($matchedSkills),
+            ],
+            runId: $runId,
+            parentRunId: $parentRunId,
+        );
     }
 
     /**
@@ -89,23 +102,14 @@ final class SkillEventDispatcher
         string $runId = '',
         string $parentRunId = '',
     ): void {
-        self::dispatch(LifecycleEvent::SkillNotMatched, [
-            'message_excerpt' => $messageExcerpt,
-            'available_skills' => $availableSkills,
-        ], $runId, $parentRunId);
-    }
-
-    /**
-     * Fire a skill lifecycle event via EventPayload.
-     *
-     * @param  LifecycleEvent  $event  Event to fire.
-     * @param  array<string, mixed>  $payload  Event context data.
-     * @param  string  $runId  Active run ID, if any.
-     * @param  string  $parentRunId  Parent run ID, if any.
-     * @return void
-     */
-    private static function dispatch(LifecycleEvent $event, array $payload, string $runId, string $parentRunId): void
-    {
-        EventPayload::fire($event->value, $payload, runId: $runId, parentRunId: $parentRunId);
+        EventPayload::fire(
+            LifecycleEvent::SkillNotMatched->value,
+            [
+                'message_excerpt' => $messageExcerpt,
+                'available_skills' => $availableSkills,
+            ],
+            runId: $runId,
+            parentRunId: $parentRunId,
+        );
     }
 }

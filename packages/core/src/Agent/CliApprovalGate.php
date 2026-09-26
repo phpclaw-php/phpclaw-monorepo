@@ -15,6 +15,10 @@ use PhpClaw\Tools\Contracts\ToolInterface;
  */
 final class CliApprovalGate implements ApprovalGateInterface
 {
+    private const PROMPT_SEPARATOR_WIDTH = 60;
+
+    private const DESCRIBE_EXCERPT_LENGTH = 80;
+
     /**
      * Approve or deny a pending tool call, non-mutating tools pass silently; mutating tools require STDIN confirmation.
      *
@@ -66,7 +70,7 @@ final class CliApprovalGate implements ApprovalGateInterface
      */
     private function prompt(string $toolName, array $toolInput): void
     {
-        $line = str_repeat('-', 60);
+        $line = str_repeat('-', self::PROMPT_SEPARATOR_WIDTH);
         echo "\n{$line}\n";
         echo "[phpClaw] Action requires approval\n";
         echo "  Tool   : {$toolName}\n";
@@ -88,21 +92,21 @@ final class CliApprovalGate implements ApprovalGateInterface
      * Render a one-line human description of the pending action.
      *
      * @param  string  $toolName  Tool awaiting approval.
-     * @param  array<string, mixed>  $in  Input the model supplied.
+     * @param  array<string, mixed>  $toolInput  Input the model supplied.
      * @return string Single-line action summary.
      */
-    private function describe(string $toolName, array $in): string
+    private function describe(string $toolName, array $toolInput): string
     {
         return match ($toolName) {
-            'file_write' => 'Write file: '.(string) ($in['path'] ?? $in['file'] ?? '?')
-                           .' ('.strlen((string) ($in['content'] ?? '')).' bytes)',
-            'file_edit' => 'Edit file: '.(string) ($in['file'] ?? '?')
-                           ."\n            OLD: ".mb_substr((string) ($in['old_str'] ?? ''), 0, 80)
-                           ."\n            NEW: ".mb_substr((string) ($in['new_str'] ?? ''), 0, 80),
-            'shell_exec' => 'Run: '.(string) ($in['command'] ?? '?'),
-            'zip_package' => 'Zip '.(string) ($in['source_dir'] ?? '?')
-                           .' -> '.(string) ($in['output_name'] ?? '?').'.zip',
-            default => (string) json_encode($in),
+            'file_write' => 'Write file: '.(string) ($toolInput['path'] ?? $toolInput['file'] ?? '?')
+                           .' ('.strlen((string) ($toolInput['content'] ?? '')).' bytes)',
+            'file_edit' => 'Edit file: '.(string) ($toolInput['file'] ?? '?')
+                           ."\n            OLD: ".mb_substr((string) ($toolInput['old_str'] ?? ''), 0, self::DESCRIBE_EXCERPT_LENGTH)
+                           ."\n            NEW: ".mb_substr((string) ($toolInput['new_str'] ?? ''), 0, self::DESCRIBE_EXCERPT_LENGTH),
+            'shell_exec' => 'Run: '.(string) ($toolInput['command'] ?? '?'),
+            'zip_package' => 'Zip '.(string) ($toolInput['source_dir'] ?? '?')
+                           .' -> '.(string) ($toolInput['output_name'] ?? '?').'.zip',
+            default => (string) json_encode($toolInput),
         };
     }
 }

@@ -22,6 +22,12 @@ final class RemoteToolActivator
 
     private const TIMEOUT = 5;
 
+    private const CACHE_DIR_MODE = 0700;
+
+    private const CACHE_FILE_MODE = 0600;
+
+    private const USER_AGENT = 'phpClaw-RemoteToolActivator/1.0';
+
     /**
      * Fetch and validate a remote tool profile.
      *
@@ -49,7 +55,7 @@ final class RemoteToolActivator
             return null;
         }
 
-        $data = json_decode($json, true);
+        $data = json_decode($json, associative: true);
         if (! is_array($data) || ! is_array($data['tools'] ?? null)) {
             Log::warning("[phpClaw] RemoteToolActivator: invalid profile at {$url}");
 
@@ -101,7 +107,7 @@ final class RemoteToolActivator
             CURLOPT_FAILONERROR => true,
             CURLOPT_SSL_VERIFYPEER => true,
             CURLOPT_SSL_VERIFYHOST => 2,
-            CURLOPT_USERAGENT => 'phpClaw-RemoteToolActivator/1.0',
+            CURLOPT_USERAGENT => self::USER_AGENT,
             CURLOPT_HTTPHEADER => ['Accept: application/json'],
         ];
 
@@ -125,7 +131,7 @@ final class RemoteToolActivator
         $dir = self::cacheDir();
         $cache = $dir.'/'.md5($url).'.json';
         if (! is_dir($dir)) {
-            @mkdir($dir, 0700, true);
+            @mkdir($dir, self::CACHE_DIR_MODE, recursive: true);
         }
         if (is_file($cache) && (time() - (int) filemtime($cache)) < self::CACHE_TTL) {
             $hit = file_get_contents($cache);
@@ -141,7 +147,7 @@ final class RemoteToolActivator
         }
 
         if (@file_put_contents($cache, $raw) !== false) {
-            @chmod($cache, 0600);
+            @chmod($cache, self::CACHE_FILE_MODE);
         }
 
         return $raw;
@@ -160,10 +166,6 @@ final class RemoteToolActivator
         curl_setopt_array($ch, self::buildCurlOptions($url, $resolved));
         $raw = curl_exec($ch);
         curl_close($ch);
-
-        if ($raw === false) {
-            return null;
-        }
 
         return is_string($raw) ? $raw : null;
     }

@@ -25,9 +25,7 @@ final class SkillResolver
 
         foreach ($entries as $entry) {
             if (! is_array($entry)) {
-                if ($onSkip !== null) {
-                    $onSkip($entry, 'not-an-array');
-                }
+                self::reportSkip($onSkip, $entry, 'not-an-array');
 
                 continue;
             }
@@ -55,9 +53,7 @@ final class SkillResolver
             try {
                 return new FileSkill($entry['file']);
             } catch (SkillException $e) {
-                if ($onSkip !== null) {
-                    $onSkip($entry, 'file-error: '.$e->getMessage());
-                }
+                self::reportSkip($onSkip, $entry, 'file-error: '.$e->getMessage());
 
                 return null;
             }
@@ -67,17 +63,13 @@ final class SkillResolver
             $class = $entry['class'];
 
             if (! class_exists($class)) {
-                if ($onSkip !== null) {
-                    $onSkip($entry, 'class-not-found: '.$class);
-                }
+                self::reportSkip($onSkip, $entry, 'class-not-found: '.$class);
 
                 return null;
             }
 
             if (! is_a($class, SkillInterface::class, true)) {
-                if ($onSkip !== null) {
-                    $onSkip($entry, 'class-not-a-skill: '.$class);
-                }
+                self::reportSkip($onSkip, $entry, 'class-not-a-skill: '.$class);
 
                 return null;
             }
@@ -94,10 +86,23 @@ final class SkillResolver
             );
         }
 
-        if ($onSkip !== null) {
-            $onSkip($entry, 'unrecognised-shape');
-        }
+        self::reportSkip($onSkip, $entry, 'unrecognised-shape');
 
         return null;
+    }
+
+    /**
+     * Invoke the skip callback when one is provided.
+     *
+     * @param  callable|null  $onSkip  Optional callback to invoke.
+     * @param  mixed  $entry  The skipped entry passed to the callback.
+     * @param  string  $reason  Machine-readable skip reason.
+     * @return void
+     */
+    private static function reportSkip(?callable $onSkip, mixed $entry, string $reason): void
+    {
+        if ($onSkip !== null) {
+            $onSkip($entry, $reason);
+        }
     }
 }

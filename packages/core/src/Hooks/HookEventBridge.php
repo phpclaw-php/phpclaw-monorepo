@@ -21,7 +21,7 @@ final class HookEventBridge
     public function __construct(
         private readonly Closure $dispatcher,
         private readonly ?array $events = null,
-        private readonly int $priority = 50,
+        private readonly int $priority = HookCatalogue::DEFAULT_PRIORITY,
     ) {}
 
     /**
@@ -55,7 +55,7 @@ final class HookEventBridge
     /**
      * Bridge listener priority used when registering against HookRegistry.
      *
-     * @return int The resulting count.
+     * @return int The configured HookRegistry listener priority.
      */
     public function priority(): int
     {

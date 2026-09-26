@@ -46,6 +46,12 @@ final class FileReadTool implements AuthorizableToolInterface, ResettableInterfa
 
     private const NOISE_BLOCKED_DIRS = BlockedPaths::NOISE_DIRS;
 
+    private readonly int $maxBytes;
+
+    private readonly bool $followSymlinks;
+
+    private readonly array $noiseBlockedDirs;
+
     private readonly string $workspaceRootConfigured;
 
     private ?string $workspaceRootResolved = null;
@@ -63,14 +69,16 @@ final class FileReadTool implements AuthorizableToolInterface, ResettableInterfa
      */
     public function __construct(
         ?string $workspaceRoot = null,
-        private readonly int $maxBytes = self::DEFAULT_MAX_BYTES,
-        private readonly bool $followSymlinks = false,
-        private readonly array $noiseBlockedDirs = self::NOISE_BLOCKED_DIRS,
+        int $maxBytes = self::DEFAULT_MAX_BYTES,
+        bool $followSymlinks = false,
+        array $noiseBlockedDirs = self::NOISE_BLOCKED_DIRS,
     ) {
+        $this->maxBytes = $maxBytes;
+        $this->followSymlinks = $followSymlinks;
+        $this->noiseBlockedDirs = $noiseBlockedDirs;
         if ($this->maxBytes < 1) {
             throw new \InvalidArgumentException('maxBytes must be greater than 0.');
         }
-
         $this->workspaceRootConfigured = rtrim(
             $workspaceRoot ?? (getcwd().DIRECTORY_SEPARATOR.self::DEFAULT_WORKSPACE_SUBPATH),
             DIRECTORY_SEPARATOR
@@ -397,15 +405,15 @@ final class FileReadTool implements AuthorizableToolInterface, ResettableInterfa
      */
     private function checkExtension(string $path): void
     {
-        $ext = strtolower(pathinfo($path, PATHINFO_EXTENSION));
+        $extension = strtolower(pathinfo($path, PATHINFO_EXTENSION));
         $basename = strtolower(basename($path));
 
         if ($basename === '.env' || str_starts_with($basename, '.env.')) {
             throw new ToolException("Access to '".$this->sanitizeForMessage($basename)."' files is blocked.");
         }
 
-        if ($ext !== '' && in_array($ext, self::BLOCKED_EXTENSIONS, true)) {
-            throw new ToolException("Files with extension '.".$this->sanitizeForMessage($ext)."' are blocked.");
+        if ($extension !== '' && in_array($extension, self::BLOCKED_EXTENSIONS, true)) {
+            throw new ToolException("Files with extension '.".$this->sanitizeForMessage($extension)."' are blocked.");
         }
     }
 
@@ -428,7 +436,7 @@ final class FileReadTool implements AuthorizableToolInterface, ResettableInterfa
     }
 
     /**
-     * Make a model-supplied path forgiving by stripping any workspace prefix duplication. A stripped candidate is only used when it resolves to a real file that the unstripped candidate does not, an ambiguous tail (both exist, or neither does) is left unchanged rather than guessed at. A genuinely absolute path that does NOT duplicate the workspace root (e.g. "/etc/passwd") is rejected outright rather than silently reinterpreted as workspace-relative, which used to produce a confusing "File not found" instead of a clear rejection.
+     * Make a model-supplied path forgiving by stripping any workspace prefix duplication. A stripped candidate is only used when it resolves to a real file that the unstripped candidate does not, an ambiguous tail (both exist, or neither does) is left unchanged rather than guessed at. A genuinely absolute path that does NOT duplicate the workspace root (e.g. "/etc/passwd") is rejected outright rather than silently reinterpreted as workspace-relative.
      *
      * @param  string  $path  Raw path supplied by the LLM.
      * @return string Normalised workspace-relative path.

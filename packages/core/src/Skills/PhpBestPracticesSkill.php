@@ -18,6 +18,10 @@ use PhpClaw\Skills\Contracts\SkillInterface;
 )]
 final class PhpBestPracticesSkill implements SkillInterface
 {
+    public const DEFAULT_DESCRIPTION = 'PHP coding standards and best practices injected for code review and refactoring tasks';
+
+    private const DEFAULT_NAME = 'php_best_practices';
+
     private const DEFAULT_TAGS = [
         'php', 'code', 'review', 'refactor', 'best', 'practices',
         'clean', 'quality', 'standard', 'style', 'lint', 'analyse',
@@ -40,6 +44,10 @@ final class PhpBestPracticesSkill implements SkillInterface
 - `declare(strict_types=1)` + `final` + explicit return types is the minimum bar for any new class.
 SKILL;
 
+    private readonly string $name;
+
+    private readonly string $description;
+
     private readonly array $tags;
 
     private readonly string $renderedContent;
@@ -55,12 +63,14 @@ SKILL;
      * @return void
      */
     public function __construct(
-        private readonly string $name = 'php_best_practices',
-        private readonly string $description = 'PHP coding standards and best practices injected for code review and refactoring tasks',
+        string $name = self::DEFAULT_NAME,
+        string $description = self::DEFAULT_DESCRIPTION,
         array $extraTags = [],
         array $extraRules = [],
         ?string $contentOverride = null,
     ) {
+        $this->name = $name;
+        $this->description = $description;
         $this->tags = array_values(array_unique([...self::DEFAULT_TAGS, ...$extraTags]));
 
         if ($contentOverride !== null) {

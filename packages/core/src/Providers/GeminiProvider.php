@@ -18,7 +18,7 @@ use PhpClaw\Providers\Tools\WebSearch;
 /**
  * Google Gemini provider - default model gemini-3.5-flash-lite, API key via query parameter.
  */
-#[Provider(name: 'gemini', defaultModel: 'gemini-3.5-flash-lite', label: 'Gemini', since: '1.0.0')]
+#[Provider(name: 'gemini', defaultModel: self::DEFAULT_MODEL, label: 'Gemini', since: '1.0.0')]
 final class GeminiProvider implements ProviderInterface, SupportsWebSearchInterface
 {
     use HasProviderTools;
@@ -49,9 +49,17 @@ final class GeminiProvider implements ProviderInterface, SupportsWebSearchInterf
 
     private const LEGACY_MODEL_PREFIX = 'gemini-1.';
 
+    private readonly string $apiKey;
+
     private readonly RawHttpClient $http;
 
     private readonly StreamParser $parser;
+
+    private readonly string $model;
+
+    private readonly string $systemPrompt;
+
+    private readonly int $maxTokens;
 
     private readonly string $baseUrl;
 
@@ -68,17 +76,21 @@ final class GeminiProvider implements ProviderInterface, SupportsWebSearchInterf
      * @return void
      */
     public function __construct(
-        private readonly string $apiKey,
+        string $apiKey,
         ?RawHttpClient $http = null,
         ?StreamParser $parser = null,
-        private readonly string $model = self::DEFAULT_MODEL,
-        private readonly string $systemPrompt = '',
-        private readonly int $maxTokens = 0,
+        string $model = self::DEFAULT_MODEL,
+        string $systemPrompt = '',
+        int $maxTokens = 0,
         string $baseUrl = '',
     ) {
+        $this->apiKey = $apiKey;
         $this->http = $http ?? new RawHttpClient;
         $this->parser = $parser ?? new StreamParser;
-        $this->baseUrl = $baseUrl !== '' ? $baseUrl : self::DEFAULT_BASE_URL;
+        $this->model = $model;
+        $this->systemPrompt = $systemPrompt;
+        $this->maxTokens = $maxTokens;
+        $this->baseUrl = $baseUrl === '' ? self::DEFAULT_BASE_URL : $baseUrl;
     }
 
     /**
@@ -111,7 +123,7 @@ final class GeminiProvider implements ProviderInterface, SupportsWebSearchInterf
         $url = $this->buildUrl(self::OPERATION_GENERATE);
         $body = $this->buildBody($messages, $tools);
 
-        $raw = $this->http->post($url, $this->headers(), $body);
+        $raw = $this->http->post($url, [], $body);
 
         return $this->parseResponse($raw);
     }
@@ -134,7 +146,7 @@ final class GeminiProvider implements ProviderInterface, SupportsWebSearchInterf
 
         $this->http->stream(
             url: $url,
-            headers: $this->headers(),
+            headers: [],
             body: $body,
             onChunk: function (string $chunk) use (&$assembled, $onToken): void {
                 $token = $this->parser->parseLine($chunk);
@@ -198,16 +210,6 @@ final class GeminiProvider implements ProviderInterface, SupportsWebSearchInterf
     private function buildUrl(string $operation): string
     {
         return $this->baseUrl.'/'.$this->model.$operation.'?key='.urlencode($this->apiKey);
-    }
-
-    /**
-     * Gemini auth is via query parameter. Content-Type is added by RawHttpClient.
-     *
-     * @return array<string, string>
-     */
-    private function headers(): array
-    {
-        return [];
     }
 
     /**
@@ -279,29 +281,7 @@ final class GeminiProvider implements ProviderInterface, SupportsWebSearchInterf
 
         foreach ($messages as $message) {
             if ($message->isBatchToolUse()) {
-                $parts = [];
-                foreach ($message->batchCalls ?? [] as $call) {
-                    $parts[] = [
-                        'functionCall' => [
-                            'name' => $call['tool_name'],
-                            'args' => ($call['tool_input'] ?? null) === null || $call['tool_input'] === [] ? new \stdClass : $call['tool_input'],
-                        ],
-                    ];
-                }
-                $contents[] = ['role' => 'model', 'parts' => $parts];
-
-                $callsByToolUseId = array_column($message->batchCalls ?? [], null, 'tool_use_id');
-                $resultParts = [];
-                foreach ($message->batchResults ?? [] as $toolUseId => $result) {
-                    $callName = $callsByToolUseId[$toolUseId]['tool_name'] ?? $toolUseId;
-                    $resultParts[] = [
-                        'functionResponse' => [
-                            'name' => $callName,
-                            'response' => ['content' => $result],
-                        ],
-                    ];
-                }
-                $contents[] = ['role' => 'user', 'parts' => $resultParts];
+                array_push($contents, ...$this->formatBatchToolUseContents($message));
 
                 continue;
             }
@@ -346,6 +326,42 @@ final class GeminiProvider implements ProviderInterface, SupportsWebSearchInterf
     }
 
     /**
+     * Convert a batch tool-use Message into the model + user content pair for the Gemini wire format.
+     *
+     * @param  Message  $message  A batch tool-use message containing batchCalls and batchResults.
+     * @return array<int, array<string, mixed>> Two entries: model functionCall parts followed by user functionResponse parts.
+     */
+    private function formatBatchToolUseContents(Message $message): array
+    {
+        $parts = [];
+        foreach ($message->batchCalls ?? [] as $call) {
+            $parts[] = [
+                'functionCall' => [
+                    'name' => $call['tool_name'],
+                    'args' => ($call['tool_input'] ?? null) === null || $call['tool_input'] === [] ? new \stdClass : $call['tool_input'],
+                ],
+            ];
+        }
+
+        $callsByToolUseId = array_column($message->batchCalls ?? [], null, 'tool_use_id');
+        $resultParts = [];
+        foreach ($message->batchResults ?? [] as $toolUseId => $result) {
+            $callName = $callsByToolUseId[$toolUseId]['tool_name'] ?? $toolUseId;
+            $resultParts[] = [
+                'functionResponse' => [
+                    'name' => $callName,
+                    'response' => ['content' => $result],
+                ],
+            ];
+        }
+
+        return [
+            ['role' => 'model', 'parts' => $parts],
+            ['role' => 'user', 'parts' => $resultParts],
+        ];
+    }
+
+    /**
      * Convert OpenAI-format tool schemas (from ToolRegistry) to Gemini's functionDeclarations.
      *
      * @param  array<int, array<string, mixed>>  $tools  Tool schemas in OpenAI function format.
@@ -377,12 +393,12 @@ final class GeminiProvider implements ProviderInterface, SupportsWebSearchInterf
             return $schema;
         }
 
-        foreach (self::SCHEMA_KEYWORDS_TO_STRIP as $k) {
-            unset($schema[$k]);
+        foreach (self::SCHEMA_KEYWORDS_TO_STRIP as $keyword) {
+            unset($schema[$keyword]);
         }
 
         if (isset($schema['type']) && is_array($schema['type'])) {
-            $types = array_values(array_filter($schema['type'], static fn (string $t): bool => $t !== 'null'));
+            $types = array_values(array_filter($schema['type'], static fn (string $type): bool => $type !== 'null'));
             if (count($types) !== count($schema['type'])) {
                 $schema['nullable'] = true;
             }
@@ -391,7 +407,7 @@ final class GeminiProvider implements ProviderInterface, SupportsWebSearchInterf
 
         if (isset($schema['enum']) && is_array($schema['enum'])) {
             $schema['type'] = 'string';
-            $schema['enum'] = array_map(static fn (mixed $v): string => (string) $v, $schema['enum']);
+            $schema['enum'] = array_map(static fn (mixed $value): string => (string) $value, $schema['enum']);
         }
 
         foreach ($schema as $key => $value) {
@@ -455,11 +471,11 @@ final class GeminiProvider implements ProviderInterface, SupportsWebSearchInterf
             if (! isset($part['functionCall'])) {
                 continue;
             }
-            $fc = $part['functionCall'];
+            $functionCall = $part['functionCall'];
             $calls[] = [
                 'tool_use_id' => 'gemini-'.uniqid(),
-                'tool_name' => (string) ($fc['name'] ?? ''),
-                'tool_input' => (array) ($fc['args'] ?? []),
+                'tool_name' => (string) ($functionCall['name'] ?? ''),
+                'tool_input' => (array) ($functionCall['args'] ?? []),
             ];
         }
 

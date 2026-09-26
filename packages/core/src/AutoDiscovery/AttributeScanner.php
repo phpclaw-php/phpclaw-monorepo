@@ -14,29 +14,22 @@ use ReflectionClass;
 
 /**
  * Walks Composer's classmap, filters to the `PhpClaw\` namespace, reflects each class for any of the six phpClaw discovery attributes, and returns a structured inventory.
- *
- * @internal
  */
 final class AttributeScanner
 {
+    public const BUCKET_KEYS = ['tools', 'providers', 'memory', 'skills', 'hooks', 'guards'];
+
     /**
      * Walk every class in Composer's classmap whose FQCN starts with `PhpClaw\` and bucket attribute-carrying classes into a structured map.
      *
-     * @param  list<string>|null  $classes  Classes.
+     * @param  list<string>|null  $classes  Pre-resolved class list; when null, built from classmap and PSR-4.
      * @param  string|null  $classmapPath  Path to the Composer classmap file.
      * @param  string|null  $psr4Path  Path to the PSR-4 autoload map.
      * @return array<string, mixed>
      */
     public static function scan(?array $classes = null, ?string $classmapPath = null, ?string $psr4Path = null): array
     {
-        $bucket = [
-            'tools' => [],
-            'providers' => [],
-            'memory' => [],
-            'skills' => [],
-            'hooks' => [],
-            'guards' => [],
-        ];
+        $bucket = array_fill_keys(self::BUCKET_KEYS, []);
 
         $candidates = $classes ?? self::candidateClasses($classmapPath, $psr4Path);
 
@@ -67,13 +60,28 @@ final class AttributeScanner
     }
 
     /**
+     * Build candidate file paths under `vendor/composer/` for a given filename, covering the monorepo dev layout and a single installed-package layout.
+     *
+     * @param  string  $filename  File or path component to append to each candidate directory.
+     * @return list<string> Absolute candidate paths (may or may not exist).
+     */
+    public static function composerVendorPaths(string $filename): array
+    {
+        return [
+            __DIR__.'/../../vendor/composer/'.$filename,
+            __DIR__.'/../../../../../vendor/composer/'.$filename,
+            __DIR__.'/../../../../../../vendor/composer/'.$filename,
+        ];
+    }
+
+    /**
      * Collect candidate `PhpClaw\` classes from BOTH the classmap and the PSR-4 prefix table, de-duplicated as a flat list.
      *
      * @param  string|null  $classmapPath  Path to the Composer classmap file.
      * @param  string|null  $psr4Path  Path to the PSR-4 autoload map.
      * @return list<string>
      */
-    private static function candidateClasses(?string $classmapPath, ?string $psr4Path = null): array
+    private static function candidateClasses(?string $classmapPath, ?string $psr4Path): array
     {
         $classmapPath ??= self::defaultClassmapPath();
         $psr4Path ??= self::defaultPsr4Path();
@@ -88,9 +96,7 @@ final class AttributeScanner
             $candidates[$class] = true;
         }
 
-        $list = array_keys($candidates);
-
-        return $list;
+        return array_keys($candidates);
     }
 
     /**
@@ -129,21 +135,58 @@ final class AttributeScanner
      */
     private static function classesFromPsr4(string $psr4Path): array
     {
-        if ($psr4Path === '' || ! is_file($psr4Path)) {
+        $psr4 = self::loadPsr4Map($psr4Path);
+
+        if ($psr4 === false) {
             return [];
+        }
+
+        $subRoots = self::collectSubRoots($psr4);
+        $classes = [];
+
+        foreach ($psr4 as $prefix => $dirs) {
+            if (! is_string($prefix) || ! str_starts_with($prefix, 'PhpClaw\\') || str_contains($prefix, '\\Tests\\') || ! is_array($dirs)) {
+                continue;
+            }
+
+            $classes = [...$classes, ...self::classesFromPhpClawPrefix($prefix, $dirs, $subRoots)];
+        }
+
+        return $classes;
+    }
+
+    /**
+     * Load and validate a PSR-4 autoload map file.
+     *
+     * @param  string  $psr4Path  Path to the PSR-4 autoload map.
+     * @return array<string, mixed>|false The loaded map, or false when the file is missing or malformed.
+     */
+    private static function loadPsr4Map(string $psr4Path): array|false
+    {
+        if ($psr4Path === '' || ! is_file($psr4Path)) {
+            return false;
         }
 
         $psr4 = require $psr4Path;
 
-        if (! is_array($psr4)) {
-            return [];
-        }
+        return is_array($psr4) ? $psr4 : false;
+    }
 
+    /**
+     * Collect every distinct directory root from all prefix→dirs entries in the PSR-4 map.
+     *
+     * @param  array<string, mixed>  $psr4  Loaded PSR-4 autoload map.
+     * @return list<string> Normalised directory paths without trailing separator.
+     */
+    private static function collectSubRoots(array $psr4): array
+    {
         $subRoots = [];
+
         foreach ($psr4 as $otherPrefix => $otherDirs) {
             if (! is_string($otherPrefix) || ! is_array($otherDirs)) {
                 continue;
             }
+
             foreach ($otherDirs as $otherDir) {
                 if (is_string($otherDir) && is_dir($otherDir)) {
                     $subRoots[] = rtrim($otherDir, '/\\');
@@ -151,32 +194,33 @@ final class AttributeScanner
             }
         }
 
+        return $subRoots;
+    }
+
+    /**
+     * Derive FQCNs for every PHP file under the given dirs that belongs to $prefix, skipping sub-roots owned by a more-specific PSR-4 entry.
+     *
+     * @param  string  $prefix  Namespace prefix.
+     * @param  array<mixed>  $dirs  Directories mapped to this prefix.
+     * @param  list<string>  $subRoots  All sub-directory roots from the full PSR-4 map.
+     * @return list<string>
+     */
+    private static function classesFromPhpClawPrefix(string $prefix, array $dirs, array $subRoots): array
+    {
         $classes = [];
 
-        foreach ($psr4 as $prefix => $dirs) {
-            if (! is_string($prefix) || ! str_starts_with($prefix, 'PhpClaw\\')) {
-                continue;
-            }
-            if (str_contains($prefix, '\\Tests\\') || str_ends_with($prefix, '\\Tests\\')) {
-                continue;
-            }
-            if (! is_array($dirs)) {
+        foreach ($dirs as $dir) {
+            if (! is_string($dir) || ! is_dir($dir)) {
                 continue;
             }
 
-            foreach ($dirs as $dir) {
-                if (! is_string($dir) || ! is_dir($dir)) {
-                    continue;
-                }
+            $skip = array_values(array_filter(
+                $subRoots,
+                static fn (string $sub): bool => $sub !== rtrim($dir, '/\\') && str_starts_with($sub, rtrim($dir, '/\\').'/'),
+            ));
 
-                $skip = array_values(array_filter(
-                    $subRoots,
-                    static fn (string $sub): bool => $sub !== rtrim($dir, '/\\') && str_starts_with($sub, rtrim($dir, '/\\').'/'),
-                ));
-
-                foreach (self::derivePhpClassesUnder($prefix, $dir, $skip) as $class) {
-                    $classes[] = $class;
-                }
+            foreach (self::derivePhpClassesUnder($prefix, $dir, $skip) as $class) {
+                $classes[] = $class;
             }
         }
 
@@ -191,7 +235,7 @@ final class AttributeScanner
      * @param  list<string>  $skipRoots  Sub-directory roots owned by a more-specific PSR-4 prefix.
      * @return list<string>
      */
-    private static function derivePhpClassesUnder(string $prefix, string $dir, array $skipRoots = []): array
+    private static function derivePhpClassesUnder(string $prefix, string $dir, array $skipRoots): array
     {
         $dir = rtrim($dir, '/\\');
         $iterator = new \RecursiveIteratorIterator(
@@ -229,7 +273,7 @@ final class AttributeScanner
     /**
      * Resolve the default `vendor/composer/autoload_classmap.php` path by walking up from this file's location through standard Composer layouts.
      *
-     * @return string The resulting value.
+     * @return string Absolute path to the classmap file, or empty string when not found.
      */
     private static function defaultClassmapPath(): string
     {
@@ -239,7 +283,7 @@ final class AttributeScanner
     /**
      * Resolve the default `vendor/composer/autoload_psr4.php` path.
      *
-     * @return string The resulting value.
+     * @return string Absolute path to the PSR-4 map file, or empty string when not found.
      */
     private static function defaultPsr4Path(): string
     {
@@ -250,17 +294,11 @@ final class AttributeScanner
      * Walk standard composer-vendor layouts up the tree and return the first matching `vendor/composer/<filename>` that exists.
      *
      * @param  string  $filename  File name to resolve.
-     * @return string The resulting value.
+     * @return string Absolute path to the first matching file, or empty string when none found.
      */
     private static function firstExistingComposerFile(string $filename): string
     {
-        $candidates = [
-            __DIR__.'/../../vendor/composer/'.$filename,
-            __DIR__.'/../../../../../vendor/composer/'.$filename,
-            __DIR__.'/../../../../../../vendor/composer/'.$filename,
-        ];
-
-        foreach ($candidates as $path) {
+        foreach (self::composerVendorPaths($filename) as $path) {
             if (is_file($path)) {
                 return $path;
             }
@@ -273,7 +311,7 @@ final class AttributeScanner
      * Cheap namespace filter: keeps only classes inside the `PhpClaw\` namespace.
      *
      * @param  string  $class  Fully-qualified class name to test.
-     * @return bool True on success.
+     * @return bool True when the class belongs to the PhpClaw namespace.
      */
     private static function isPhpClawClass(string $class): bool
     {
@@ -284,7 +322,7 @@ final class AttributeScanner
      * Auto-discovery filter: excludes test-namespace classes that would otherwise be picked up by `composer dump-autoload` of an adapter's dev-deps.
      *
      * @param  string  $class  Fully-qualified class name to test.
-     * @return bool True on success.
+     * @return bool True when the class is a non-test PhpClaw class.
      */
     private static function isAutoDiscoverable(string $class): bool
     {
@@ -292,11 +330,11 @@ final class AttributeScanner
     }
 
     /**
-     * Collect a single (non-repeatable) attribute into the bucket as a name=>data map.
+     * Collect a single (non-repeatable) attribute into the bucket as a class=>data map.
      *
-     * @param  ReflectionClass<object>  $reflection  Reflection.
-     * @param  class-string  $attributeClass  Attribute class.
-     * @param  array<class-string, array<string, mixed>>  $bucket  Bucket.
+     * @param  ReflectionClass<object>  $reflection  Reflection of the class being scanned.
+     * @param  class-string  $attributeClass  Fully-qualified attribute class name to look for.
+     * @param  array<class-string, array<string, mixed>>  $bucket  Output map, mutated in-place.
      * @return void
      */
     private static function collectSingle(ReflectionClass $reflection, string $attributeClass, array &$bucket): void
@@ -315,9 +353,9 @@ final class AttributeScanner
     /**
      * Collect a repeatable attribute (Hook): every occurrence on the class is appended to the bucket entry for that class.
      *
-     * @param  ReflectionClass<object>  $reflection  Reflection.
-     * @param  class-string  $attributeClass  Attribute class.
-     * @param  array<class-string, list<array<string, mixed>>>  $bucket  Bucket.
+     * @param  ReflectionClass<object>  $reflection  Reflection of the class being scanned.
+     * @param  class-string  $attributeClass  Fully-qualified attribute class name to look for.
+     * @param  array<class-string, list<array<string, mixed>>>  $bucket  Output map, mutated in-place.
      * @return void
      */
     private static function collectRepeatable(ReflectionClass $reflection, string $attributeClass, array &$bucket): void

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace PhpClaw\Agent;
 
 use PhpClaw\Agent\Contracts\ApprovalGateInterface;
+use PhpClaw\Config\LoopConfig;
 use PhpClaw\Exceptions\HumanDeniedException;
 use PhpClaw\Exceptions\MaxIterationsException;
 use PhpClaw\Exceptions\ProviderException;
@@ -20,7 +21,7 @@ use PhpClaw\Tools\ToolRouter;
  */
 final class Agent
 {
-    public const DEFAULT_MAX_ITERATIONS = 20;
+    public const DEFAULT_MAX_ITERATIONS = LoopConfig::DEFAULT_MAX_ITERATIONS;
 
     public const DEFAULT_MAX_RETRIES = 0;
 
@@ -29,6 +30,34 @@ final class Agent
     private const CHARS_PER_TOKEN_ESTIMATE = 4;
 
     private const STREAM_CHUNK_BYTES = 10;
+
+    private const NANOS_PER_MILLISECOND = 1_000_000;
+
+    private const RESPONSE_TYPE_TEXT = 'text';
+
+    private const RESPONSE_TYPE_TOOL_BATCH = 'tool_use_batch';
+
+    private readonly ProviderInterface $provider;
+
+    private readonly ToolRegistry $tools;
+
+    private readonly int $maxIterations;
+
+    private readonly int $maxRetries;
+
+    private readonly int $maxHistoryLength;
+
+    private readonly ?ApprovalGateInterface $approvalGate;
+
+    private readonly ?ToolRouter $toolRouter;
+
+    private readonly int $maxToolResultTokens;
+
+    private readonly bool $leanToolSchemas;
+
+    private readonly int $requestBudgetTokens;
+
+    private readonly int $fixedPromptTokens;
 
     private readonly ToolOutputGuard $toolOutputGuard;
 
@@ -53,23 +82,40 @@ final class Agent
      * @param  ?ToolRouter  $toolRouter  Optional router that selects the tool subset offered per iteration.
      * @param  int  $maxHistoryTokens  Compact history when its token estimate exceeds this value. 0 = disabled.
      * @param  int  $maxToolResultTokens  Cut a single tool result at this estimated-token ceiling and append a marker. 0 = disabled.
+     * @param  bool  $leanToolSchemas  When true, tool schemas are sent in their lean form.
+     * @param  int  $requestBudgetTokens  Drop the lowest-ranked routed tools until the estimated request fits this budget. 0 = disabled.
+     * @param  int  $fixedPromptTokens  Estimated tokens of the fixed prompt parts, counted against the request budget.
      */
     public function __construct(
-        private readonly ProviderInterface $provider,
-        private readonly ToolRegistry $tools,
-        private readonly int $maxIterations = self::DEFAULT_MAX_ITERATIONS,
-        private readonly int $maxRetries = self::DEFAULT_MAX_RETRIES,
-        private readonly int $maxHistoryLength = self::DEFAULT_MAX_HISTORY_LENGTH,
+        ProviderInterface $provider,
+        ToolRegistry $tools,
+        int $maxIterations = self::DEFAULT_MAX_ITERATIONS,
+        int $maxRetries = self::DEFAULT_MAX_RETRIES,
+        int $maxHistoryLength = self::DEFAULT_MAX_HISTORY_LENGTH,
         ?ToolOutputGuard $toolOutputGuard = null,
         ?OutputSanitiser $outputSanitiser = null,
         bool $compactHistory = true,
-        private readonly ?ApprovalGateInterface $approvalGate = null,
-        private readonly ?ToolRouter $toolRouter = null,
+        ?ApprovalGateInterface $approvalGate = null,
+        ?ToolRouter $toolRouter = null,
         int $maxHistoryTokens = 0,
-        private readonly int $maxToolResultTokens = 0,
+        int $maxToolResultTokens = 0,
+        bool $leanToolSchemas = false,
+        int $requestBudgetTokens = 0,
+        int $fixedPromptTokens = 0,
     ) {
+        $this->provider = $provider;
+        $this->tools = $tools;
+        $this->maxIterations = $maxIterations;
+        $this->maxRetries = $maxRetries;
+        $this->maxHistoryLength = $maxHistoryLength;
         $this->toolOutputGuard = $toolOutputGuard ?? new ToolOutputGuard;
         $this->outputSanitiser = $outputSanitiser ?? new OutputSanitiser;
+        $this->approvalGate = $approvalGate;
+        $this->toolRouter = $toolRouter;
+        $this->maxToolResultTokens = $maxToolResultTokens;
+        $this->leanToolSchemas = $leanToolSchemas;
+        $this->requestBudgetTokens = $requestBudgetTokens;
+        $this->fixedPromptTokens = $fixedPromptTokens;
         $this->historyCompactor = new HistoryCompactor($this->provider, $this->maxHistoryLength, $compactHistory, $maxHistoryTokens);
         $this->retryLoop = new ProviderRetryLoop($this->provider, $this->maxRetries);
     }
@@ -121,6 +167,41 @@ final class Agent
     }
 
     /**
+     * Drop the lowest-ranked tools until the estimated request fits the profile budget; never below one tool.
+     *
+     * @param  array<int, array<string, mixed>>  $toolSchemas  Routed schemas.
+     * @param  Message[]  $history  History including the current user message.
+     * @return array<int, array<string, mixed>> Schemas that fit, in the router's alphabetical order.
+     */
+    private function fitToolsToBudget(array $toolSchemas, array $history): array
+    {
+        if ($this->requestBudgetTokens <= 0 || $this->toolRouter === null) {
+            return $toolSchemas;
+        }
+
+        $order = array_flip($this->toolRouter->lastRankedNames());
+        $byName = [];
+        foreach ($toolSchemas as $schema) {
+            $byName[strtolower((string) ($schema['name'] ?? ($schema['function']['name'] ?? '')))] = $schema;
+        }
+        uksort($byName, static fn (string $a, string $b): int => ($order[$a] ?? PHP_INT_MAX) <=> ($order[$b] ?? PHP_INT_MAX));
+
+        $base = $this->fixedPromptTokens + $this->historyCompactor->estimateTokens($history);
+        while (count($byName) > 1) {
+            $estimate = $base + (int) ceil(strlen((string) json_encode(array_values($byName))) / self::CHARS_PER_TOKEN_ESTIMATE);
+            if ($estimate <= $this->requestBudgetTokens) {
+                break;
+            }
+            array_pop($byName);
+        }
+
+        $kept = array_values($byName);
+        usort($kept, static fn (array $a, array $b): int => strcmp((string) ($a['name'] ?? $a['function']['name']), (string) ($b['name'] ?? $b['function']['name'])));
+
+        return $kept;
+    }
+
+    /**
      * Shared ReAct loop body. When $onToken is non-null, hooks fire with streaming:true, the final text is chunked through $onToken, and stream.end fires at completion.
      *
      * @param  string  $message  Current user message to append before the loop runs.
@@ -130,11 +211,11 @@ final class Agent
      * @param  string  $originalMessage  The user message before memory and skill context were prepended; used for tool routing. Empty falls back to $message.
      * @return AgentResponse The terminal text response produced by the loop.
      *
-     * @throws MaxIterationsException
-     * @throws ToolException
-     * @throws ProviderException
+     * @throws MaxIterationsException When the loop exhausts all iterations without a text response.
+     * @throws ToolException When a tool is not registered or fails fatally.
+     * @throws ProviderException When the provider fails after all retries.
      */
-    private function executeIterationLoop(string $message, array $history, string $runId, ?callable $onToken, string $originalMessage = ''): AgentResponse
+    private function executeIterationLoop(string $message, array $history, string $runId, ?callable $onToken, string $originalMessage): AgentResponse
     {
         $streaming = $onToken !== null;
         $startNs = hrtime(true);
@@ -144,16 +225,17 @@ final class Agent
         $this->tools->resetRunState();
 
         $history[] = Message::user($message);
-        $toolSchemas = $this->tools->schemas($this->provider->name());
+        $toolSchemas = $this->tools->schemas($this->provider->name(), $this->leanToolSchemas);
         if ($this->toolRouter !== null) {
             $toolSchemas = $this->toolRouter->filter($toolSchemas, $originalMessage !== '' ? $originalMessage : $message, $this->provider->model(), $this->tools->routingMetadata());
+            $toolSchemas = $this->fitToolsToBudget($toolSchemas, $history);
         }
-        $hallucinationRetry = false;
+        $isHallucinationRetry = false;
 
-        for ($i = 1; $i <= $this->maxIterations; $i++) {
-            $iterationId = $this->buildIterationId($runId, $i);
+        for ($iteration = 1; $iteration <= $this->maxIterations; $iteration++) {
+            $iterationId = $this->buildIterationId($runId, $iteration);
 
-            HookDispatcher::agentIteration($i, $message, $this->provider->name(), $this->provider->model(), streaming: $streaming, runId: $runId, history: $history, parentRunId: $iterationId);
+            HookDispatcher::agentIteration($iteration, $message, $this->provider->name(), $this->provider->model(), streaming: $streaming, runId: $runId, history: $history, parentRunId: $iterationId);
 
             $history = $this->historyCompactor->applyIfOversized($history, $message, $runId, $iterationId);
 
@@ -168,11 +250,11 @@ final class Agent
             );
 
             try {
-                $response = $this->retryLoop->send($history, $toolSchemas, $i, streaming: $streaming, runId: $runId, parentRunId: $iterationId);
+                $response = $this->retryLoop->send($history, $toolSchemas, $iteration, streaming: $streaming, runId: $runId, parentRunId: $iterationId);
             } catch (ProviderException $e) {
-                if ($this->retryLoop->isHallucinationRejection($e) && ! $hallucinationRetry) {
+                if ($this->retryLoop->isHallucinationRejection($e) && ! $isHallucinationRetry) {
                     $this->triggerHallucinationRetry(
-                        $hallucinationRetry,
+                        $isHallucinationRetry,
                         $toolSchemas,
                         '(provider-rejected)',
                         'Provider rejected request due to hallucinated tool; retrying once with no tools: '.$e->getMessage(),
@@ -187,17 +269,17 @@ final class Agent
 
             $this->fireProviderResponseHooks($response, streaming: $streaming, runId: $runId, iterationId: $iterationId);
 
-            if ($response['type'] === 'text') {
-                return $this->finaliseTextResponse($response, $message, $i, $startNs, $toolsCalled, $runId, $onToken);
+            if ($response['type'] === self::RESPONSE_TYPE_TEXT) {
+                return $this->finaliseTextResponse($response, $message, $iteration, $startNs, $toolsCalled, $runId, $onToken);
             }
 
-            if ($response['type'] === 'tool_use_batch') {
+            if ($response['type'] === self::RESPONSE_TYPE_TOOL_BATCH) {
                 $calls = $response['calls'] ?? [];
                 $hallucinated = $this->detectHallucinatedToolNames($calls);
 
-                if (! empty($hallucinated) && ! $hallucinationRetry) {
+                if (! empty($hallucinated) && ! $isHallucinationRetry) {
                     $this->triggerHallucinationRetry(
-                        $hallucinationRetry,
+                        $isHallucinationRetry,
                         $toolSchemas,
                         implode(',', $hallucinated),
                         'Model hallucinated unregistered tool(s); retrying once with no tools.',
@@ -209,10 +291,10 @@ final class Agent
                 }
 
                 $refusal = null;
-                $results = $this->executeToolBatch($calls, $i, $runId, $iterationId, $toolsCalled, $failedCalls, $refusal);
+                $results = $this->executeToolBatch($calls, $iteration, $runId, $iterationId, $toolsCalled, $failedCalls, $refusal);
 
                 if ($refusal !== null) {
-                    return $this->buildTextResponse(['text' => $refusal], $i, $startNs, $toolsCalled, $runId);
+                    return $this->buildTextResponse(['text' => $refusal], $iteration, $startNs, $toolsCalled, $runId);
                 }
 
                 $history[] = Message::toolBatch($calls, $results);
@@ -256,7 +338,7 @@ final class Agent
             $onToken($chunk);
         }
 
-        $durationMs = (int) round((hrtime(true) - $startNs) / 1000000);
+        $durationMs = $this->elapsedMilliseconds($startNs);
         HookDispatcher::streamEnd($message, $providerName, $providerModel, $durationMs, mb_strlen($text), $runId);
 
         return $this->buildTextResponse($response, $iterations, $startNs, $toolsCalled, $runId, sanitisedText: $text);
@@ -306,7 +388,7 @@ final class Agent
             runId: $runId,
         );
 
-        $durationMs = (int) round((hrtime(true) - $startNs) / 1000000);
+        $durationMs = $this->elapsedMilliseconds($startNs);
         HookDispatcher::streamEnd($message, $this->provider->name(), $this->provider->model(), $durationMs, mb_strlen($fullText), $runId);
 
         return new AgentResponse(
@@ -323,12 +405,12 @@ final class Agent
      * Compose the per-iteration ID used for nested hook parent_run_id tracking.
      *
      * @param  string  $runId  Root run identifier; empty disables nesting.
-     * @param  int  $i  Iteration number (1-based).
-     * @return string "{runId}_I{i}" when runId is non-empty, otherwise ''.
+     * @param  int  $iteration  Iteration number (1-based).
+     * @return string "{runId}_I{iteration}" when runId is non-empty, otherwise ''.
      */
-    private function buildIterationId(string $runId, int $i): string
+    private function buildIterationId(string $runId, int $iteration): string
     {
-        return $runId !== '' ? $runId.'_I'.$i : '';
+        return $runId !== '' ? $runId.'_I'.$iteration : '';
     }
 
     /**
@@ -368,29 +450,9 @@ final class Agent
     }
 
     /**
-     * Fire the tool.error hook used by the hallucination-retry recovery path.
-     *
-     * @param  string  $toolName  Tool name (or sentinel like '(provider-rejected)') for the hook payload.
-     * @param  string  $error  Error message describing why retry-without-tools was triggered.
-     * @param  string  $runId  Run identifier propagated to hooks for run correlation.
-     * @param  string  $iterationId  Parent run id for nesting this hook under the current iteration.
-     * @return void
-     */
-    private function fireHallucinationRetry(string $toolName, string $error, string $runId, string $iterationId): void
-    {
-        HookDispatcher::toolError(
-            toolName: $toolName,
-            toolInput: [],
-            error: $error,
-            runId: $runId,
-            parentRunId: $iterationId,
-        );
-    }
-
-    /**
      * Arm the once-per-run hallucination retry: clear the tool schemas so the next attempt runs with no tools, and report the trigger via the tool.error hook.
      *
-     * @param  bool  $hallucinationRetry  Loop-local retry-armed flag, set true.
+     * @param  bool  $isHallucinationRetry  Loop-local retry-armed flag, set true.
      * @param  array<int, array<string, mixed>>  $toolSchemas  Loop-local tool schema list, cleared.
      * @param  string  $toolName  Hallucinated tool name(s), or a placeholder when the provider rejected the request outright.
      * @param  string  $error  Error message describing why retry-without-tools was triggered.
@@ -399,16 +461,22 @@ final class Agent
      * @return void
      */
     private function triggerHallucinationRetry(
-        bool &$hallucinationRetry,
+        bool &$isHallucinationRetry,
         array &$toolSchemas,
         string $toolName,
         string $error,
         string $runId,
         string $iterationId,
     ): void {
-        $hallucinationRetry = true;
+        $isHallucinationRetry = true;
         $toolSchemas = [];
-        $this->fireHallucinationRetry($toolName, $error, $runId, $iterationId);
+        HookDispatcher::toolError(
+            toolName: $toolName,
+            toolInput: [],
+            error: $error,
+            runId: $runId,
+            parentRunId: $iterationId,
+        );
     }
 
     /**
@@ -421,9 +489,9 @@ final class Agent
     {
         $hallucinated = [];
         foreach ($calls as $call) {
-            $n = (string) ($call['tool_name'] ?? '');
-            if ($n !== '' && ! $this->tools->has($n)) {
-                $hallucinated[] = $n;
+            $name = (string) ($call['tool_name'] ?? '');
+            if ($name !== '' && ! $this->tools->has($name)) {
+                $hallucinated[] = $name;
             }
         }
 
@@ -455,40 +523,82 @@ final class Agent
 
             HookDispatcher::toolBefore($toolName, $toolInput, $iteration, $runId, parentRunId: $iterationId);
 
-            if ($this->approvalGate !== null) {
-                try {
-                    $tool = $this->tools->has($toolName) ? $this->tools->get($toolName) : null;
-                    $this->approvalGate->check($toolName, $toolInput, $tool);
-                    $result = $this->executeTool($toolName, $toolInput, $runId);
-                } catch (HumanDeniedException $e) {
-                    $result = (string) json_encode([
-                        'status' => 'denied',
-                        'tool' => $e->toolName,
-                        'message' => 'Action denied by human. Propose an alternative approach or ask what to do instead.',
-                    ]);
-                }
-            } else {
-                $result = $this->executeTool($toolName, $toolInput, $runId);
-            }
+            $result = $this->runWithApproval($toolName, $toolInput, $runId);
 
             HookDispatcher::toolAfter($toolName, $toolInput, $result, $iteration, $runId, parentRunId: $iterationId);
 
-            $failure = $this->failureMessage($result);
-
-            if ($failure !== null) {
-                $signature = $toolName.'|'.json_encode($toolInput);
-
-                if (isset($failedCalls[$signature])) {
-                    $refusal = $failure;
-                } else {
-                    $failedCalls[$signature] = true;
-                }
-            }
+            $this->recordToolFailure($toolName, $toolInput, $result, $failedCalls, $refusal);
 
             $results[$toolUseId] = $result;
         }
 
         return $results;
+    }
+
+    /**
+     * Execute a tool, consulting the approval gate first when one is configured.
+     *
+     * @param  string  $toolName  Name of the tool to execute.
+     * @param  array<string, mixed>  $toolInput  Arguments passed by the model.
+     * @param  string  $runId  Run identifier propagated to hooks for run correlation.
+     * @return string Tool output, or a JSON denial envelope when the gate rejects the call.
+     */
+    private function runWithApproval(string $toolName, array $toolInput, string $runId): string
+    {
+        if ($this->approvalGate === null) {
+            return $this->executeTool($toolName, $toolInput, $runId);
+        }
+
+        try {
+            $tool = $this->tools->has($toolName) ? $this->tools->get($toolName) : null;
+            $this->approvalGate->check($toolName, $toolInput, $tool);
+
+            return $this->executeTool($toolName, $toolInput, $runId);
+        } catch (HumanDeniedException $e) {
+            return (string) json_encode([
+                'status' => 'denied',
+                'tool' => $e->toolName,
+                'message' => 'Action denied by human. Propose an alternative approach or ask what to do instead.',
+            ]);
+        }
+    }
+
+    /**
+     * Track a failed tool call; set $refusal when the identical call has already failed this run.
+     *
+     * @param  string  $toolName  Name of the tool that produced the result.
+     * @param  array<string, mixed>  $toolInput  Arguments that were passed to the tool.
+     * @param  string  $result  Tool output to inspect for a failure payload.
+     * @param  array<string, bool>  $failedCalls  Accumulated failure signatures (by-reference).
+     * @param  string|null  $refusal  Set to the failure message when the same call fails twice (by-reference).
+     * @return void
+     */
+    private function recordToolFailure(string $toolName, array $toolInput, string $result, array &$failedCalls, ?string &$refusal): void
+    {
+        $failure = $this->failureMessage($result);
+
+        if ($failure === null) {
+            return;
+        }
+
+        $signature = $toolName.'|'.json_encode($toolInput);
+
+        if (isset($failedCalls[$signature])) {
+            $refusal = $failure;
+        } else {
+            $failedCalls[$signature] = true;
+        }
+    }
+
+    /**
+     * Compute elapsed wall-clock milliseconds from a hrtime(true) start marker.
+     *
+     * @param  int  $startNs  hrtime(true) value captured at the start of the measured interval.
+     * @return int Elapsed duration in whole milliseconds.
+     */
+    private function elapsedMilliseconds(int $startNs): int
+    {
+        return (int) round((hrtime(true) - $startNs) / self::NANOS_PER_MILLISECOND);
     }
 
     /**
@@ -536,7 +646,7 @@ final class Agent
         ?string $sanitisedText = null,
     ): AgentResponse {
         $text = $sanitisedText ?? $this->outputSanitiser->sanitise((string) ($response['text'] ?? ''));
-        $durationMs = (int) round((hrtime(true) - $startNs) / 1000000);
+        $durationMs = $this->elapsedMilliseconds($startNs);
 
         return new AgentResponse(
             text: $text,
@@ -559,7 +669,7 @@ final class Agent
      *
      * @param  string  $message  Original user message; included in the hook payload.
      * @param  string  $runId  Run identifier propagated to hooks for run correlation.
-     * @return never The result.
+     * @return never Always throws.
      *
      * @throws MaxIterationsException Always thrown after the hook fires.
      */
@@ -610,7 +720,7 @@ final class Agent
      *
      * @throws ToolException When the tool is not registered (hallucinated tool name).
      */
-    private function executeTool(string $toolName, array $toolInput, string $runId = ''): string
+    private function executeTool(string $toolName, array $toolInput, string $runId): string
     {
         if (! $this->tools->has($toolName)) {
             $error = "Tool '{$toolName}' is not registered. The model likely hallucinated a tool name; cannot continue the ReAct loop because the provider will reject history referencing an undefined tool.";

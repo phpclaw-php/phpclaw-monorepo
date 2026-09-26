@@ -29,7 +29,7 @@ final class MemoryCatalogue implements CatalogueInterface
     /**
      * Look up a single driver entry by slug.
      *
-     * @param  string  $key  Storage key.
+     * @param  string  $key  Driver slug to look up.
      * @return array{label: string, class: class-string<MemoryInterface>, factory?: callable|string}|null
      */
     public static function find(string $key): ?array
@@ -50,8 +50,8 @@ final class MemoryCatalogue implements CatalogueInterface
     /**
      * Register a custom memory driver at runtime, overrides attribute-discovered entries with the same slug.
      *
-     * @param  string  $key  Storage key.
-     * @param  string  $label  Human-readable label, if any.
+     * @param  string  $key  Driver slug (unique identifier in the catalogue).
+     * @param  string  $label  Human-readable driver label.
      * @param  class-string<MemoryInterface>  $class  FQCN of the MemoryInterface implementation.
      * @param  callable|string|null  $factory  Optional factory that builds the instance from runtime config.
      * @return void
@@ -126,7 +126,7 @@ final class MemoryCatalogue implements CatalogueInterface
             $factory = $info['factory'] ?? null;
             $config = $configByKey[$slug] ?? [];
 
-            if ($factory !== null && is_callable($factory)) {
+            if (is_callable($factory)) {
                 MemoryRegistry::register($slug, static fn (): MemoryInterface => $factory($config));
             } else {
                 MemoryRegistry::register($slug, static fn (): MemoryInterface => new $class);
@@ -135,9 +135,9 @@ final class MemoryCatalogue implements CatalogueInterface
     }
 
     /**
-     * Bootstrap integration: invoked by activateFromSettings().
+     * Invoked by Bootstrap::activateFromSettings(); reads 'memory_config' and registers all discovered drivers into MemoryRegistry.
      *
-     * @param  array<string, mixed>  $settings  Settings.
+     * @param  array<string, mixed>  $settings  Admin settings array; reads the 'memory_config' key.
      * @return list<string> Always empty: memory writes into MemoryRegistry directly.
      */
     public static function activateFromSettings(array $settings): array

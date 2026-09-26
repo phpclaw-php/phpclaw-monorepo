@@ -31,6 +31,18 @@ final class ToolProfileResolver
 
     private const LOCAL_PROVIDERS = ['ollama', 'groq'];
 
+    private const REQUEST_BUDGET_TOKENS = [
+        self::PROFILE_MINIMAL => 3000,
+        self::PROFILE_STANDARD => 6000,
+        self::PROFILE_FULL => self::UNLIMITED,
+    ];
+
+    private const SKILL_CONTEXT_CHARS = [
+        self::PROFILE_MINIMAL => 4000,
+        self::PROFILE_STANDARD => 8000,
+        self::PROFILE_FULL => self::UNLIMITED,
+    ];
+
     /**
      * Resolve which tool profile to use based on provider and model size.
      *
@@ -76,6 +88,28 @@ final class ToolProfileResolver
     public static function maxTools(string $profile): int
     {
         return self::PROFILES[$profile] ?? self::UNLIMITED;
+    }
+
+    /**
+     * Estimated-token ceiling for one provider request on this profile, 0 = unlimited.
+     *
+     * @param  string  $profile  One of the PROFILE_* constants.
+     * @return int
+     */
+    public static function requestBudget(string $profile): int
+    {
+        return self::REQUEST_BUDGET_TOKENS[$profile] ?? self::UNLIMITED;
+    }
+
+    /**
+     * Character ceiling for the injected skill block on this profile, 0 = unlimited.
+     *
+     * @param  string  $profile  One of the PROFILE_* constants.
+     * @return int
+     */
+    public static function skillContextChars(string $profile): int
+    {
+        return self::SKILL_CONTEXT_CHARS[$profile] ?? self::UNLIMITED;
     }
 
     /**

@@ -17,7 +17,7 @@ final class RoleSwitchGuard implements GuardInterface
 {
     use NormalisesText;
 
-    private const PATTERNS = [
+    public const PATTERNS = [
         'you are now',
         'act as if',
         'pretend you are',

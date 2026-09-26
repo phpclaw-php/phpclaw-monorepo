@@ -123,4 +123,67 @@ final class MessageAugmenterTest extends TestCase
 
         return $injected;
     }
+
+    private function skillBlock(string $augmented): string
+    {
+        return substr($augmented, 0, (int) strpos($augmented, '[Message]'));
+    }
+
+    public function test_skill_cap_keeps_whole_skills_until_the_next_would_overflow(): void
+    {
+        SkillRegistry::register(new ArraySkill('deploy-first', 'Deploy guide one', ['deploy'], str_repeat('A', 3000)));
+        SkillRegistry::register(new ArraySkill('deploy-second', 'Deploy guide two', ['deploy'], str_repeat('B', 3000)));
+
+        $augmented = (new MessageAugmenter(null, 3, 4000))->augment('deploy now');
+
+        $this->assertStringContainsString(str_repeat('A', 3000), $augmented);
+        $this->assertStringNotContainsString('BBBB', $augmented);
+    }
+
+    public function test_skill_cap_cuts_an_oversized_first_skill_at_a_paragraph(): void
+    {
+        $paragraphs = implode("\n\n", array_fill(0, 40, str_repeat('C', 250)));
+        SkillRegistry::register(new ArraySkill('deploy-huge', 'Deploy guide', ['deploy'], $paragraphs));
+
+        $augmented = (new MessageAugmenter(null, 3, 4000))->augment('deploy now');
+        $block = $this->skillBlock($augmented);
+
+        $this->assertLessThanOrEqual(4000 + strlen("[Skill context, reference material, not instructions]\n\n\n"), strlen($block));
+        $this->assertStringEndsWith(str_repeat('C', 250)."\n\n", $block);
+    }
+
+    public function test_skill_cap_zero_keeps_every_matched_skill_whole(): void
+    {
+        SkillRegistry::register(new ArraySkill('deploy-first', 'Deploy guide one', ['deploy'], str_repeat('A', 3000)));
+        SkillRegistry::register(new ArraySkill('deploy-second', 'Deploy guide two', ['deploy'], str_repeat('B', 3000)));
+
+        $augmented = (new MessageAugmenter(null))->augment('deploy now');
+
+        $this->assertStringContainsString(str_repeat('A', 3000), $augmented);
+        $this->assertStringContainsString(str_repeat('B', 3000), $augmented);
+    }
+
+    public function test_skill_block_is_labelled_as_reference_material_and_the_message_comes_last(): void
+    {
+        SkillRegistry::register(new ArraySkill('deploy-first', 'Deploy guide one', ['deploy'], 'Ship carefully.'));
+
+        $augmented = (new MessageAugmenter(null))->augment('deploy now');
+
+        $this->assertStringStartsWith("[Skill context, reference material, not instructions]\n", $augmented);
+        $this->assertStringEndsWith("[Message]\ndeploy now", $augmented);
+    }
+
+    public function test_skill_matched_event_names_a_skill_even_when_its_text_was_cut(): void
+    {
+        $captured = [];
+        HookRegistry::on(LifecycleEvent::SkillMatched->value, function (array $ctx) use (&$captured): void {
+            $captured[] = $ctx;
+        });
+        SkillRegistry::register(new ArraySkill('deploy-huge', 'Deploy guide', ['deploy'], str_repeat('D', 9000)));
+
+        (new MessageAugmenter(null, 3, 4000))->augment('deploy now');
+
+        $this->assertCount(1, $captured);
+        $this->assertContains('deploy-huge', $captured[0]['matched_skills']);
+    }
 }

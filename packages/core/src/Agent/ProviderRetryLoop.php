@@ -10,11 +10,15 @@ use PhpClaw\Providers\Contracts\ProviderInterface;
 
 /**
  * Wraps `ProviderInterface::send()` with automatic retry on transient `ProviderException`, firing `provider.retry` between attempts and `provider.error` after the final failure.
- *
- * @internal
  */
 final class ProviderRetryLoop
 {
+    private const HALLUCINATION_PATTERNS = [
+        'tool call validation failed',
+        'not in request.tools',
+        'Failed to call a function',
+    ];
+
     /**
      * Build a ProviderRetryLoop.
      *
@@ -48,7 +52,7 @@ final class ProviderRetryLoop
         string $parentRunId = '',
     ): array {
         $lastException = null;
-        $maxAttempts = 1 + $this->maxRetries;
+        $maxAttempts = 1 + max(0, $this->maxRetries);
 
         for ($attempt = 1; $attempt <= $maxAttempts; $attempt++) {
             try {
@@ -92,14 +96,18 @@ final class ProviderRetryLoop
      * Detect provider-side rejections caused by hallucinated tool names.
      *
      * @param  ProviderException  $e  Exception to classify.
-     * @return bool True on success.
+     * @return bool True when the exception message matches a known provider hallucination rejection pattern.
      */
     public function isHallucinationRejection(ProviderException $e): bool
     {
-        $msg = $e->getMessage();
+        $errorMessage = $e->getMessage();
 
-        return str_contains($msg, 'tool call validation failed')
-            || str_contains($msg, 'not in request.tools')
-            || str_contains($msg, 'Failed to call a function');
+        foreach (self::HALLUCINATION_PATTERNS as $pattern) {
+            if (str_contains($errorMessage, $pattern)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

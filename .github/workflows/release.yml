@@ -59,12 +59,12 @@ jobs:
           path: phpclaw
           fetch-depth: 0
 
-      - name: Checkout private build script into scripts/
+      - name: Checkout private build script into clawscripts/
         uses: actions/checkout@v7
         with:
           repository: erakashpatel/clawscripts
           token: ${{ secrets.BUILD_TOKEN }}
-          path: scripts
+          path: clawscripts
 
       - name: Checkout marketing site into marketing/
         uses: actions/checkout@v7
@@ -87,7 +87,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
           HEAD_SHA: ${{ github.sha }}
-        run: php scripts/release-notes.php collect "${{ runner.temp }}/commits.json"
+        run: php clawscripts/release-notes.php collect "${{ runner.temp }}/commits.json"
 
       - name: Auto-bump versions from the release range
         env:
@@ -98,11 +98,11 @@ jobs:
           tag() { git -C phpclaw tag -l "$1-v*" | sed "s/^$1-v//" | sort -V | tail -1; }
           export CURRENT_JOOMLA="$(tag joomla)" CURRENT_WORDPRESS="$(tag wordpress)"
           export CURRENT_PRESTASHOP="$(tag prestashop)" CURRENT_OPENCART="$(tag opencart)"
-          FILES=$(php scripts/release-notes.php files)
+          FILES=$(php clawscripts/release-notes.php files)
           # One level per package, from the commits that reach it since its own last release.
-          LEVELS=$(php scripts/release-notes.php levels)
+          LEVELS=$(php clawscripts/release-notes.php levels)
           echo "Levels: $LEVELS"
-          CHANGED_FILES="$FILES" BUMP_LEVELS="$LEVELS" php scripts/auto-bump.php
+          CHANGED_FILES="$FILES" BUMP_LEVELS="$LEVELS" php clawscripts/auto-bump.php
 
       - name: Read per-adapter versions
         id: v
@@ -117,15 +117,15 @@ jobs:
           RELEASE_LINE: ${{ github.ref_name }}
         run: |
           mkdir -p dist
-          php scripts/release-notes.php notes joomla     "${{ steps.v.outputs.joomla }}"     > dist/notes-joomla.md
-          php scripts/release-notes.php notes wordpress  "${{ steps.v.outputs.wordpress }}"  > dist/notes-wordpress.md
-          php scripts/release-notes.php notes prestashop "${{ steps.v.outputs.prestashop }}" > dist/notes-prestashop.md
-          php scripts/release-notes.php notes opencart   "${{ steps.v.outputs.opencart }}"   > dist/notes-opencart.md
+          php clawscripts/release-notes.php notes joomla     "${{ steps.v.outputs.joomla }}"     > dist/notes-joomla.md
+          php clawscripts/release-notes.php notes wordpress  "${{ steps.v.outputs.wordpress }}"  > dist/notes-wordpress.md
+          php clawscripts/release-notes.php notes prestashop "${{ steps.v.outputs.prestashop }}" > dist/notes-prestashop.md
+          php clawscripts/release-notes.php notes opencart   "${{ steps.v.outputs.opencart }}"   > dist/notes-opencart.md
 
       - name: Build all CMS ZIPs
         run: |
           MAJOR="${GITHUB_REF_NAME%%.x}"
-          php scripts/build-zip-release.php all \
+          php clawscripts/build-zip-release.php all \
             --core-major="$MAJOR" --cloud-major="$MAJOR" --mcp-major="$MAJOR"
 
       - name: Make unversioned copies for the rolling latest
@@ -261,7 +261,7 @@ jobs:
           git -C marketing config user.name "phpclaw-release-bot"
           git -C marketing config user.email "release-bot@phpclaw.ai"
           for attempt in 1 2 3 4 5; do
-            php scripts/gen-update-manifests.php
+            php clawscripts/gen-update-manifests.php
             git -C marketing add public/api
             if git -C marketing diff --cached --quiet; then
               echo "No manifest changes to publish."

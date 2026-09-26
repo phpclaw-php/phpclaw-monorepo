@@ -11,11 +11,13 @@ use PhpClaw\Memory\Contracts\MemoryInterface;
  */
 final class RouterMemory implements MemoryInterface
 {
+    private const DEFAULT_NAMESPACE = 'default';
+
     /**
      * Create a new RouterMemory instance.
      *
      * @param  MemoryInterface  $default  Fallback driver for any namespace not present in $routes.
-     * @param  array<string, MemoryInterface>  $routes  Map of namespace → driver. First match wins.
+     * @param  array<string, MemoryInterface>  $routes  Map of namespace → driver; exact-key lookup, no ordering.
      */
     public function __construct(
         private readonly MemoryInterface $default,
@@ -26,7 +28,7 @@ final class RouterMemory implements MemoryInterface
      * The driver chosen for the given namespace.
      *
      * @param  string  $namespace  Namespace to scope the operation.
-     * @return MemoryInterface The result.
+     * @return MemoryInterface The routed driver, or the default when no route matches.
      */
     public function driverFor(string $namespace): MemoryInterface
     {
@@ -36,7 +38,7 @@ final class RouterMemory implements MemoryInterface
     /**
      * Every routed namespace mapped to its driver (excludes the default).
      *
-     * @return array The resulting list.
+     * @return array<string, MemoryInterface> Namespace-to-driver map (excludes the default driver).
      */
     public function routes(): array
     {
@@ -46,7 +48,7 @@ final class RouterMemory implements MemoryInterface
     /**
      * The fallback driver.
      *
-     * @return MemoryInterface The result.
+     * @return MemoryInterface The driver used for any namespace not present in the routes map.
      */
     public function defaultDriver(): MemoryInterface
     {
@@ -60,7 +62,7 @@ final class RouterMemory implements MemoryInterface
      * @param  string  $namespace  Namespace whose routed driver is used.
      * @return mixed Stored value, or null when absent.
      */
-    public function get(string $key, string $namespace = 'default'): mixed
+    public function get(string $key, string $namespace = self::DEFAULT_NAMESPACE): mixed
     {
         return $this->driverFor($namespace)->get($key, $namespace);
     }
@@ -74,7 +76,7 @@ final class RouterMemory implements MemoryInterface
      * @param  int|null  $ttl  Time-to-live in seconds, or null for no expiry.
      * @return void
      */
-    public function set(string $key, mixed $value, string $namespace = 'default', ?int $ttl = null): void
+    public function set(string $key, mixed $value, string $namespace = self::DEFAULT_NAMESPACE, ?int $ttl = null): void
     {
         $this->driverFor($namespace)->set($key, $value, $namespace, $ttl);
     }
@@ -86,7 +88,7 @@ final class RouterMemory implements MemoryInterface
      * @param  string  $namespace  Namespace whose routed driver is used.
      * @return void
      */
-    public function forget(string $key, string $namespace = 'default'): void
+    public function forget(string $key, string $namespace = self::DEFAULT_NAMESPACE): void
     {
         $this->driverFor($namespace)->forget($key, $namespace);
     }
@@ -97,7 +99,7 @@ final class RouterMemory implements MemoryInterface
      * @param  string  $namespace  Namespace to clear.
      * @return void
      */
-    public function flush(string $namespace = 'default'): void
+    public function flush(string $namespace = self::DEFAULT_NAMESPACE): void
     {
         $this->driverFor($namespace)->flush($namespace);
     }
@@ -108,7 +110,7 @@ final class RouterMemory implements MemoryInterface
      * @param  string  $namespace  Namespace to read.
      * @return array<string, mixed> Key-value map of stored entries.
      */
-    public function all(string $namespace = 'default'): array
+    public function all(string $namespace = self::DEFAULT_NAMESPACE): array
     {
         return $this->driverFor($namespace)->all($namespace);
     }
@@ -120,7 +122,7 @@ final class RouterMemory implements MemoryInterface
      * @param  string  $namespace  Namespace whose routed driver is used.
      * @return bool True when the key exists.
      */
-    public function has(string $key, string $namespace = 'default'): bool
+    public function has(string $key, string $namespace = self::DEFAULT_NAMESPACE): bool
     {
         return $this->driverFor($namespace)->has($key, $namespace);
     }

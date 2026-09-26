@@ -6,8 +6,6 @@ namespace PhpClaw\Hooks;
 
 /**
  * Shared payload-augmentation + fire helper used by every domain-specific event dispatcher in {@see PhpClaw\Hooks\Dispatchers}.
- *
- * @internal
  */
 final class EventPayload
 {

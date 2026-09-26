@@ -203,6 +203,13 @@ final class FileWriteToolTest extends TestCase
         $tool->execute(['path' => 'auto.php', 'content' => '<?php echo 1;']);
     }
 
+    public function test_autodiscovery_binds_config_by_name_when_a_leading_key_is_missing(): void
+    {
+        $tool = $this->fileWriteFromCatalogue(['allowPhpWrite' => true]);
+
+        $this->assertInstanceOf(FileWriteTool::class, $tool);
+    }
+
     private function fileWriteFromCatalogue(array $config): FileWriteTool
     {
         foreach (ToolCatalogue::instantiateDefaults($config) as $tool) {

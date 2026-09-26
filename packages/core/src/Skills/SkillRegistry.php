@@ -14,12 +14,6 @@ final class SkillRegistry
 {
     public const DEFAULT_MATCH_LIMIT = 3;
 
-    private const MESSAGE_WORD_MIN_LENGTH = 3;
-
-    private const CORPUS_WORD_MIN_LENGTH = 4;
-
-    private const TAG_WORD_MIN_LENGTH = self::MESSAGE_WORD_MIN_LENGTH;
-
     public const STOPWORDS = [
         'the', 'and', 'with', 'for', 'this', 'that', 'from', 'your', 'you', 'are', 'was', 'has',
         'have', 'had', 'will', 'can', 'its', 'their', 'them', 'then', 'than', 'into', 'over',
@@ -30,6 +24,12 @@ final class SkillRegistry
         'every', 'everything', 'anything', 'something', 'nothing', 'both', 'many', 'much', 'few',
         'other', 'another', 'same',
     ];
+
+    private const MESSAGE_WORD_MIN_LENGTH = 3;
+
+    private const CORPUS_WORD_MIN_LENGTH = 4;
+
+    private const TAG_WORD_MIN_LENGTH = self::MESSAGE_WORD_MIN_LENGTH;
 
     private const MIN_MATCH_SCORE = 1;
 
@@ -132,7 +132,7 @@ final class SkillRegistry
         uksort($scored, static function (string $a, string $b) use ($scored): int {
             return $scored[$b] <=> $scored[$a] ?: strcmp($a, $b);
         });
-        $top = array_slice($scored, 0, $limit, true);
+        $top = array_slice($scored, 0, $limit, preserve_keys: true);
 
         return array_map(static fn (string $name): SkillInterface => self::$skills[$name], array_keys($top));
     }
@@ -189,7 +189,7 @@ final class SkillRegistry
 
         return array_values(array_unique(array_filter(
             str_word_count($normalised, self::WORD_LIST_FORMAT),
-            static fn (string $w): bool => strlen($w) >= $minLength,
+            static fn (string $word): bool => strlen($word) >= $minLength,
         )));
     }
 }

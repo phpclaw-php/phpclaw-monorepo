@@ -15,7 +15,7 @@ use PhpClaw\Tools\Contracts\ToolRoutingInterface;
  * Read-only project awareness: framework/CMS detection, Composer packages, and a shallow file tree.
  */
 #[Tool(
-    name: 'project_info',
+    name: self::TOOL_NAME,
     description: 'Detect framework/CMS, list Composer packages, and show the project file tree.',
     since: '1.0.0',
     default: true,
@@ -24,6 +24,14 @@ use PhpClaw\Tools\Contracts\ToolRoutingInterface;
 final class ProjectTool implements AuthorizableToolInterface, ToolInterface, ToolRoutingInterface
 {
     use HasCoreToolBinding;
+
+    private const TOOL_NAME = 'project_info';
+
+    private const DEPTH_MIN = 1;
+
+    private const DEPTH_MAX = 4;
+
+    private const DEPTH_DEFAULT = 2;
 
     private const MARKERS = [
         'wordpress' => ['wp-config.php', 'wp-load.php'],
@@ -58,7 +66,7 @@ final class ProjectTool implements AuthorizableToolInterface, ToolInterface, Too
      */
     public function name(): string
     {
-        return 'project_info';
+        return self::TOOL_NAME;
     }
 
     /**
@@ -108,7 +116,7 @@ final class ProjectTool implements AuthorizableToolInterface, ToolInterface, Too
         }
 
         return [
-            'input' => ['depth' => max(1, min(4, (int) ($input['depth'] ?? 2)))],
+            'input' => ['depth' => max(self::DEPTH_MIN, min(self::DEPTH_MAX, (int) ($input['depth'] ?? self::DEPTH_DEFAULT)))],
             'result' => null,
         ];
     }
@@ -124,8 +132,8 @@ final class ProjectTool implements AuthorizableToolInterface, ToolInterface, Too
         return [
             'framework' => $this->detectFramework(),
             'root' => $this->projectRoot,
-            'packages' => $this->composerPackages(),
-            'file_tree' => $this->tree($this->projectRoot, (int) $input['depth']),
+            'packages' => $this->readComposerPackages(),
+            'file_tree' => $this->buildFileTree($this->projectRoot, (int) $input['depth']),
         ];
     }
 
@@ -179,7 +187,7 @@ final class ProjectTool implements AuthorizableToolInterface, ToolInterface, Too
      *
      * @return list<array{name: string, version: string}>
      */
-    private function composerPackages(): array
+    private function readComposerPackages(): array
     {
         $lock = $this->projectRoot.'/composer.lock';
         if (! is_file($lock)) {
@@ -203,7 +211,7 @@ final class ProjectTool implements AuthorizableToolInterface, ToolInterface, Too
      * @param  int  $level  Current recursion level.
      * @return array<int|string, mixed>
      */
-    private function tree(string $dir, int $depth, int $level = 0): array
+    private function buildFileTree(string $dir, int $depth, int $level = 0): array
     {
         if ($level >= $depth) {
             return [];
@@ -216,7 +224,7 @@ final class ProjectTool implements AuthorizableToolInterface, ToolInterface, Too
                     continue;
                 }
                 if ($entry->isDir()) {
-                    $items[$entry->getFilename().'/'] = $this->tree($entry->getPathname(), $depth, $level + 1);
+                    $items[$entry->getFilename().'/'] = $this->buildFileTree($entry->getPathname(), $depth, $level + 1);
                 } else {
                     $items[] = $entry->getFilename();
                 }

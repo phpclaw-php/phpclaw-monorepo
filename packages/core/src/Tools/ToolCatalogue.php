@@ -35,9 +35,7 @@ final class ToolCatalogue implements CatalogueInterface
             $merged[$class] = true;
         }
 
-        $list = array_keys($merged);
-
-        return $list;
+        return array_keys($merged);
     }
 
     /**
@@ -175,7 +173,7 @@ final class ToolCatalogue implements CatalogueInterface
 
             foreach ($needsConfig as $argName => $_typeHint) {
                 if (array_key_exists($argName, $config)) {
-                    $args[] = $config[$argName];
+                    $args[$argName] = $config[$argName];
                 }
             }
 

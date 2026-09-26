@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace PhpClaw\Tests\Unit\Providers;
 
 use PhpClaw\Agent\Message;
+use PhpClaw\Exceptions\ProviderException;
 use PhpClaw\Http\RawHttpClient;
 use PhpClaw\Http\StreamParser;
 use PhpClaw\Providers\OpenAIPresets;
@@ -88,6 +89,62 @@ final class OpenAIProviderTest extends TestCase
         $this->assertSame('call_01', $result['calls'][0]['tool_use_id']);
         $this->assertSame('shell_exec', $result['calls'][0]['tool_name']);
         $this->assertSame(['command' => 'ls'], $result['calls'][0]['tool_input']);
+    }
+
+    public function test_send_throws_provider_exception_for_malformed_tool_call_arguments(): void
+    {
+        $this->mockHttp->method('post')->willReturn([
+            'choices' => [
+                [
+                    'message' => [
+                        'role' => 'assistant',
+                        'content' => null,
+                        'tool_calls' => [
+                            [
+                                'id' => 'call_01',
+                                'type' => 'function',
+                                'function' => ['name' => 'shell_exec', 'arguments' => '{bad'],
+                            ],
+                        ],
+                    ],
+                    'finish_reason' => 'tool_calls',
+                ],
+            ],
+        ]);
+
+        $this->expectException(ProviderException::class);
+        $this->expectExceptionMessage("Malformed tool-call arguments for 'shell_exec'.");
+
+        $this->provider->send([Message::user('List files')]);
+    }
+
+    public function test_send_keeps_malformed_tool_call_tags_as_text(): void
+    {
+        $this->mockHttp->method('post')->willReturn([
+            'choices' => [[
+                'message' => [
+                    'role' => 'assistant',
+                    'content' => '<tool_call>{bad json {"name":"shell","arguments":{"cmd":"ls"}}</tool_call>',
+                ],
+            ]],
+        ]);
+
+        $result = $this->provider->send([Message::user('hi')]);
+
+        $this->assertSame('text', $result['type']);
+    }
+
+    public function test_send_unrecognised_response_error_names_keys_not_body(): void
+    {
+        $this->mockHttp->method('post')->willReturn([
+            'id' => 'chatcmpl-1',
+            'choices' => [['message' => ['role' => 'assistant', 'refusal' => 'private model output']]],
+        ]);
+
+        $this->expectException(ProviderException::class);
+        $this->expectExceptionMessage('Unexpected OpenAI-compatible response structure (keys: id, choices).');
+
+        $this->provider->send([Message::user('hi')]);
     }
 
     public function test_send_returns_tool_use_batch_for_multiple_calls(): void

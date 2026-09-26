@@ -17,7 +17,7 @@ final class InjectionGuard implements GuardInterface
 {
     use NormalisesText;
 
-    private const PATTERNS = [
+    public const PATTERNS = [
         'ignore previous instructions',
         'ignore all instructions',
         'disregard your',

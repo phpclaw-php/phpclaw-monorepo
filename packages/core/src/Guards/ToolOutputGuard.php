@@ -18,28 +18,10 @@ final class ToolOutputGuard
 
     private const INVISIBLE_CHARS_PATTERN = '/[\x{200B}\x{200C}\x{200D}\x{FEFF}\x{00AD}\x{2060}\x{180E}]/u';
 
-    private const PATTERNS = [
-        'ignore previous instructions',
-        'ignore all instructions',
-        'disregard your',
-        'forget your',
-        'system prompt',
-        'jailbreak',
-        'override instructions',
-        'as a developer mode',
-        'dan mode',
-        'do anything now',
-        'new persona',
-        'you are now',
-        'act as if',
-        'pretend you are',
-        '<?php',
-        '<?=',
-        '?>',
-    ];
+    private const PATTERNS = [...InjectionGuard::PATTERNS, ...RoleSwitchGuard::PATTERNS, '<?php', '<?=', '?>'];
 
     /**
-     * Scan and redact injection patterns from a tool result. Homoglyph-substituted patterns are detected (the audit hook fires) but redact() cannot yet neutralise them in the returned text, a tracked follow-up, not silently left open.
+     * Scan and redact injection patterns from a tool result; homoglyph-substituted patterns trigger the audit hook but are not yet neutralised in the returned text.
      *
      * @param  string  $toolResult  Raw output returned by the tool.
      * @param  string  $toolName  Name of the tool that produced the result (for the hook).

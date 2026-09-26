@@ -9,8 +9,6 @@ use PhpClaw\Hooks\LifecycleEvent;
 
 /**
  * Typed dispatchers for streaming-flow lifecycle events.
- *
- * @internal
  */
 final class StreamEventDispatcher
 {
@@ -43,7 +41,7 @@ final class StreamEventDispatcher
      * @param  string  $provider  Provider name.
      * @param  string  $model  Model identifier.
      * @param  int  $durationMs  Duration in milliseconds.
-     * @param  int  $chars  Chars.
+     * @param  int  $chars  Total character count of the streamed response.
      * @param  string  $runId  Active run ID, if any.
      * @return void
      */

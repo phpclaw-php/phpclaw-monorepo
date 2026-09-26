@@ -15,7 +15,7 @@ final class RuntimeConfig
      * Group the behavioural configuration.
      *
      * @param  bool  $storeMessages  True to persist prompt + response content to memory and cloud payloads.
-     * @param  bool  $useDefaultGuards  True to register the seven built-in default guards on build.
+     * @param  bool  $useDefaultGuards  True to register the eight built-in default guards on build.
      * @param  bool  $sanitiseOutput  Whether to sanitise LLM output.
      * @param  bool  $compactHistory  Whether history compaction runs (false disables the summary LLM call).
      * @param  MemoryInterface|null  $memory  Memory driver for conversation persistence; null = stateless.

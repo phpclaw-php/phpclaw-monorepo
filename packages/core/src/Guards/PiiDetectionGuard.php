@@ -6,7 +6,6 @@ namespace PhpClaw\Guards;
 
 use PhpClaw\AutoDiscovery\Attributes\Guard;
 use PhpClaw\Exceptions\GuardException;
-use PhpClaw\Guards\Contracts\GuardInterface;
 use PhpClaw\Guards\Contracts\PromptOnlyGuardInterface;
 
 /**
@@ -19,8 +18,10 @@ use PhpClaw\Guards\Contracts\PromptOnlyGuardInterface;
     enabledByDefault: true,
     since: '1.0.0',
 )]
-final class PiiDetectionGuard implements GuardInterface, PromptOnlyGuardInterface
+final class PiiDetectionGuard implements PromptOnlyGuardInterface
 {
+    public const DEFAULT_MESSAGE_TEMPLATE = 'PII detected: {type} found in prompt.';
+
     private const DEFAULT_PATTERNS = [
         'email' => '/[a-zA-Z0-9._%+\-]{1,64}@[a-zA-Z0-9.\-]{1,253}\.[a-zA-Z]{2,63}/',
         'credit_card' => '/\b(?:\d{4}[\s\-]){3}\d{4}\b/',
@@ -28,7 +29,11 @@ final class PiiDetectionGuard implements GuardInterface, PromptOnlyGuardInterfac
         'phone' => '/\b(?:\+?\d{1,3}[\s\-])?\(?\d{3}\)?[\s\-]\d{3}[\s\-]\d{4}\b/',
     ];
 
+    private readonly bool $blockOnDetection;
+
     private readonly array $patterns;
+
+    private readonly string $messageTemplate;
 
     /**
      * Build a PII detection guard with optional custom patterns and message template.
@@ -39,11 +44,13 @@ final class PiiDetectionGuard implements GuardInterface, PromptOnlyGuardInterfac
      * @return void
      */
     public function __construct(
-        private readonly bool $blockOnDetection = true,
+        bool $blockOnDetection = true,
         array $customPatterns = [],
-        private readonly string $messageTemplate = 'PII detected: {type} found in prompt.',
+        string $messageTemplate = self::DEFAULT_MESSAGE_TEMPLATE,
     ) {
+        $this->blockOnDetection = $blockOnDetection;
         $this->patterns = array_merge(self::DEFAULT_PATTERNS, $customPatterns);
+        $this->messageTemplate = $messageTemplate;
     }
 
     /**

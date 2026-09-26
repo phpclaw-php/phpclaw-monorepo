@@ -27,8 +27,28 @@ final class SsrfValidator
 
     private const CGNAT_END = 100 * 256 * 256 * 256 + 127 * 256 * 256 + 255 * 256 + 255;
 
+    private const DEFAULT_PORT_HTTPS = 443;
+
+    private const DEFAULT_PORT_HTTP = 80;
+
+    private const IPV6_LOOPBACK_PACKED = "\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x01";
+
+    private const IPV6_MAPPED_IPV4_PREFIX = "\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\xff\xff";
+
+    private const IPV6_MAPPED_IPV4_PREFIX_LEN = 12;
+
+    private const IPV6_ULA_MASK = 0xFE;
+
+    private const IPV6_ULA_PREFIX = 0xFC;
+
+    private const IPV6_LINK_LOCAL_FIRST_BYTE = 0xFE;
+
+    private const IPV6_LINK_LOCAL_SECOND_BYTE_MASK = 0xC0;
+
+    private const IPV6_LINK_LOCAL_SECOND_BYTE_PREFIX = 0x80;
+
     /**
-     * Validate the URL's host and return the vetted addresses used for IP-pinning. Runs every check assertPublicHost performs: numeric-encoding rejection, blocked-host prefix matching, assertBlockedIpv4 (including CGNAT), and IPv6 range checks, then collects every address that cleared all checks and returns them together with the parsed host and port. For an IP-literal host the literal itself is returned in ips (after passing validation). Port defaults to 443 for https and 80 for http when not present in the URL.
+     * Validate the URL's host against all SSRF checks and return the vetted host, port, and resolved IP addresses for pinning.
      *
      * @param  string  $url  Full URL to validate.
      * @return array{host: string, port: int, ips: list<string>}
@@ -46,7 +66,7 @@ final class SsrfValidator
 
         $scheme = strtolower((string) (parse_url($url, PHP_URL_SCHEME) ?? ''));
         $parsedPort = parse_url($url, PHP_URL_PORT);
-        $port = is_int($parsedPort) ? $parsedPort : ($scheme === 'https' ? 443 : 80);
+        $port = is_int($parsedPort) ? $parsedPort : ($scheme === 'https' ? self::DEFAULT_PORT_HTTPS : self::DEFAULT_PORT_HTTP);
 
         self::assertNotNumericEncoding($host);
 
@@ -70,33 +90,7 @@ final class SsrfValidator
             return ['host' => $host, 'port' => $port, 'ips' => [$host]];
         }
 
-        $ipv4Addresses = @gethostbynamel($host);
-        $ipv6Records = @dns_get_record($host, DNS_AAAA);
-        $ipv4Addresses = is_array($ipv4Addresses) ? $ipv4Addresses : [];
-        $ipv6Records = is_array($ipv6Records) ? $ipv6Records : [];
-
-        if ($ipv4Addresses === [] && $ipv6Records === []) {
-            throw new ToolException(
-                "Could not resolve host '{$host}': unresolvable hosts are blocked."
-            );
-        }
-
-        $ips = [];
-
-        foreach ($ipv4Addresses as $ipv4) {
-            self::assertBlockedIpv4($ipv4, $host);
-            $ips[] = $ipv4;
-        }
-
-        foreach ($ipv6Records as $record) {
-            $ipv6 = strtolower((string) ($record['ipv6'] ?? ''));
-            if ($ipv6 !== '') {
-                self::assertResolvedIpv6($ipv6, $host);
-                $ips[] = $ipv6;
-            }
-        }
-
-        return ['host' => $host, 'port' => $port, 'ips' => $ips];
+        return self::resolveHostname($host, $port);
     }
 
     /**
@@ -130,7 +124,7 @@ final class SsrfValidator
     }
 
     /**
-     * Build a CURLOPT_RESOLVE pin entry from a validated address set, or return null when the host is already an IP literal. Returns "host:port:ip1,ip2,..." for DNS hostnames, handed directly to CURLOPT_RESOLVE. Returns null for IPv4 literals (filter_var detects them) or IPv6 literals (host contains ':'), because IP-literal URLs cannot be DNS-rebind attacked, the address is already fixed by the URL itself.
+     * Build a CURLOPT_RESOLVE pin entry string, or null when the host is already an IP literal.
      *
      * @param  array{host: string, port: int, ips: list<string>}  $resolved  Output of resolveValidated().
      * @return string|null Pin entry string, or null for IP-literal hosts.
@@ -138,7 +132,7 @@ final class SsrfValidator
     public static function pinEntry(array $resolved): ?string
     {
         $host = (string) ($resolved['host'] ?? '');
-        $port = (int) ($resolved['port'] ?? 443);
+        $port = (int) ($resolved['port'] ?? self::DEFAULT_PORT_HTTPS);
         $ips = (array) ($resolved['ips'] ?? []);
 
         if (filter_var($host, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4) !== false || str_contains($host, ':')) {
@@ -153,6 +147,46 @@ final class SsrfValidator
     }
 
     /**
+     * Resolve a hostname via DNS, validate every resolved address, and return the vetted result.
+     *
+     * @param  string  $host  Validated hostname (not an IP literal).
+     * @param  int  $port  Port derived from the URL scheme or explicit port.
+     * @return array{host: string, port: int, ips: list<string>}
+     *
+     * @throws ToolException When the host cannot be resolved or resolves to a private/internal address.
+     */
+    private static function resolveHostname(string $host, int $port): array
+    {
+        $ipv4Addresses = @gethostbynamel($host);
+        $ipv6Records = @dns_get_record($host, DNS_AAAA);
+        $ipv4Addresses = is_array($ipv4Addresses) ? $ipv4Addresses : [];
+        $ipv6Records = is_array($ipv6Records) ? $ipv6Records : [];
+
+        if ($ipv4Addresses === [] && $ipv6Records === []) {
+            throw new ToolException(
+                "Could not resolve host '{$host}': unresolvable hosts are blocked."
+            );
+        }
+
+        $ips = [];
+
+        foreach ($ipv4Addresses as $ipv4) {
+            self::assertBlockedIpv4($ipv4, $host);
+            $ips[] = $ipv4;
+        }
+
+        foreach ($ipv6Records as $record) {
+            $ipv6 = strtolower((string) ($record['ipv6'] ?? ''));
+            if ($ipv6 !== '') {
+                self::assertResolvedIpv6($ipv6, $host);
+                $ips[] = $ipv6;
+            }
+        }
+
+        return ['host' => $host, 'port' => $port, 'ips' => $ips];
+    }
+
+    /**
      * Throw when the host uses non-standard numeric IP encoding.
      *
      * @param  string  $host  Host string extracted from the URL.
@@ -162,26 +196,22 @@ final class SsrfValidator
      */
     private static function assertNotNumericEncoding(string $host): void
     {
-        if (preg_match('/^[0-9]+$/', $host)) {
-            throw new ToolException(
-                "Requests to '{$host}' are blocked (non-standard IP encoding)."
-            );
-        }
+        $blocked = (bool) preg_match('/^[0-9]+$/', $host)
+            || (bool) preg_match('/^0x[0-9a-f]+$/i', $host);
 
-        if (preg_match('/^0x[0-9a-f]+$/i', $host)) {
-            throw new ToolException(
-                "Requests to '{$host}' are blocked (non-standard IP encoding)."
-            );
-        }
-
-        if (str_contains($host, '.')) {
+        if (! $blocked && str_contains($host, '.')) {
             foreach (explode('.', $host) as $part) {
                 if (preg_match('/^0x[0-9a-f]+$/i', $part) || preg_match('/^0[0-7]+$/', $part)) {
-                    throw new ToolException(
-                        "Requests to '{$host}' are blocked (non-standard IP encoding)."
-                    );
+                    $blocked = true;
+                    break;
                 }
             }
+        }
+
+        if ($blocked) {
+            throw new ToolException(
+                "Requests to '{$host}' are blocked (non-standard IP encoding)."
+            );
         }
     }
 
@@ -234,37 +264,30 @@ final class SsrfValidator
             return;
         }
 
-        $b0 = ord($packed[0]);
-        $b1 = ord($packed[1]);
+        $firstByte = ord($packed[0]);
+        $secondByte = ord($packed[1]);
 
-        if ($packed === "\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x01") {
+        if ($packed === self::IPV6_LOOPBACK_PACKED) {
             throw new ToolException(
                 "Requests to '{$host}' are blocked (resolves to IPv6 loopback)."
             );
         }
 
-        if (($b0 & 0xFE) === 0xFC) {
+        if (($firstByte & self::IPV6_ULA_MASK) === self::IPV6_ULA_PREFIX) {
             throw new ToolException(
                 "Requests to '{$host}' are blocked (resolves to private IPv6 address {$ip})."
             );
         }
 
-        if ($b0 === 0xFE && ($b1 & 0xC0) === 0x80) {
+        if ($firstByte === self::IPV6_LINK_LOCAL_FIRST_BYTE && ($secondByte & self::IPV6_LINK_LOCAL_SECOND_BYTE_MASK) === self::IPV6_LINK_LOCAL_SECOND_BYTE_PREFIX) {
             throw new ToolException(
                 "Requests to '{$host}' are blocked (resolves to link-local IPv6 address {$ip})."
             );
         }
 
-        if (substr($packed, 0, 12) === "\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\xff\xff") {
-            $ipv4 = inet_ntop(substr($packed, 12));
+        if (substr($packed, 0, self::IPV6_MAPPED_IPV4_PREFIX_LEN) === self::IPV6_MAPPED_IPV4_PREFIX) {
+            $ipv4 = inet_ntop(substr($packed, self::IPV6_MAPPED_IPV4_PREFIX_LEN));
             if ($ipv4 !== false) {
-                foreach (self::BLOCKED_HOSTS as $blocked) {
-                    if (str_starts_with($ipv4, $blocked)) {
-                        throw new ToolException(
-                            "Requests to '{$host}' are blocked (IPv4-mapped IPv6 {$ip} is private)."
-                        );
-                    }
-                }
                 self::assertBlockedIpv4($ipv4, $host);
             }
         }

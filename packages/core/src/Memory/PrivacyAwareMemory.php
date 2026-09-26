@@ -11,6 +11,8 @@ use PhpClaw\Memory\Contracts\MemoryInterface;
  */
 final class PrivacyAwareMemory implements MemoryInterface
 {
+    private const DEFAULT_NAMESPACE = 'default';
+
     /**
      * Create a new PrivacyAwareMemory instance.
      *
@@ -25,7 +27,7 @@ final class PrivacyAwareMemory implements MemoryInterface
     /**
      * Whether writes are currently flowing through to the inner driver.
      *
-     * @return bool True on success.
+     * @return bool True when message storage is enabled.
      */
     public function storeMessages(): bool
     {
@@ -49,7 +51,7 @@ final class PrivacyAwareMemory implements MemoryInterface
      * @param  string  $namespace  Namespace to scope the read.
      * @return mixed Stored value, or null when absent.
      */
-    public function get(string $key, string $namespace = 'default'): mixed
+    public function get(string $key, string $namespace = self::DEFAULT_NAMESPACE): mixed
     {
         return $this->inner->get($key, $namespace);
     }
@@ -63,7 +65,7 @@ final class PrivacyAwareMemory implements MemoryInterface
      * @param  int|null  $ttl  Time-to-live in seconds, or null for no expiry.
      * @return void
      */
-    public function set(string $key, mixed $value, string $namespace = 'default', ?int $ttl = null): void
+    public function set(string $key, mixed $value, string $namespace = self::DEFAULT_NAMESPACE, ?int $ttl = null): void
     {
         if (! $this->storeMessages) {
             return;
@@ -79,7 +81,7 @@ final class PrivacyAwareMemory implements MemoryInterface
      * @param  string  $namespace  Namespace to scope the deletion.
      * @return void
      */
-    public function forget(string $key, string $namespace = 'default'): void
+    public function forget(string $key, string $namespace = self::DEFAULT_NAMESPACE): void
     {
         $this->inner->forget($key, $namespace);
     }
@@ -90,7 +92,7 @@ final class PrivacyAwareMemory implements MemoryInterface
      * @param  string  $namespace  Namespace to clear.
      * @return void
      */
-    public function flush(string $namespace = 'default'): void
+    public function flush(string $namespace = self::DEFAULT_NAMESPACE): void
     {
         $this->inner->flush($namespace);
     }
@@ -101,7 +103,7 @@ final class PrivacyAwareMemory implements MemoryInterface
      * @param  string  $namespace  Namespace to read.
      * @return array<string, mixed> Key-value map of stored entries.
      */
-    public function all(string $namespace = 'default'): array
+    public function all(string $namespace = self::DEFAULT_NAMESPACE): array
     {
         return $this->inner->all($namespace);
     }
@@ -113,7 +115,7 @@ final class PrivacyAwareMemory implements MemoryInterface
      * @param  string  $namespace  Namespace to check.
      * @return bool True when the key exists.
      */
-    public function has(string $key, string $namespace = 'default'): bool
+    public function has(string $key, string $namespace = self::DEFAULT_NAMESPACE): bool
     {
         return $this->inner->has($key, $namespace);
     }

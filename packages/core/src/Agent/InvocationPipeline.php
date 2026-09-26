@@ -12,8 +12,6 @@ use PhpClaw\Support\Ulid;
 
 /**
  * Wraps every public-API invocation in the standard lifecycle: run id → withRun → augment → guard scan → agent.before → invoke → agent.after → return.
- *
- * @internal
  */
 final class InvocationPipeline
 {
@@ -33,7 +31,7 @@ final class InvocationPipeline
      *
      * @param  string  $message  User message.
      * @param  bool  $streaming  Whether the request is streaming.
-     * @param  callable  $invoke  Invoke.
+     * @param  callable  $invoke  Callable that runs the agent and returns AgentResponse.
      * @return AgentResponse The result.
      */
     public function execute(string $message, bool $streaming, callable $invoke): AgentResponse
@@ -49,8 +47,7 @@ final class InvocationPipeline
             try {
                 $response = $invoke($augmented, $runId, $message);
             } catch (\Throwable $e) {
-                HookDispatcher::agentError($message, $e->getMessage(), get_class($e), streaming: $streaming, runId: $runId);
-                throw $e;
+                $this->reportErrorAndRethrow($e, $message, $streaming, $runId);
             }
 
             $this->fireAgentAfter($message, $response, $streaming, conversationId: '', runId: $runId);
@@ -62,11 +59,11 @@ final class InvocationPipeline
     /**
      * Run a conversational invocation (`sendInConversation` / `streamInConversation`).
      *
-     * @param  Conversation  $conversation  Conversation.
+     * @param  Conversation  $conversation  Conversation context whose history is fed to the agent.
      * @param  string  $message  User message.
      * @param  bool  $streaming  Whether the request is streaming.
-     * @param  (callable(array<string, mixed>): (array<string, mixed>|mixed))|null  $beforePersist  Before persist.
-     * @param  callable  $invoke  Invoke.
+     * @param  (callable(array<string, mixed>): (array<string, mixed>|mixed))|null  $beforePersist  Optional mutator applied to the serialized conversation before persistence.
+     * @param  callable  $invoke  Callable that runs the agent and returns AgentResponse.
      * @return ConversationTurn The result.
      */
     public function executeInConversation(
@@ -91,8 +88,7 @@ final class InvocationPipeline
             try {
                 $response = $invoke($augmented, $conversation->history, $runId, $message);
             } catch (\Throwable $e) {
-                HookDispatcher::agentError($message, $e->getMessage(), get_class($e), conversationId: $conversation->id, streaming: $streaming, runId: $runId);
-                throw $e;
+                $this->reportErrorAndRethrow($e, $message, $streaming, $runId, $conversation->id);
             }
 
             $updated = $conversation
@@ -116,6 +112,24 @@ final class InvocationPipeline
                 conversation: $updated,
             );
         });
+    }
+
+    /**
+     * Fire the agent.error hook and rethrow the caught exception.
+     *
+     * @param  \Throwable  $e  Exception caught during the agent invocation.
+     * @param  string  $message  Original user message reported in the hook payload.
+     * @param  bool  $streaming  Whether the invocation was in streaming mode.
+     * @param  string  $runId  Active run identifier propagated to the hook.
+     * @param  string  $conversationId  Conversation identifier when this is a conversational call; empty otherwise.
+     * @return never Always rethrows $e after firing the hook.
+     *
+     * @throws \Throwable Always.
+     */
+    private function reportErrorAndRethrow(\Throwable $e, string $message, bool $streaming, string $runId, string $conversationId = ''): never
+    {
+        HookDispatcher::agentError($message, $e->getMessage(), get_class($e), conversationId: $conversationId, streaming: $streaming, runId: $runId);
+        throw $e;
     }
 
     /**
@@ -153,8 +167,8 @@ final class InvocationPipeline
     /**
      * Apply the optional beforePersist mutator and write the conversation to memory.
      *
-     * @param  Conversation  $updated  Updated.
-     * @param  (callable(array<string, mixed>): (array<string, mixed>|mixed))|null  $beforePersist  Before persist.
+     * @param  Conversation  $updated  Conversation with the latest turn appended.
+     * @param  (callable(array<string, mixed>): (array<string, mixed>|mixed))|null  $beforePersist  Optional mutator applied to the payload before writing to memory.
      * @return void
      */
     private function persistConversation(Conversation $updated, ?callable $beforePersist): void

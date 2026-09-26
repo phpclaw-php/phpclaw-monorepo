@@ -12,9 +12,7 @@ use Composer\InstalledVersions;
 final class ComposerExtras
 {
     private const CANDIDATE_PATHS = [
-        '/vendor/composer/installed.json',
         '/../../vendor/composer/installed.json',
-        '/../../../vendor/composer/installed.json',
     ];
 
     private static ?array $cache = null;
@@ -182,9 +180,9 @@ final class ComposerExtras
         $packages = self::loadInstalledPackages();
         $extras = [];
 
-        foreach ($packages as $pkg) {
-            $name = $pkg['name'] ?? null;
-            $phpclaw = $pkg['extra']['phpclaw'] ?? null;
+        foreach ($packages as $package) {
+            $name = $package['name'] ?? null;
+            $phpclaw = $package['extra']['phpclaw'] ?? null;
 
             if (! is_string($name) || ! is_array($phpclaw)) {
                 continue;
@@ -204,32 +202,7 @@ final class ComposerExtras
     private static function loadInstalledPackages(): array
     {
         if (class_exists(InstalledVersions::class)) {
-            $packages = [];
-
-            $rawData = InstalledVersions::getAllRawData();
-
-            foreach ($rawData as $entry) {
-                if (isset($entry['root']) && is_array($entry['root'])) {
-                    $packages[] = self::normaliseRoot($entry['root']);
-                }
-
-                $versions = $entry['versions'] ?? [];
-
-                if (! is_array($versions)) {
-                    continue;
-                }
-
-                foreach ($versions as $name => $info) {
-                    if (! is_string($name) || ! is_array($info)) {
-                        continue;
-                    }
-
-                    $info['name'] = $info['name'] ?? $name;
-                    $packages[] = $info;
-                }
-            }
-
-            return $packages;
+            return self::packagesFromInstalledVersions();
         }
 
         $jsonPath = self::locateInstalledJson();
@@ -245,7 +218,7 @@ final class ComposerExtras
         }
 
         try {
-            $data = json_decode($raw, true, 512, JSON_THROW_ON_ERROR);
+            $data = json_decode($raw, associative: true, depth: 512, flags: JSON_THROW_ON_ERROR);
         } catch (\JsonException) {
             return [];
         }
@@ -253,6 +226,39 @@ final class ComposerExtras
         $packages = $data['packages'] ?? $data;
 
         return is_array($packages) ? array_values($packages) : [];
+    }
+
+    /**
+     * Extract the package list from Composer's runtime InstalledVersions API.
+     *
+     * @return list<array<string, mixed>>
+     */
+    private static function packagesFromInstalledVersions(): array
+    {
+        $packages = [];
+
+        foreach (InstalledVersions::getAllRawData() as $entry) {
+            if (isset($entry['root']) && is_array($entry['root'])) {
+                $packages[] = self::normaliseRoot($entry['root']);
+            }
+
+            $versions = $entry['versions'] ?? [];
+
+            if (! is_array($versions)) {
+                continue;
+            }
+
+            foreach ($versions as $name => $info) {
+                if (! is_string($name) || ! is_array($info)) {
+                    continue;
+                }
+
+                $info['name'] = $info['name'] ?? $name;
+                $packages[] = $info;
+            }
+        }
+
+        return $packages;
     }
 
     /**

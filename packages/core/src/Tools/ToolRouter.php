@@ -6,8 +6,6 @@ namespace PhpClaw\Tools;
 
 /**
  * Per-turn tool relevance filter: pins message-named tools, ranks the rest by ordered weighted signals, slices to the budget unless the budget is unlimited, and returns the trimmed set sorted by name so an identical selection is byte-identical across messages.
- *
- * @internal
  */
 final class ToolRouter
 {
@@ -23,7 +21,7 @@ final class ToolRouter
         'some', 'each', 'every', 'per', 'via', 'too', 'very', 'just', 'also', 'only',
         'more', 'most', 'less', 'least', 'such', 'same', 'own', 'how', 'what', 'when',
         'where', 'which', 'who', 'whom', 'why', 'does', 'did', 'done', 'let', 'please',
-        'them', 'they', 'its', 'one', 'two', 'out', 'off', 'over', 'under', 'again',
+        'them', 'they', 'one', 'two', 'out', 'off', 'over', 'under', 'again',
     ];
 
     private const DEFAULT_LIMIT = 10;
@@ -48,15 +46,29 @@ final class ToolRouter
         'opus' => 20,
     ];
 
+    private array $lastRankedNames = [];
+
     /**
      * Create a new ToolRouter instance.
      *
      * @param  int  $maxToolsPerTurn  Explicit per-turn budget; 0 derives it from the model id, UNLIMITED disables the cap.
+     * @param  float  $minScoreShare  Drop ranked tools scoring below this share of the best score; 0 keeps today's fill-to-cap.
      * @return void
      */
     public function __construct(
         private readonly int $maxToolsPerTurn = 0,
+        private readonly float $minScoreShare = 0.0,
     ) {}
+
+    /**
+     * Tool names of the last filter() result in ranked order, pinned tools first.
+     *
+     * @return string[]
+     */
+    public function lastRankedNames(): array
+    {
+        return $this->lastRankedNames;
+    }
 
     /**
      * Filter the full schema list down to the most relevant tools for this message.
@@ -89,9 +101,17 @@ final class ToolRouter
             $scorable[] = $schema;
         }
 
-        $ranked = $this->rank($scorable, $message, $metadata);
+        $rows = $this->rankByScore($scorable, $message, $metadata);
+
+        if ($this->minScoreShare > 0.0 && $rows !== [] && $rows[0]['score'] > 0) {
+            $floor = $rows[0]['score'] * $this->minScoreShare;
+            $rows = array_values(array_filter($rows, static fn (array $r): bool => $r['score'] >= $floor));
+        }
+
+        $ranked = array_map(static fn (array $row): array => $row['schema'], $rows);
         $slots = max(0, $limit - count($pinned));
         $chosen = array_merge($pinned, array_slice($ranked, 0, $slots));
+        $this->lastRankedNames = array_map(fn (array $s): string => $this->schemaName($s), $chosen);
 
         usort($chosen, fn (array $a, array $b): int => strcmp($this->schemaName($a), $this->schemaName($b)));
 
@@ -110,31 +130,76 @@ final class ToolRouter
     {
         $best = 0;
 
+        $weights = $this->wordWeights($allSchemas, $this->keywords($message), $metadata, $message);
+
         foreach ($allSchemas as $schema) {
-            $best = max($best, $this->score($schema, $this->keywords($message), $metadata));
+            $best = max($best, $this->calculateScore($schema, $weights, $metadata));
         }
 
-        return $best === 0 ? 0.0 : round(min(1.0, $best / $this->maxPossibleScore()), 4);
+        return $best <= 0.0 ? 0.0 : round(min(1.0, $best / $this->computeMaxPossibleScore()), 4);
     }
 
     /**
-     * Order schemas by descending score, breaking ties on tool name so equal scores never fall back
-     * to the order the tools happened to be declared in.
+     * Weight each message word by how rare it is across the schemas, ln(N / carriers), damped by how often it
+     * repeats in the message, 1 / (1 + ln(repeats)), so a pasted document's words do not outrank the request.
+     *
+     * @param  array<int, array<string, mixed>>  $schemas  Schemas being ranked.
+     * @param  string[]  $words  Keyword tokens from the message.
+     * @param  array<string, ToolRoutingMetadata>  $metadata  Routing metadata keyed by lowercased tool name.
+     * @param  string  $message  Raw message, used to count repeats; empty skips the damping.
+     * @return array<string, float> Weight per message word.
+     */
+    private function wordWeights(array $schemas, array $words, array $metadata, string $message = ''): array
+    {
+        $total = count($schemas);
+        if ($total < 3 || $words === []) {
+            return array_fill_keys($words, 1.0);
+        }
+
+        $repeats = $message === '' ? [] : array_count_values($this->tokens($message));
+
+        $signals = [];
+        foreach ($schemas as $schema) {
+            $name = $this->schemaName($schema);
+            $routing = $metadata[$name] ?? ToolRoutingMetadata::empty();
+            $signals[] = $this->keywords(implode(' ', array_merge(
+                [$name, $this->schemaDescription($schema)],
+                $routing->intents, $routing->domains, $routing->tags, $routing->examples,
+            )));
+        }
+
+        $weights = [];
+        foreach ($words as $word) {
+            $carriers = 0;
+            foreach ($signals as $signal) {
+                if (in_array($word, $signal, true)) {
+                    $carriers++;
+                }
+            }
+            $rarity = $carriers === 0 ? 1.0 : log($total / $carriers);
+            $weights[$word] = $rarity / (1 + log($repeats[$word] ?? 1));
+        }
+
+        return $weights;
+    }
+
+    /**
+     * Score and order schemas, returning rows with the score kept for callers that apply a floor.
      *
      * @param  array<int, array<string, mixed>>  $schemas  Schemas eligible for scoring.
      * @param  string  $message  Current user message.
      * @param  array<string, ToolRoutingMetadata>  $metadata  Routing metadata keyed by lowercased tool name.
-     * @return array<int, array<string, mixed>> Schemas in ranked order.
+     * @return array<int, array{schema: array<string, mixed>, score: float, name: string}> Rows in ranked order.
      */
-    private function rank(array $schemas, string $message, array $metadata): array
+    private function rankByScore(array $schemas, string $message, array $metadata): array
     {
-        $words = $this->keywords($message);
+        $weights = $this->wordWeights($schemas, $this->keywords($message), $metadata, $message);
         $rows = [];
 
         foreach ($schemas as $schema) {
             $rows[] = [
                 'schema' => $schema,
-                'score' => $this->score($schema, $words, $metadata),
+                'score' => $this->calculateScore($schema, $weights, $metadata),
                 'name' => $this->schemaName($schema),
             ];
         }
@@ -143,29 +208,29 @@ final class ToolRouter
             return $b['score'] <=> $a['score'] ?: strcmp($a['name'], $b['name']);
         });
 
-        return array_map(static fn (array $row): array => $row['schema'], $rows);
+        return $rows;
     }
 
     /**
      * Score one schema against the message words using the ordered weight map.
      *
      * @param  array<string, mixed>  $schema  Single tool schema.
-     * @param  string[]  $words  Keyword tokens from the message.
+     * @param  array<string, float>  $weights  Message word weights from wordWeights().
      * @param  array<string, ToolRoutingMetadata>  $metadata  Routing metadata keyed by lowercased tool name.
-     * @return int Weighted score.
+     * @return float Weighted score.
      */
-    private function score(array $schema, array $words, array $metadata): int
+    private function calculateScore(array $schema, array $weights, array $metadata): float
     {
         $name = $this->schemaName($schema);
         $routing = $metadata[$name] ?? ToolRoutingMetadata::empty();
 
-        $score = 0;
-        $score += self::WEIGHTS['intent'] * $this->overlap($words, $routing->intents);
-        $score += self::WEIGHTS['domain'] * $this->overlap($words, $routing->domains);
-        $score += self::WEIGHTS['tag'] * $this->overlap($words, $routing->tags);
-        $score += self::WEIGHTS['example'] * $this->overlap($words, $routing->examples);
-        $score += self::WEIGHTS['name'] * $this->overlap($words, [$name]);
-        $score += self::WEIGHTS['description'] * $this->overlap($words, [$this->schemaDescription($schema)]);
+        $score = 0.0;
+        $score += self::WEIGHTS['intent'] * $this->countOverlap($weights, $routing->intents);
+        $score += self::WEIGHTS['domain'] * $this->countOverlap($weights, $routing->domains);
+        $score += self::WEIGHTS['tag'] * $this->countOverlap($weights, $routing->tags);
+        $score += self::WEIGHTS['example'] * $this->countOverlap($weights, $routing->examples);
+        $score += self::WEIGHTS['name'] * $this->countOverlap($weights, [$name]);
+        $score += self::WEIGHTS['description'] * $this->countOverlap($weights, [$this->schemaDescription($schema)]);
 
         return $score;
     }
@@ -173,17 +238,22 @@ final class ToolRouter
     /**
      * Count how many message words appear in the tokenised signal list.
      *
-     * @param  string[]  $words  Keyword tokens from the message.
+     * @param  array<string, float>  $weights  Message word weights from wordWeights().
      * @param  string[]  $signals  Raw signal strings from routing metadata or the schema.
-     * @return int Number of distinct overlapping tokens.
+     * @return float Sum of the weights of the overlapping tokens.
      */
-    private function overlap(array $words, array $signals): int
+    private function countOverlap(array $weights, array $signals): float
     {
-        if ($signals === [] || $words === []) {
-            return 0;
+        if ($signals === [] || $weights === []) {
+            return 0.0;
         }
 
-        return count(array_intersect($words, $this->keywords(implode(' ', $signals))));
+        $sum = 0.0;
+        foreach (array_intersect_key($weights, array_flip($this->keywords(implode(' ', $signals)))) as $weight) {
+            $sum += $weight;
+        }
+
+        return $sum;
     }
 
     /**
@@ -191,7 +261,7 @@ final class ToolRouter
      *
      * @return int
      */
-    private function maxPossibleScore(): int
+    private function computeMaxPossibleScore(): int
     {
         return array_sum(self::WEIGHTS);
     }
@@ -228,13 +298,13 @@ final class ToolRouter
     {
         $found = [];
 
-        preg_match_all('/\b(?:use|using|with|via)\s+([A-Za-z][A-Za-z0-9]*Tool)\b/i', $message, $m1);
-        foreach ($m1[1] as $camel) {
+        preg_match_all('/\b(?:use|using|with|via)\s+([A-Za-z][A-Za-z0-9]*Tool)\b/i', $message, $camelMatches);
+        foreach ($camelMatches[1] as $camel) {
             $found[] = strtolower((string) preg_replace('/(?<!^)[A-Z]/', '_$0', substr($camel, 0, -4)));
         }
 
-        preg_match_all('/\b([a-z][a-z0-9]*(?:_[a-z0-9]+)+)\b/', strtolower($message), $m2);
-        foreach ($m2[1] as $snake) {
+        preg_match_all('/\b([a-z][a-z0-9]*(?:_[a-z0-9]+)+)\b/', strtolower($message), $snakeMatches);
+        foreach ($snakeMatches[1] as $snake) {
             $found[] = $snake;
         }
 
@@ -283,7 +353,7 @@ final class ToolRouter
 
         $model = strtolower($model);
         foreach (self::MODEL_LIMITS as $fragment => $limit) {
-            if ($fragment !== '' && $this->modelMatchesFragment($model, (string) $fragment)) {
+            if ($this->modelMatchesFragment($model, $fragment)) {
                 return $limit;
             }
         }
@@ -308,12 +378,23 @@ final class ToolRouter
     }
 
     /**
-     * Lowercase, split, drop stopwords and short tokens, and dedupe a string into keyword tokens; snake_case words also contribute their parts so a tool name matches the plain word.
+     * Lowercase, split, drop stopwords and short tokens, singularise, and dedupe a string into keyword tokens; snake_case words also contribute their parts so a tool name matches the plain word.
      *
      * @param  string  $text  Source text.
-     * @return string[] Unique tokens of at least MIN_KEYWORD_LEN characters.
+     * @return string[] Unique singularised tokens from words of at least MIN_KEYWORD_LEN characters.
      */
     private function keywords(string $text): array
+    {
+        return array_values(array_unique($this->tokens($text)));
+    }
+
+    /**
+     * Keyword tokens of a string with repeats kept, the raw form keywords() dedupes.
+     *
+     * @param  string  $text  Source text.
+     * @return string[] Singularised tokens of at least MIN_KEYWORD_LEN characters, stopwords removed, in order of appearance.
+     */
+    private function tokens(string $text): array
     {
         $tokens = [];
 
@@ -325,10 +406,31 @@ final class ToolRouter
             }
         }
 
-        return array_values(array_unique(array_filter(
+        $kept = array_filter(
             $tokens,
             static fn (string $w): bool => strlen($w) >= self::MIN_KEYWORD_LEN
                 && ! in_array($w, self::STOPWORDS, true),
-        )));
+        );
+
+        return array_values(array_map(self::singular(...), $kept));
+    }
+
+    /**
+     * Reduce a plural keyword to its singular so "editors" matches the tag "editor" and "categories" matches "category".
+     *
+     * @param  string  $word  Lowercased keyword.
+     * @return string The singular form, or the word unchanged when it is too short or not plural.
+     */
+    private static function singular(string $word): string
+    {
+        if (strlen($word) <= self::MIN_KEYWORD_LEN || ! str_ends_with($word, 's')) {
+            return $word;
+        }
+
+        if (str_ends_with($word, 'ies')) {
+            return substr($word, 0, -3).'y';
+        }
+
+        return substr($word, 0, -1);
     }
 }

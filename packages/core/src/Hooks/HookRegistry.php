@@ -16,6 +16,8 @@ final class HookRegistry
 
     private const EVENT_CONTEXT_KEY = 'event';
 
+    private const WILDCARD = '*';
+
     private static array $hooks = [];
 
     private static array $sorted = [];
@@ -55,7 +57,7 @@ final class HookRegistry
      * Whether a HookInterface class is already registered for the given event.
      *
      * @param  string  $event  Lifecycle event name.
-     * @param  class-string<HookInterface>  $class  Exception class name.
+     * @param  class-string<HookInterface>  $class  Fully-qualified class name of the listener.
      * @return bool
      */
     public static function hasListener(string $event, string $class): bool
@@ -74,10 +76,10 @@ final class HookRegistry
     {
         if ($handler instanceof HookInterface) {
             $class = $handler::class;
-            if (isset(self::$registeredClasses['*'][$class])) {
+            if (isset(self::$registeredClasses[self::WILDCARD][$class])) {
                 return;
             }
-            self::$registeredClasses['*'][$class] = true;
+            self::$registeredClasses[self::WILDCARD][$class] = true;
         }
 
         self::$anyHooks[] = [
@@ -225,8 +227,8 @@ final class HookRegistry
         foreach ($list as ['handler' => $handler]) {
             try {
                 $handler($context);
-            } catch (\Throwable $e) {
-                Log::error('[phpclaw] hook error on '.($context['event'] ?? 'unknown').': '.$e->getMessage());
+            } catch (\Throwable $exception) {
+                Log::error('[phpclaw] hook error on '.($context[self::EVENT_CONTEXT_KEY] ?? 'unknown').': '.$exception->getMessage());
             }
         }
     }

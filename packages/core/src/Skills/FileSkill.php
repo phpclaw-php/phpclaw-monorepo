@@ -12,6 +12,12 @@ use PhpClaw\Skills\Contracts\SkillInterface;
  */
 final class FileSkill implements SkillInterface
 {
+    private const FRONTMATTER_DELIMITER = '---';
+
+    private const FRONTMATTER_DELIMITER_LENGTH = 3;
+
+    private const YAML_TRIM_CHARS = " \t\"'";
+
     private string $name;
 
     private string $description;
@@ -93,24 +99,24 @@ final class FileSkill implements SkillInterface
      * @param  string  $path  File path used in exception messages.
      * @return array{string, string}
      *
-     * @throws SkillException
+     * @throws SkillException When the frontmatter is missing or unclosed.
      */
     private function splitFrontmatter(string $raw, string $path): array
     {
         $raw = ltrim($raw);
 
-        if (! str_starts_with($raw, '---')) {
+        if (! str_starts_with($raw, self::FRONTMATTER_DELIMITER)) {
             throw new SkillException("Skill file missing YAML frontmatter: {$path}");
         }
 
-        $end = strpos($raw, '---', 3);
+        $end = strpos($raw, self::FRONTMATTER_DELIMITER, self::FRONTMATTER_DELIMITER_LENGTH);
 
         if ($end === false) {
             throw new SkillException("Skill file has unclosed YAML frontmatter: {$path}");
         }
 
-        $frontmatter = substr($raw, 3, $end - 3);
-        $body = substr($raw, $end + 3);
+        $frontmatter = substr($raw, self::FRONTMATTER_DELIMITER_LENGTH, $end - self::FRONTMATTER_DELIMITER_LENGTH);
+        $body = substr($raw, $end + self::FRONTMATTER_DELIMITER_LENGTH);
 
         return [$frontmatter, $body];
     }
@@ -125,8 +131,8 @@ final class FileSkill implements SkillInterface
      */
     private function extractString(string $yaml, string $key, string $default): string
     {
-        if (preg_match('/^'.preg_quote($key, '/').'\s*:\s*(.+)$/m', $yaml, $m)) {
-            return trim($m[1], " \t\"'");
+        if (preg_match('/^'.preg_quote($key, '/').'\s*:\s*(.+)$/m', $yaml, $matches)) {
+            return trim($matches[1], self::YAML_TRIM_CHARS);
         }
 
         return $default;
@@ -151,7 +157,7 @@ final class FileSkill implements SkillInterface
         }
 
         return array_values(array_filter(array_map(
-            fn (string $t) => trim($t, " \t\"'"),
+            fn (string $tag) => trim($tag, self::YAML_TRIM_CHARS),
             explode(',', $raw),
         )));
     }

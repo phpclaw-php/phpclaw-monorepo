@@ -21,7 +21,7 @@ use PhpClaw\Tools\Security\BlockedPaths;
  * Replaces a unique old_str with new_str in a workspace file, failing loudly when old_str is missing or matches more than once.
  */
 #[Tool(
-    name: 'file_edit',
+    name: self::TOOL_NAME,
     description: 'Replace a unique string in a workspace file (surgical edit, not a full rewrite).',
     since: '1.0.0',
     default: true,
@@ -36,6 +36,8 @@ final class FileEditTool implements AuthorizableToolInterface, MutatingToolInter
     public const DEFAULT_WORKSPACE_SUBPATH = 'storage/phpclaw';
 
     public const DEFAULT_MAX_BYTES = 2097152;
+
+    private const TOOL_NAME = 'file_edit';
 
     private const BINARY_SNIFF_BYTES = 8192;
 
@@ -55,6 +57,12 @@ final class FileEditTool implements AuthorizableToolInterface, MutatingToolInter
 
     private const NOISE_BLOCKED_DIRS = BlockedPaths::NOISE_DIRS;
 
+    private readonly bool $followSymlinks;
+
+    private readonly array $noiseBlockedDirs;
+
+    private readonly int $maxBytes;
+
     private readonly string $workspaceRootConfigured;
 
     private ?string $workspaceRootResolved = null;
@@ -72,14 +80,16 @@ final class FileEditTool implements AuthorizableToolInterface, MutatingToolInter
      */
     public function __construct(
         ?string $workspaceRoot = null,
-        private readonly bool $followSymlinks = false,
-        private readonly array $noiseBlockedDirs = self::NOISE_BLOCKED_DIRS,
-        private readonly int $maxBytes = self::DEFAULT_MAX_BYTES,
+        bool $followSymlinks = false,
+        array $noiseBlockedDirs = self::NOISE_BLOCKED_DIRS,
+        int $maxBytes = self::DEFAULT_MAX_BYTES,
     ) {
+        $this->followSymlinks = $followSymlinks;
+        $this->noiseBlockedDirs = $noiseBlockedDirs;
+        $this->maxBytes = $maxBytes;
         if ($this->maxBytes < 1) {
             throw new \InvalidArgumentException('maxBytes must be greater than 0.');
         }
-
         $this->workspaceRootConfigured = rtrim(
             $workspaceRoot ?? (getcwd().DIRECTORY_SEPARATOR.self::DEFAULT_WORKSPACE_SUBPATH),
             DIRECTORY_SEPARATOR
@@ -93,7 +103,7 @@ final class FileEditTool implements AuthorizableToolInterface, MutatingToolInter
      */
     public function name(): string
     {
-        return 'file_edit';
+        return self::TOOL_NAME;
     }
 
     /**
@@ -149,17 +159,17 @@ final class FileEditTool implements AuthorizableToolInterface, MutatingToolInter
             throw new ToolException('file_edit: path and old_str are required.');
         }
 
-        $abs = $this->validatePath($file);
+        $absolutePath = $this->validatePath($file);
 
-        if (! is_file($abs)) {
+        if (! is_file($absolutePath)) {
             throw new ToolException('file_edit: file not found: '.$this->sanitizeForMessage($file));
         }
 
-        if (! FileReadLog::wasRead($this->resolveWorkspaceRoot(), $abs)) {
+        if (! FileReadLog::wasRead($this->resolveWorkspaceRoot(), $absolutePath)) {
             throw new ToolException('file_edit: file_read must be called on '.$this->sanitizeForMessage($file).' before editing it.');
         }
 
-        $contents = $this->readAndCheckBinary($abs, $file);
+        $contents = $this->readAndCheckBinary($absolutePath, $file);
 
         $count = substr_count($contents, $oldStr);
 
@@ -174,7 +184,7 @@ final class FileEditTool implements AuthorizableToolInterface, MutatingToolInter
         return [
             'input' => [
                 'file' => $file,
-                'absolute_path' => $abs,
+                'absolute_path' => $absolutePath,
                 'contents' => $contents,
                 'old_str' => $oldStr,
                 'new_str' => (string) ($input['new_str'] ?? ''),
@@ -434,15 +444,15 @@ final class FileEditTool implements AuthorizableToolInterface, MutatingToolInter
      */
     private function checkExtension(string $path): void
     {
-        $ext = strtolower(pathinfo($path, PATHINFO_EXTENSION));
+        $extension = strtolower(pathinfo($path, PATHINFO_EXTENSION));
         $basename = strtolower(basename($path));
 
         if ($basename === '.env' || str_starts_with($basename, '.env.')) {
             throw new ToolException("file_edit: Access to '".$this->sanitizeForMessage($basename)."' files is blocked.");
         }
 
-        if ($ext !== '' && in_array($ext, self::BLOCKED_EXTENSIONS, true)) {
-            throw new ToolException("file_edit: Files with extension '.".$this->sanitizeForMessage($ext)."' are blocked.");
+        if ($extension !== '' && in_array($extension, self::BLOCKED_EXTENSIONS, true)) {
+            throw new ToolException("file_edit: Files with extension '.".$this->sanitizeForMessage($extension)."' are blocked.");
         }
     }
 

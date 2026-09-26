@@ -16,7 +16,7 @@ use PhpClaw\Tools\Contracts\ToolRoutingInterface;
  * Recursive read-only pattern search across workspace files, returns file, line, match, and context.
  */
 #[Tool(
-    name: 'code_search',
+    name: self::TOOL_NAME,
     description: 'Search a pattern across workspace files; returns file, line, match, and context.',
     since: '1.0.0',
     default: true,
@@ -28,6 +28,8 @@ final class CodeSearchTool implements AuthorizableToolInterface, ToolInterface, 
 
     public const DEFAULT_WORKSPACE_SUBPATH = 'storage/phpclaw';
 
+    private const TOOL_NAME = 'code_search';
+
     private const MAX_SCAN_ROWS = 1000;
 
     private const MAX_PAGE_BYTES = 8192;
@@ -37,6 +39,8 @@ final class CodeSearchTool implements AuthorizableToolInterface, ToolInterface, 
     private const CONTEXT_LINES = 0;
 
     private const SKIP_DIRS = ['vendor', 'node_modules', '.git', '.idea'];
+
+    private const MAX_CONTEXT_LINES = 5;
 
     private const MAX_BACKTRACK_STEPS = 200000;
 
@@ -65,7 +69,7 @@ final class CodeSearchTool implements AuthorizableToolInterface, ToolInterface, 
      */
     public function name(): string
     {
-        return 'code_search';
+        return self::TOOL_NAME;
     }
 
     /**
@@ -142,7 +146,7 @@ final class CodeSearchTool implements AuthorizableToolInterface, ToolInterface, 
                 'root' => $root,
                 'extension' => ltrim((string) ($input['extension'] ?? ''), '.'),
                 'is_regex' => $isRegex,
-                'context_lines' => max(0, min(5, (int) ($input['context_lines'] ?? self::CONTEXT_LINES))),
+                'context_lines' => max(0, min(self::MAX_CONTEXT_LINES, (int) ($input['context_lines'] ?? self::CONTEXT_LINES))),
                 'with_content' => array_key_exists('context_lines', $input),
                 'offset' => max(0, (int) ($input['offset'] ?? 0)),
             ],
@@ -163,9 +167,9 @@ final class CodeSearchTool implements AuthorizableToolInterface, ToolInterface, 
                 (string) $input['root'],
                 (string) $input['pattern'],
                 (string) $input['extension'],
-                (bool) $input['is_regex'],
-                (int) $input['context_lines'],
-                (int) $input['offset'],
+                isRegex: (bool) $input['is_regex'],
+                contextLines: (int) $input['context_lines'],
+                offset: (int) $input['offset'],
             ),
         ];
     }
@@ -198,7 +202,7 @@ final class CodeSearchTool implements AuthorizableToolInterface, ToolInterface, 
         $bytes = 0;
 
         foreach (array_slice($results, 0, self::MAX_SCAN_ROWS) as $row) {
-            $shaped = $this->shapeRow($row, (bool) $input['with_content'], (int) $input['context_lines']);
+            $shaped = $this->shapeRow($row, withContent: (bool) $input['with_content'], contextLines: (int) $input['context_lines']);
             $bytes += strlen((string) json_encode($shaped)) + 1;
 
             if ($bytes > self::MAX_PAGE_BYTES && $rows !== []) {
@@ -231,10 +235,10 @@ final class CodeSearchTool implements AuthorizableToolInterface, ToolInterface, 
      *
      * @param  array<string, mixed>  $row  Full collected match.
      * @param  bool  $withContent  Whether the caller passed context_lines at all.
-     * @param  int  $ctx  Requested context lines.
+     * @param  int  $contextLines  Requested context lines.
      * @return array<string, mixed> The trimmed row.
      */
-    private function shapeRow(array $row, bool $withContent, int $ctx): array
+    private function shapeRow(array $row, bool $withContent, int $contextLines): array
     {
         $shaped = ['file' => $row['file'], 'line' => $row['line']];
 
@@ -244,7 +248,7 @@ final class CodeSearchTool implements AuthorizableToolInterface, ToolInterface, 
 
         $shaped['match'] = $row['match'];
 
-        if ($ctx > 0) {
+        if ($contextLines > 0) {
             $shaped['before'] = $row['before'];
             $shaped['after'] = $row['after'];
         }
@@ -266,7 +270,7 @@ final class CodeSearchTool implements AuthorizableToolInterface, ToolInterface, 
             return $this->workspaceRoot;
         }
 
-        $ws = realpath($this->workspaceRoot) ?: $this->workspaceRoot;
+        $workspaceBase = realpath($this->workspaceRoot) ?: $this->workspaceRoot;
 
         $real = realpath($this->isAbsolutePath($subPath)
             ? $subPath
@@ -276,7 +280,7 @@ final class CodeSearchTool implements AuthorizableToolInterface, ToolInterface, 
             throw new ToolException("code_search: directory not found: {$subPath}");
         }
 
-        if (! str_starts_with($real.DIRECTORY_SEPARATOR, rtrim($ws, '/\\').DIRECTORY_SEPARATOR)) {
+        if (! str_starts_with($real.DIRECTORY_SEPARATOR, rtrim($workspaceBase, '/\\').DIRECTORY_SEPARATOR)) {
             throw new ToolException('code_search: path escapes workspace root - blocked.');
         }
 
@@ -307,20 +311,20 @@ final class CodeSearchTool implements AuthorizableToolInterface, ToolInterface, 
      *
      * @param  string  $root  Absolute directory to search.
      * @param  string  $pattern  Literal or regex pattern.
-     * @param  string  $ext  Extension filter, or '' for any.
+     * @param  string  $extension  Extension filter, or '' for any.
      * @param  bool  $isRegex  Whether the pattern is a regex.
-     * @param  int  $ctx  Context lines around each match.
+     * @param  int  $contextLines  Context lines around each match.
      * @param  int  $offset  Matches to skip before collecting, for paging.
      * @return list<array<string, mixed>> Up to MAX_SCAN_ROWS + 1 rows, the extra one signalling that more exist.
      */
-    private function scan(string $root, string $pattern, string $ext, bool $isRegex, int $ctx, int $offset = 0): array
+    private function scan(string $root, string $pattern, string $extension, bool $isRegex, int $contextLines, int $offset = 0): array
     {
         $results = [];
         $seen = 0;
         $iterator = new \RecursiveIteratorIterator(
             new \RecursiveCallbackFilterIterator(
                 new \RecursiveDirectoryIterator($root, \FilesystemIterator::SKIP_DOTS),
-                static fn (\SplFileInfo $f): bool => ! in_array($f->getFilename(), self::SKIP_DIRS, true),
+                static fn (\SplFileInfo $fileInfo): bool => ! in_array($fileInfo->getFilename(), self::SKIP_DIRS, true),
             ),
         );
 
@@ -337,7 +341,7 @@ final class CodeSearchTool implements AuthorizableToolInterface, ToolInterface, 
                 if (! $file->isFile() || $file->getSize() > self::MAX_FILE_BYTES) {
                     continue;
                 }
-                if ($ext !== '' && strtolower($file->getExtension()) !== strtolower($ext)) {
+                if ($extension !== '' && strtolower($file->getExtension()) !== strtolower($extension)) {
                     continue;
                 }
 
@@ -349,16 +353,12 @@ final class CodeSearchTool implements AuthorizableToolInterface, ToolInterface, 
                 foreach ($lines as $i => $line) {
                     $linesScanned++;
 
-                    if ($isRegex) {
-                        $matched = @preg_match($pattern, $line);
-                        if ($matched === false) {
-                            $skipped++;
+                    $hit = $this->matchLine($line, $pattern, $isRegex);
 
-                            continue;
-                        }
-                        $hit = (bool) $matched;
-                    } else {
-                        $hit = str_contains($line, $pattern);
+                    if ($hit === null) {
+                        $skipped++;
+
+                        continue;
                     }
 
                     if (! $hit) {
@@ -369,13 +369,7 @@ final class CodeSearchTool implements AuthorizableToolInterface, ToolInterface, 
                         continue;
                     }
 
-                    $results[] = [
-                        'file' => substr($file->getPathname(), strlen($this->workspaceRoot) + 1),
-                        'line' => $i + 1,
-                        'match' => $line,
-                        'before' => array_slice($lines, max(0, $i - $ctx), min($ctx, $i)),
-                        'after' => array_slice($lines, $i + 1, $ctx),
-                    ];
+                    $results[] = $this->buildMatchRow($file->getPathname(), $i, $line, $lines, $contextLines);
 
                     if (count($results) > self::MAX_SCAN_ROWS) {
                         return $results;
@@ -396,6 +390,46 @@ final class CodeSearchTool implements AuthorizableToolInterface, ToolInterface, 
         }
 
         return $results;
+    }
+
+    /**
+     * Determine whether a line matches the pattern; returns null when a regex hits the backtrack ceiling.
+     *
+     * @param  string  $line  Source line to test.
+     * @param  string  $pattern  Literal string or compiled regex pattern.
+     * @param  bool  $isRegex  Whether pattern is a regex.
+     * @return bool|null True on match, false on no match, null when a regex backtrack limit is hit.
+     */
+    private function matchLine(string $line, string $pattern, bool $isRegex): ?bool
+    {
+        if (! $isRegex) {
+            return str_contains($line, $pattern);
+        }
+
+        $matched = @preg_match($pattern, $line);
+
+        return $matched === false ? null : (bool) $matched;
+    }
+
+    /**
+     * Build a single result row from a confirmed match.
+     *
+     * @param  string  $filePath  Absolute path of the matched file.
+     * @param  int  $index  Zero-based line index within the file.
+     * @param  string  $line  The matched source line.
+     * @param  string[]  $lines  All lines of the file, for context slicing.
+     * @param  int  $contextLines  Number of surrounding lines to include.
+     * @return array<string, mixed> Result row with file, line, match, before, and after keys.
+     */
+    private function buildMatchRow(string $filePath, int $index, string $line, array $lines, int $contextLines): array
+    {
+        return [
+            'file' => substr($filePath, strlen($this->workspaceRoot) + 1),
+            'line' => $index + 1,
+            'match' => $line,
+            'before' => array_slice($lines, max(0, $index - $contextLines), min($contextLines, $index)),
+            'after' => array_slice($lines, $index + 1, $contextLines),
+        ];
     }
 
     /**

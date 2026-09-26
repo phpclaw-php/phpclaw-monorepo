@@ -17,7 +17,7 @@ use PhpClaw\Tools\Contracts\ToolRoutingInterface;
 use PhpClaw\Tools\Security\BlockedPaths;
 
 /**
- * Executes shell commands from an explicit allowlist, hard-blocked list enforced, metacharacters stripped.
+ * Executes shell commands from an explicit allowlist, hard-blocked list enforced, metacharacters rejected.
  */
 #[Tool(
     name: 'shell',
@@ -37,6 +37,8 @@ final class ShellTool implements AuthorizableToolInterface, MutatingToolInterfac
     private const PROCESS_TIMEOUT_SECONDS = 5;
 
     private const HARD_READ_CEILING_BYTES = 10485760;
+
+    private const SIGKILL = 9;
 
     private const DEFAULT_ALLOWLIST = [
         'ls', 'pwd', 'df',
@@ -166,16 +168,16 @@ final class ShellTool implements AuthorizableToolInterface, MutatingToolInterfac
 
         $this->rejectOnMetacharacters($command);
 
-        [$cmdName, $safe] = $this->parseCommand($command);
+        $cmdName = $this->parseCommand($command);
 
         $this->enforceCommandBlocklists($command, $cmdName);
 
         if (in_array($cmdName, self::FILE_READING_COMMANDS, true)) {
-            $this->validateFileArguments($safe, $cmdName);
+            $this->validateFileArguments($command, $cmdName);
         }
 
         return [
-            'input' => ['command' => $safe, 'command_name' => $cmdName],
+            'input' => ['command' => $command, 'command_name' => $cmdName],
             'result' => null,
         ];
     }
@@ -241,7 +243,7 @@ final class ShellTool implements AuthorizableToolInterface, MutatingToolInterfac
             return true;
         }
 
-        [$cmdName] = $this->parseCommand($command);
+        $cmdName = $this->parseCommand($command);
 
         return ! in_array($cmdName, self::READONLY_COMMANDS, true);
     }
@@ -301,14 +303,13 @@ final class ShellTool implements AuthorizableToolInterface, MutatingToolInterfac
      * Extract the leading command name from an already-validated command string.
      *
      * @param  string  $command  Raw command string from the LLM.
-     * @return array{0: string, 1: string} [cmdName, command]
+     * @return string Lower-cased first word of the command.
      */
-    private function parseCommand(string $command): array
+    private function parseCommand(string $command): string
     {
         preg_match('/^([a-zA-Z0-9_\-]+)/', $command, $matches);
-        $cmdName = strtolower($matches[1] ?? '');
 
-        return [$cmdName, $command];
+        return strtolower($matches[1] ?? '');
     }
 
     /**
@@ -342,7 +343,7 @@ final class ShellTool implements AuthorizableToolInterface, MutatingToolInterfac
     /**
      * Validate file arguments in file-reading commands against sensitive file rules.
      *
-     * @param  string  $command  Metacharacter-stripped command string.
+     * @param  string  $command  Raw command string, already checked for shell metacharacters.
      * @param  string  $cmdName  First-word command name.
      * @return void
      *
@@ -356,23 +357,30 @@ final class ShellTool implements AuthorizableToolInterface, MutatingToolInterfac
 
         foreach ($tokens as $token) {
             $token = trim($token);
+
             if ($token === '') {
                 continue;
             }
 
-            if (str_starts_with($token, '-')) {
-                $eq = strpos($token, '=');
-                if ($eq !== false) {
-                    $candidate = substr($token, $eq + 1);
-                    if ($candidate !== '') {
-                        $this->assertPathNotSensitive($command, $cmdName, $candidate);
-                    }
-                }
+            if (! str_starts_with($token, '-')) {
+                $this->assertPathNotSensitive($command, $cmdName, $token);
 
                 continue;
             }
 
-            $this->assertPathNotSensitive($command, $cmdName, $token);
+            $equalsPos = strpos($token, '=');
+
+            if ($equalsPos === false) {
+                continue;
+            }
+
+            $candidate = substr($token, $equalsPos + 1);
+
+            if ($candidate === '') {
+                continue;
+            }
+
+            $this->assertPathNotSensitive($command, $cmdName, $candidate);
         }
     }
 
@@ -390,9 +398,9 @@ final class ShellTool implements AuthorizableToolInterface, MutatingToolInterfac
     }
 
     /**
-     * Check one path-like token (a plain argument, or a flag's embedded '=' value) against every sensitive-file rule. Identical logic to what validateFileArguments() ran inline before the flag-embedded-path fix, extracted so both the plain-token and flag-value paths share it.
+     * Check one path-like token (a plain argument, or a flag's embedded '=' value) against every sensitive-file rule.
      *
-     * @param  string  $command  Metacharacter-stripped command string (for hook/error context).
+     * @param  string  $command  Raw command string, already checked for shell metacharacters (for hook/error context).
      * @param  string  $cmdName  First-word command name (for hook/error context).
      * @param  string  $token  Path-like token to validate.
      * @return void
@@ -403,7 +411,7 @@ final class ShellTool implements AuthorizableToolInterface, MutatingToolInterfac
     {
         $basename = strtolower(basename($token));
         $effective = self::stripBackupSuffix($basename);
-        $ext = strtolower(pathinfo($token, PATHINFO_EXTENSION));
+        $extension = strtolower(pathinfo($token, PATHINFO_EXTENSION));
         $effectiveExt = strtolower(pathinfo($effective, PATHINFO_EXTENSION));
         $lower = strtolower($token);
 
@@ -415,12 +423,12 @@ final class ShellTool implements AuthorizableToolInterface, MutatingToolInterfac
             );
         }
 
-        if (($ext !== '' && in_array($ext, self::BLOCKED_EXTENSIONS, true))
+        if (($extension !== '' && in_array($extension, self::BLOCKED_EXTENSIONS, true))
             || ($effectiveExt !== '' && in_array($effectiveExt, self::BLOCKED_EXTENSIONS, true))) {
             HookDispatcher::shellDenied($command, $cmdName, 'sensitive_extension', $token);
 
             throw new ShellDeniedException(
-                "Access to '.{$ext}' files is blocked: may contain secrets."
+                "Access to '.{$extension}' files is blocked: may contain secrets."
             );
         }
 
@@ -455,26 +463,42 @@ final class ShellTool implements AuthorizableToolInterface, MutatingToolInterfac
 
         $resolved = realpath($token) ?: realpath(dirname($token));
         if ($resolved !== false) {
-            $resolvedLower = strtolower($resolved);
+            $this->assertRealpathNotSensitive($command, $cmdName, $token, $resolved);
+        }
+    }
 
-            foreach (self::BLOCKED_DIR_SEGMENTS as $segment) {
-                if (str_contains('/'.$resolvedLower.'/', '/'.$segment.'/')) {
-                    HookDispatcher::shellDenied($command, $cmdName, 'sensitive_directory', $token);
+    /**
+     * Re-check blocked directories and path patterns against the resolved real path of a token.
+     *
+     * @param  string  $command  Full command string (for hook payload).
+     * @param  string  $cmdName  First-word command name (for hook payload).
+     * @param  string  $token  Original token as supplied (for error messages).
+     * @param  string  $resolved  Real path from realpath() for the token or its parent directory.
+     * @return void
+     *
+     * @throws ShellDeniedException When the resolved path falls inside a blocked directory or matches a blocked pattern.
+     */
+    private function assertRealpathNotSensitive(string $command, string $cmdName, string $token, string $resolved): void
+    {
+        $resolvedLower = strtolower($resolved);
 
-                    throw new ShellDeniedException(
-                        "Access to files in '{$segment}/' is blocked."
-                    );
-                }
+        foreach (self::BLOCKED_DIR_SEGMENTS as $segment) {
+            if (str_contains('/'.$resolvedLower.'/', '/'.$segment.'/')) {
+                HookDispatcher::shellDenied($command, $cmdName, 'sensitive_directory', $token);
+
+                throw new ShellDeniedException(
+                    "Access to files in '{$segment}/' is blocked."
+                );
             }
+        }
 
-            foreach (self::BLOCKED_PATH_PATTERNS as $pattern) {
-                if (preg_match($pattern, $resolvedLower) === 1) {
-                    HookDispatcher::shellDenied($command, $cmdName, 'sensitive_path', $token);
+        foreach (self::BLOCKED_PATH_PATTERNS as $pattern) {
+            if (preg_match($pattern, $resolvedLower) === 1) {
+                HookDispatcher::shellDenied($command, $cmdName, 'sensitive_path', $token);
 
-                    throw new ShellDeniedException(
-                        "Access to '{$token}' is blocked: system file."
-                    );
-                }
+                throw new ShellDeniedException(
+                    "Access to '{$token}' is blocked: system file."
+                );
             }
         }
     }
@@ -598,7 +622,7 @@ final class ShellTool implements AuthorizableToolInterface, MutatingToolInterfac
      */
     private function killProcess($process, array $pipes): void
     {
-        proc_terminate($process, 9);
+        proc_terminate($process, self::SIGKILL);
         fclose($pipes[1]);
         fclose($pipes[2]);
         proc_close($process);

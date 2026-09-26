@@ -21,6 +21,28 @@ final class Message implements \Stringable
 
     private const TO_STRING_TRUNCATE_AT = 200;
 
+    private const ROLES = [
+        self::ROLE_USER,
+        self::ROLE_ASSISTANT,
+        self::ROLE_TOOL,
+        self::ROLE_TOOL_BATCH,
+        self::ROLE_SYSTEM,
+    ];
+
+    public readonly string $role;
+
+    public readonly string $content;
+
+    public readonly ?string $toolName;
+
+    public readonly ?array $toolInput;
+
+    public readonly ?string $toolUseId;
+
+    public readonly ?array $batchCalls;
+
+    public readonly ?array $batchResults;
+
     /**
      * Construct a Message directly. Prefer the named factories (user(), assistant(), tool(), etc.) over this constructor.
      *
@@ -36,23 +58,24 @@ final class Message implements \Stringable
      * @throws \InvalidArgumentException When $role is not one of the ROLE_* constants.
      */
     public function __construct(
-        public readonly string $role,
-        public readonly string $content,
-        public readonly ?string $toolName = null,
-        public readonly ?array $toolInput = null,
-        public readonly ?string $toolUseId = null,
-        public readonly ?array $batchCalls = null,
-        public readonly ?array $batchResults = null,
+        string $role,
+        string $content,
+        ?string $toolName = null,
+        ?array $toolInput = null,
+        ?string $toolUseId = null,
+        ?array $batchCalls = null,
+        ?array $batchResults = null,
     ) {
-        if (! in_array($role, [
-            self::ROLE_USER,
-            self::ROLE_ASSISTANT,
-            self::ROLE_TOOL,
-            self::ROLE_TOOL_BATCH,
-            self::ROLE_SYSTEM,
-        ], true)) {
+        $this->role = $role;
+        $this->content = $content;
+        $this->toolName = $toolName;
+        $this->toolInput = $toolInput;
+        $this->toolUseId = $toolUseId;
+        $this->batchCalls = $batchCalls;
+        $this->batchResults = $batchResults;
+        if (! in_array($this->role, self::ROLES, true)) {
             throw new \InvalidArgumentException(
-                "Unknown message role '{$role}'. Expected one of: user, assistant, tool, tool_batch, system."
+                "Unknown message role '{$this->role}'. Expected one of: ".implode(', ', self::ROLES).'.'
             );
         }
     }
@@ -276,7 +299,7 @@ final class Message implements \Stringable
     {
         $label = match (true) {
             $this->role === self::ROLE_TOOL && $this->toolName !== null => "tool:{$this->toolName}",
-            $this->role === self::ROLE_ASSISTANT && $this->isToolUse() => "assistant:tool_use:{$this->toolName}",
+            $this->isToolUse() => "assistant:tool_use:{$this->toolName}",
             $this->role === self::ROLE_TOOL_BATCH => 'tool_batch',
             default => $this->role,
         };

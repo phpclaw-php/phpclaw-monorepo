@@ -11,8 +11,6 @@ final class StreamParser
 {
     private const SSE_DATA_PREFIX = 'data: ';
 
-    private const SSE_DATA_PREFIX_LENGTH = 6;
-
     private const SSE_DONE_MARKER = '[DONE]';
 
     private const SSE_LINE_TERMINATOR = "\n";
@@ -92,11 +90,11 @@ final class StreamParser
             return null;
         }
 
-        return substr($line, self::SSE_DATA_PREFIX_LENGTH);
+        return substr($line, strlen(self::SSE_DATA_PREFIX));
     }
 
     /**
-     * Anthropic: { "type": "content_block_delta", "delta": { "type": "text_delta", "text": "..." } }
+     * Extract a text token from an Anthropic content_block_delta event.
      *
      * @param  array<string, mixed>  $data  Decoded SSE event payload.
      * @return string|null Extracted text token, or null when not a text delta.
@@ -117,7 +115,7 @@ final class StreamParser
     }
 
     /**
-     * OpenAI / Groq / Mistral / Ollama: { "choices": [{ "delta": { "content": "..." } }] }
+     * Extract a text token from an OpenAI-compatible choices[0].delta.content event.
      *
      * @param  array<string, mixed>  $data  Decoded SSE event payload.
      * @return string|null Extracted text token, or null when no content present.
@@ -130,7 +128,7 @@ final class StreamParser
     }
 
     /**
-     * Gemini: { "candidates": [{ "content": { "parts": [{ "text": "..." }] } }] }
+     * Extract a text token from a Gemini candidates[0].content.parts[0].text event.
      *
      * @param  array<string, mixed>  $data  Decoded SSE event payload.
      * @return string|null Extracted text token, or null when no text present.

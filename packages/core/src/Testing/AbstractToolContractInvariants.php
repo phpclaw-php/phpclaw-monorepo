@@ -137,7 +137,7 @@ abstract class AbstractToolContractInvariants extends TestCase
     public function test_the_pending_conversion_list_only_names_real_tools(): void
     {
         $names = array_map(
-            static fn (string $f): string => basename($f, '.php'),
+            static fn (string $file): string => basename($file, '.php'),
             $this->toolFiles(),
         );
 
@@ -272,19 +272,9 @@ abstract class AbstractToolContractInvariants extends TestCase
         self::assertGreaterThan(0, $checked, 'no tool declares the contract, so this proves nothing');
         self::assertSame([], $missing, implode("\n", $missing));
 
-        $withSchema = 0;
-
-        foreach ($this->toolFiles() as $file) {
-            $source = (string) file_get_contents($file);
-
-            if (str_contains($source, "'examples' => self::EXAMPLES")) {
-                $withSchema++;
-            }
-        }
-
         self::assertGreaterThan(
             1,
-            $withSchema,
+            $this->countToolsWithSchemaSurfacing(),
             'the schema-surfacing half of this test matched nothing, so it could not have failed',
         );
     }
@@ -311,13 +301,7 @@ abstract class AbstractToolContractInvariants extends TestCase
                 continue;
             }
 
-            preg_match_all("/'([a-z_]+)'\s*=>/", $allowed[1], $keyMatches);
-            $accepted = $keyMatches[1];
-
-            if ($accepted === []) {
-                preg_match_all("/'([a-z_]+)'/", $allowed[1], $keyMatches);
-                $accepted = $keyMatches[1];
-            }
+            $accepted = $this->extractAcceptedKeys($allowed[1]);
 
             preg_match_all("/'arguments' => \[(.*?)\],?\n        \]/s", $block[1], $argBlocks);
 
@@ -421,13 +405,13 @@ abstract class AbstractToolContractInvariants extends TestCase
                 continue;
             }
 
-            preg_match_all("/'([a-z_0-9]+)'/", $untrusted[1], $u);
-            preg_match_all("/'([a-z_0-9]+)'/", $available[1], $a);
+            preg_match_all("/'([a-z_0-9]+)'/", $untrusted[1], $untrustedMatches);
+            preg_match_all("/'([a-z_0-9]+)'/", $available[1], $availableMatches);
 
-            foreach ($u[1] as $field) {
+            foreach ($untrustedMatches[1] as $field) {
                 $checked++;
 
-                if (! in_array($field, $a[1], true)) {
+                if (! in_array($field, $availableMatches[1], true)) {
                     $offenders[] = $name.' marks "'.$field.'" untrusted but never returns it, '
                         .'so the warning can never fire for it';
                 }
@@ -459,5 +443,42 @@ abstract class AbstractToolContractInvariants extends TestCase
             'method_exists() returns false for a Mockery mock, silently skipping the guarded path. '
             .'Use is_callable([$obj, $method]) instead. Offenders: '.implode(', ', $offenders),
         );
+    }
+
+    /**
+     * Count tool source files that surface examples into a schema payload.
+     *
+     * @return int Number of tool files containing the schema examples key.
+     */
+    private function countToolsWithSchemaSurfacing(): int
+    {
+        $count = 0;
+
+        foreach ($this->toolFiles() as $file) {
+            if (str_contains((string) file_get_contents($file), "'examples' => self::EXAMPLES")) {
+                $count++;
+            }
+        }
+
+        return $count;
+    }
+
+    /**
+     * Parse the accepted keys from a raw ALLOWED_KEYS array section.
+     *
+     * @param  string  $allowedSection  Raw content between the brackets of ALLOWED_KEYS.
+     * @return array<int, string> Extracted key strings.
+     */
+    private function extractAcceptedKeys(string $allowedSection): array
+    {
+        preg_match_all("/'([a-z_]+)'\s*=>/", $allowedSection, $keyMatches);
+        $accepted = $keyMatches[1];
+
+        if ($accepted === []) {
+            preg_match_all("/'([a-z_]+)'/", $allowedSection, $keyMatches);
+            $accepted = $keyMatches[1];
+        }
+
+        return $accepted;
     }
 }

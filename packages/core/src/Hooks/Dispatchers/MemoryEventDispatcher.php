@@ -10,8 +10,6 @@ use PhpClaw\Hooks\LifecycleEvent;
 
 /**
  * Typed dispatchers for memory-driver lifecycle events.
- *
- * @internal
  */
 final class MemoryEventDispatcher
 {
@@ -34,6 +32,8 @@ final class MemoryEventDispatcher
         string $runId = '',
         string $parentRunId = '',
     ): void {
+        [$resolvedRunId, $resolvedParentRunId] = self::resolveRunContext($runId, $parentRunId);
+
         EventPayload::fire(
             LifecycleEvent::MemoryWrite->value,
             [
@@ -42,8 +42,8 @@ final class MemoryEventDispatcher
                 'driver' => $driver,
                 'ttl' => $ttl,
             ],
-            runId: $runId !== '' ? $runId : HookRunContext::currentRunId(),
-            parentRunId: $parentRunId !== '' ? $parentRunId : HookRunContext::currentParentRunId(),
+            runId: $resolvedRunId,
+            parentRunId: $resolvedParentRunId,
         );
     }
 
@@ -64,6 +64,8 @@ final class MemoryEventDispatcher
         string $runId = '',
         string $parentRunId = '',
     ): void {
+        [$resolvedRunId, $resolvedParentRunId] = self::resolveRunContext($runId, $parentRunId);
+
         EventPayload::fire(
             LifecycleEvent::MemoryForget->value,
             [
@@ -71,8 +73,8 @@ final class MemoryEventDispatcher
                 'namespace' => $namespace,
                 'driver' => $driver,
             ],
-            runId: $runId !== '' ? $runId : HookRunContext::currentRunId(),
-            parentRunId: $parentRunId !== '' ? $parentRunId : HookRunContext::currentParentRunId(),
+            runId: $resolvedRunId,
+            parentRunId: $resolvedParentRunId,
         );
     }
 
@@ -95,6 +97,8 @@ final class MemoryEventDispatcher
         string $runId = '',
         string $parentRunId = '',
     ): void {
+        [$resolvedRunId, $resolvedParentRunId] = self::resolveRunContext($runId, $parentRunId);
+
         EventPayload::fire(
             LifecycleEvent::MemoryRead->value,
             [
@@ -103,8 +107,23 @@ final class MemoryEventDispatcher
                 'driver' => $driver,
                 'hit' => $hit,
             ],
-            runId: $runId !== '' ? $runId : HookRunContext::currentRunId(),
-            parentRunId: $parentRunId !== '' ? $parentRunId : HookRunContext::currentParentRunId(),
+            runId: $resolvedRunId,
+            parentRunId: $resolvedParentRunId,
         );
+    }
+
+    /**
+     * Resolve run and parent-run IDs from explicit arguments or the active hook context.
+     *
+     * @param  string  $runId  Caller-supplied run ID, or '' to read from context.
+     * @param  string  $parentRunId  Caller-supplied parent run ID, or '' to read from context.
+     * @return array{0: string, 1: string} Resolved run ID and parent run ID.
+     */
+    private static function resolveRunContext(string $runId, string $parentRunId): array
+    {
+        return [
+            $runId !== '' ? $runId : HookRunContext::currentRunId(),
+            $parentRunId !== '' ? $parentRunId : HookRunContext::currentParentRunId(),
+        ];
     }
 }

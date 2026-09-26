@@ -14,24 +14,36 @@ final class Conversation
 {
     public const MEMORY_NAMESPACE = 'conversations';
 
+    public readonly string $id;
+
+    public readonly array $history;
+
+    public readonly \DateTimeImmutable $createdAt;
+
+    public readonly array $metadata;
+
     /**
      * Build a Conversation value object from its parts.
      *
      * @param  string  $id  Stable identifier (typically a ULID) used to key memory storage.
      * @param  Message[]  $history  Ordered list of messages composing the conversation.
      * @param  \DateTimeImmutable  $createdAt  Conversation start timestamp.
-     * @param  array<string, mixed>  $metadata  Application-defined key-value pairs (never persisted by default).
+     * @param  array<string, mixed>  $metadata  Application-defined key-value pairs serialized by toArray().
      * @return void
      *
      * @throws \InvalidArgumentException When $history contains non-Message entries.
      */
     public function __construct(
-        public readonly string $id,
-        public readonly array $history,
-        public readonly \DateTimeImmutable $createdAt,
-        public readonly array $metadata = [],
+        string $id,
+        array $history,
+        \DateTimeImmutable $createdAt,
+        array $metadata = [],
     ) {
-        foreach ($history as $i => $entry) {
+        $this->id = $id;
+        $this->history = $history;
+        $this->createdAt = $createdAt;
+        $this->metadata = $metadata;
+        foreach ($this->history as $i => $entry) {
             if (! $entry instanceof Message) {
                 throw new \InvalidArgumentException(
                     "Conversation history[{$i}] must be a Message instance, got ".get_debug_type($entry).'.'
@@ -104,7 +116,7 @@ final class Conversation
     /**
      * Return a new Conversation with additional metadata merged in.
      *
-     * @param  array<string, mixed>  $metadata  Metadata array shallow-merged over existing metadata (existing keys win on collision).
+     * @param  array<string, mixed>  $metadata  Metadata array shallow-merged over existing metadata (incoming keys win on collision).
      * @return self New Conversation instance with merged metadata.
      */
     public function withMetadata(array $metadata): self

@@ -18,7 +18,7 @@ use PhpClaw\Providers\Tools\WebSearch;
 /**
  * Anthropic Messages API provider: supports prompt caching, extended thinking, tool use, and server-side web search.
  */
-#[Provider(name: 'anthropic', defaultModel: 'claude-haiku-4-5-20251001', label: 'Anthropic', since: '1.0.0')]
+#[Provider(name: 'anthropic', defaultModel: self::DEFAULT_MODEL, label: 'Anthropic', since: '1.0.0')]
 final class AnthropicProvider implements ProviderInterface, SupportsWebSearchInterface
 {
     use HasProviderTools;
@@ -43,15 +43,31 @@ final class AnthropicProvider implements ProviderInterface, SupportsWebSearchInt
 
     private const MIN_THINKING_BUDGET = 1024;
 
+    private const THINKING_MAX_TOKENS_HEADROOM = 1000;
+
+    private const CACHE_CONTROL_EPHEMERAL = ['type' => 'ephemeral'];
+
     private const MODEL_MAX_TOKENS = [
         self::MODEL_OPUS => 16000,
         self::MODEL_SONNET => 16000,
         self::MODEL_HAIKU => 8192,
     ];
 
+    private readonly string $apiKey;
+
     private readonly RawHttpClient $http;
 
     private readonly StreamParser $parser;
+
+    private readonly string $model;
+
+    private readonly string $systemPrompt;
+
+    private readonly int $maxTokens;
+
+    private readonly bool $promptCache;
+
+    private readonly int $thinkingBudget;
 
     private readonly string $endpoint;
 
@@ -63,26 +79,32 @@ final class AnthropicProvider implements ProviderInterface, SupportsWebSearchInt
      * @param  StreamParser|null  $parser  SSE stream parser. Defaults to a new StreamParser instance.
      * @param  string  $model  Model identifier. Defaults to MODEL_HAIKU.
      * @param  string  $systemPrompt  System prompt sent with every request. Empty = none.
-     * @param  int  $maxTokens  Max output tokens. 0 = auto-select per model default. When thinkingBudget > 0, auto-adjusted to thinkingBudget + 1000.
+     * @param  int  $maxTokens  Max output tokens. 0 = auto per model; auto-adjusted upward to at least thinkingBudget + 1000 when thinkingBudget >= 1024.
      * @param  bool  $promptCache  Enable Anthropic prompt caching. No-op when system prompt is empty and no tools are registered.
      * @param  int  $thinkingBudget  Extended thinking budget tokens. 0 = disabled. Min = 1024.
      * @param  string  $endpoint  Override API endpoint URL. Empty = use default.
      * @return void
      */
     public function __construct(
-        private readonly string $apiKey,
+        string $apiKey,
         ?RawHttpClient $http = null,
         ?StreamParser $parser = null,
-        private readonly string $model = self::DEFAULT_MODEL,
-        private readonly string $systemPrompt = '',
-        private readonly int $maxTokens = 0,
-        private readonly bool $promptCache = false,
-        private readonly int $thinkingBudget = 0,
+        string $model = self::DEFAULT_MODEL,
+        string $systemPrompt = '',
+        int $maxTokens = 0,
+        bool $promptCache = false,
+        int $thinkingBudget = 0,
         string $endpoint = '',
     ) {
+        $this->apiKey = $apiKey;
         $this->http = $http ?? new RawHttpClient;
         $this->parser = $parser ?? new StreamParser;
-        $this->endpoint = $endpoint !== '' ? $endpoint : self::DEFAULT_ENDPOINT;
+        $this->model = $model;
+        $this->systemPrompt = $systemPrompt;
+        $this->maxTokens = $maxTokens;
+        $this->promptCache = $promptCache;
+        $this->thinkingBudget = $thinkingBudget;
+        $this->endpoint = $endpoint === '' ? self::DEFAULT_ENDPOINT : $endpoint;
     }
 
     /**
@@ -118,7 +140,7 @@ final class AnthropicProvider implements ProviderInterface, SupportsWebSearchInt
 
         $raw = $this->http->post(
             url: $this->endpoint,
-            headers: $this->headers(),
+            headers: $this->buildHeaders(),
             body: $body,
         );
 
@@ -143,7 +165,7 @@ final class AnthropicProvider implements ProviderInterface, SupportsWebSearchInt
 
         $this->http->stream(
             url: $this->endpoint,
-            headers: $this->headers(),
+            headers: $this->buildHeaders(),
             body: $body,
             onChunk: function (string $line) use ($onToken, &$fullText): void {
                 $token = $this->parser->parseLine($line);
@@ -232,7 +254,7 @@ final class AnthropicProvider implements ProviderInterface, SupportsWebSearchInt
             $body['system'] = $this->buildSystemField();
         }
 
-        if ($this->thinkingEnabled()) {
+        if ($this->isThinkingEnabled()) {
             $body['thinking'] = [
                 'type' => 'enabled',
                 'budget_tokens' => $this->thinkingBudget,
@@ -263,8 +285,8 @@ final class AnthropicProvider implements ProviderInterface, SupportsWebSearchInt
             ? $this->maxTokens
             : (self::MODEL_MAX_TOKENS[$this->model] ?? self::DEFAULT_MAX_TOKENS);
 
-        if ($this->thinkingEnabled()) {
-            $minimum = $this->thinkingBudget + 1000;
+        if ($this->isThinkingEnabled()) {
+            $minimum = $this->thinkingBudget + self::THINKING_MAX_TOKENS_HEADROOM;
 
             return max($base, $minimum);
         }
@@ -277,7 +299,7 @@ final class AnthropicProvider implements ProviderInterface, SupportsWebSearchInt
      *
      * @return bool
      */
-    private function thinkingEnabled(): bool
+    private function isThinkingEnabled(): bool
     {
         return $this->thinkingBudget >= self::MIN_THINKING_BUDGET;
     }
@@ -297,7 +319,7 @@ final class AnthropicProvider implements ProviderInterface, SupportsWebSearchInt
             [
                 'type' => 'text',
                 'text' => $this->systemPrompt,
-                'cache_control' => ['type' => 'ephemeral'],
+                'cache_control' => self::CACHE_CONTROL_EPHEMERAL,
             ],
         ];
     }
@@ -315,7 +337,7 @@ final class AnthropicProvider implements ProviderInterface, SupportsWebSearchInt
         }
 
         $last = count($tools) - 1;
-        $tools[$last]['cache_control'] = ['type' => 'ephemeral'];
+        $tools[$last]['cache_control'] = self::CACHE_CONTROL_EPHEMERAL;
 
         return $tools;
     }
@@ -325,7 +347,7 @@ final class AnthropicProvider implements ProviderInterface, SupportsWebSearchInt
      *
      * @return array<string, string>
      */
-    private function headers(): array
+    private function buildHeaders(): array
     {
         $headers = [
             'x-api-key' => $this->apiKey,
@@ -338,7 +360,7 @@ final class AnthropicProvider implements ProviderInterface, SupportsWebSearchInt
             $betas[] = self::BETA_PROMPT_CACHE;
         }
 
-        if ($this->thinkingEnabled()) {
+        if ($this->isThinkingEnabled()) {
             $betas[] = self::BETA_THINKING;
         }
 
@@ -361,26 +383,7 @@ final class AnthropicProvider implements ProviderInterface, SupportsWebSearchInt
 
         foreach ($messages as $message) {
             if ($message->isBatchToolUse()) {
-                $contentBlocks = [];
-                foreach ($message->batchCalls ?? [] as $call) {
-                    $contentBlocks[] = [
-                        'type' => 'tool_use',
-                        'id' => $call['tool_use_id'],
-                        'name' => $call['tool_name'],
-                        'input' => empty($call['tool_input']) ? new \stdClass : $call['tool_input'],
-                    ];
-                }
-                $formatted[] = ['role' => 'assistant', 'content' => $contentBlocks];
-
-                $resultBlocks = [];
-                foreach ($message->batchResults as $toolUseId => $result) {
-                    $resultBlocks[] = [
-                        'type' => 'tool_result',
-                        'tool_use_id' => $toolUseId,
-                        'content' => $result,
-                    ];
-                }
-                $formatted[] = ['role' => 'user', 'content' => $resultBlocks];
+                array_push($formatted, ...$this->formatBatchToolUseMessages($message));
 
                 continue;
             }
@@ -426,6 +429,39 @@ final class AnthropicProvider implements ProviderInterface, SupportsWebSearchInt
     }
 
     /**
+     * Convert a batch tool-use Message into the assistant + user content block pair for the Anthropic wire format.
+     *
+     * @param  Message  $message  A batch tool-use message containing batchCalls and batchResults.
+     * @return array<int, array<string, mixed>> Two entries: assistant tool_use blocks followed by user tool_result blocks.
+     */
+    private function formatBatchToolUseMessages(Message $message): array
+    {
+        $contentBlocks = [];
+        foreach ($message->batchCalls ?? [] as $call) {
+            $contentBlocks[] = [
+                'type' => 'tool_use',
+                'id' => $call['tool_use_id'],
+                'name' => $call['tool_name'],
+                'input' => empty($call['tool_input']) ? new \stdClass : $call['tool_input'],
+            ];
+        }
+
+        $resultBlocks = [];
+        foreach ($message->batchResults as $toolUseId => $result) {
+            $resultBlocks[] = [
+                'type' => 'tool_result',
+                'tool_use_id' => $toolUseId,
+                'content' => $result,
+            ];
+        }
+
+        return [
+            ['role' => 'assistant', 'content' => $contentBlocks],
+            ['role' => 'user', 'content' => $resultBlocks],
+        ];
+    }
+
+    /**
      * Parse a raw Anthropic API response into the normalised array shape.
      *
      * @param  array<string, mixed>  $raw  Decoded API response body.
@@ -454,16 +490,9 @@ final class AnthropicProvider implements ProviderInterface, SupportsWebSearchInt
             ]);
         }
 
-        $text = '';
-        $hasText = false;
-        foreach ($content as $block) {
-            if (($block['type'] ?? '') === 'text') {
-                $text .= (string) ($block['text'] ?? '');
-                $hasText = true;
-            }
-        }
+        $text = $this->extractText($content);
 
-        if ($hasText) {
+        if ($text !== null) {
             return array_merge($usage, [
                 'type' => 'text',
                 'text' => $text,
@@ -476,7 +505,7 @@ final class AnthropicProvider implements ProviderInterface, SupportsWebSearchInt
         }
 
         throw new ProviderException(
-            'Unexpected Anthropic response structure: '.json_encode($raw)
+            'Unexpected Anthropic response structure (keys: '.implode(', ', array_keys($raw)).').'
         );
     }
 
@@ -496,6 +525,26 @@ final class AnthropicProvider implements ProviderInterface, SupportsWebSearchInt
         }
 
         return $text;
+    }
+
+    /**
+     * Concatenate text from every `text` content block, or return null when none are present.
+     *
+     * @param  array<int, array<string, mixed>>  $content  Response content blocks.
+     * @return string|null Concatenated text, or null when no text blocks exist.
+     */
+    private function extractText(array $content): ?string
+    {
+        $text = '';
+        $hasText = false;
+        foreach ($content as $block) {
+            if (($block['type'] ?? '') === 'text') {
+                $text .= (string) ($block['text'] ?? '');
+                $hasText = true;
+            }
+        }
+
+        return $hasText ? $text : null;
     }
 
     /**

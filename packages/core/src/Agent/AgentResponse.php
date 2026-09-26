@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace PhpClaw\Agent;
 
 /**
- * Immutable value object returned by PhpClaw::send(), stream(), and sendInConversation().
+ * Immutable value object returned by Claw::send(), stream(), and sendInConversation().
  */
 final class AgentResponse
 {

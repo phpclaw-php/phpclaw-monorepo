@@ -40,7 +40,6 @@ final class FileWriteTool implements AuthorizableToolInterface, MutatingToolInte
     private const BLOCKED_EXTENSIONS = [
         ...BlockedPaths::EXTENSIONS,
         'sh', 'bash', 'exe', 'bat', 'cmd', 'ps1',
-        'php', 'phtml', 'phar',
     ];
 
     private const BLOCKED_DIR_SEGMENTS = [
@@ -52,6 +51,12 @@ final class FileWriteTool implements AuthorizableToolInterface, MutatingToolInte
         'core', 'system', 'sysext',
     ];
 
+    private readonly bool $allowPhpWrite;
+
+    private readonly int $maxBytes;
+
+    private readonly bool $followSymlinks;
+
     private readonly string $workspaceRoot;
 
     /**
@@ -60,20 +65,22 @@ final class FileWriteTool implements AuthorizableToolInterface, MutatingToolInte
      * @param  string|null  $workspaceRoot  Absolute path to workspace root. Defaults to <CWD>/storage/phpclaw/.
      * @param  bool  $allowPhpWrite  True to permit writing .php/.phtml/.phar files.
      * @param  int  $maxBytes  Maximum content size in bytes. Writes exceeding this throw ToolException.
-     * @param  bool  $followSymlinks  False (default) rejects any path whose existing components include a symlink. True allows them, but the blocklists are still re-checked against the resolved target. Appended last (not inserted earlier) so ToolCatalogue::instantiateDefaults()'s positional `needsConfig` spread, which only supplies workspaceRoot/allowPhpWrite, can never mis-target this parameter.
+     * @param  bool  $followSymlinks  False (default) rejects any path whose existing components include a symlink. True allows them, but the blocklists are still re-checked against the resolved target.
      * @return void
      */
     public function __construct(
         ?string $workspaceRoot = null,
-        private readonly bool $allowPhpWrite = false,
-        private readonly int $maxBytes = self::DEFAULT_MAX_BYTES,
-        private readonly bool $followSymlinks = false,
+        bool $allowPhpWrite = false,
+        int $maxBytes = self::DEFAULT_MAX_BYTES,
+        bool $followSymlinks = false,
     ) {
+        $this->allowPhpWrite = $allowPhpWrite;
+        $this->maxBytes = $maxBytes;
+        $this->followSymlinks = $followSymlinks;
         $raw = rtrim(
             $workspaceRoot ?? (getcwd().DIRECTORY_SEPARATOR.self::DEFAULT_WORKSPACE_SUBPATH),
             DIRECTORY_SEPARATOR
         );
-
         $real = realpath($raw);
         $this->workspaceRoot = $real !== false ? $real : $raw;
     }
@@ -266,7 +273,7 @@ final class FileWriteTool implements AuthorizableToolInterface, MutatingToolInte
 
         $segments = array_values(array_filter(
             preg_split('/[\/\\\\]/', $relativePath) ?: [],
-            static fn (string $s): bool => $s !== '',
+            static fn (string $segment): bool => $segment !== '',
         ));
 
         $this->assertNoSymlinksInPath($segments);
@@ -350,25 +357,25 @@ final class FileWriteTool implements AuthorizableToolInterface, MutatingToolInte
      */
     private function checkExtension(string $path): void
     {
-        $ext = strtolower(pathinfo($path, PATHINFO_EXTENSION));
+        $extension = strtolower(pathinfo($path, PATHINFO_EXTENSION));
         $basename = strtolower(basename($path));
 
         if (str_starts_with($basename, '.env')) {
             throw new ToolException("Writing to '".$this->sanitizeForMessage($basename)."' files is blocked.");
         }
 
-        if (in_array($ext, self::PHP_EXTENSIONS, true)) {
+        if (in_array($extension, self::PHP_EXTENSIONS, true)) {
             if (! $this->allowPhpWrite) {
                 throw new ToolException(
-                    'Writing .'.$this->sanitizeForMessage($ext).' files is blocked by default. Enable allowPhpWrite to permit it.'
+                    'Writing .'.$this->sanitizeForMessage($extension).' files is blocked by default. Enable allowPhpWrite to permit it.'
                 );
             }
 
             return;
         }
 
-        if ($ext !== '' && in_array($ext, self::BLOCKED_EXTENSIONS, true)) {
-            throw new ToolException("Writing files with extension '.".$this->sanitizeForMessage($ext)."' is blocked.");
+        if ($extension !== '' && in_array($extension, self::BLOCKED_EXTENSIONS, true)) {
+            throw new ToolException("Writing files with extension '.".$this->sanitizeForMessage($extension)."' is blocked.");
         }
     }
 
@@ -487,14 +494,16 @@ final class FileWriteTool implements AuthorizableToolInterface, MutatingToolInte
      */
     private function ensureParentDirectory(string $absolutePath): void
     {
-        $dir = dirname($absolutePath);
+        $directory = dirname($absolutePath);
 
-        if (! is_dir($dir)) {
-            $created = mkdir($dir, self::DIRECTORY_MODE, recursive: true);
+        if (is_dir($directory)) {
+            return;
+        }
 
-            if (! $created && ! is_dir($dir)) {
-                throw new ToolException('Could not create directory: '.$this->sanitizeForMessage($dir));
-            }
+        $created = mkdir($directory, self::DIRECTORY_MODE, recursive: true);
+
+        if (! $created && ! is_dir($directory)) {
+            throw new ToolException('Could not create directory: '.$this->sanitizeForMessage($directory));
         }
     }
 

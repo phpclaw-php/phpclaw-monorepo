@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace PhpClaw\SqlGuard;
 
 /**
- * Validates that a query is a single read-only SELECT/WITH statement and returns the exact string to execute; allowlist-of-shape and fail-closed, comments and statement separators are rejected (never stripped), only SELECT/WITH may lead, and write/exfiltration tokens are rejected outside string literals, so a plain token scan is reliable with no stripped copy that can diverge from the executed string.
+ * Validates that a query is a single read-only SELECT/WITH statement and returns the exact string to execute; fail-closed: comments are rejected, only one trailing semicolon is accepted, only SELECT/WITH may lead, and write/exfiltration tokens outside string literals are blocked.
  */
 final class SqlReadOnlyGuard
 {
@@ -69,9 +69,9 @@ final class SqlReadOnlyGuard
             }
         }
 
-        foreach (self::BLOCKED_SEQUENCES as [$a, $b]) {
-            if ($tokens->hasSequence($a, $b)) {
-                throw new SqlGuardException("Blocked clause: {$a} {$b}.");
+        foreach (self::BLOCKED_SEQUENCES as [$first, $second]) {
+            if ($tokens->hasSequence($first, $second)) {
+                throw new SqlGuardException("Blocked clause: {$first} {$second}.");
             }
         }
 
@@ -98,10 +98,10 @@ final class SqlReadOnlyGuard
         $i = 0;
 
         while ($i < $length) {
-            $c = $sql[$i];
+            $char = $sql[$i];
 
-            if (($c >= 'A' && $c <= 'Z') || ($c >= 'a' && $c <= 'z') || ($c >= '0' && $c <= '9') || $c === '_') {
-                $word .= $c;
+            if (self::isWordChar($char)) {
+                $word .= $char;
                 $i++;
 
                 continue;
@@ -112,39 +112,39 @@ final class SqlReadOnlyGuard
                 $word = '';
             }
 
-            if ($c === ' ' || $c === "\t" || $c === "\n" || $c === "\r") {
+            if ($char === ' ' || $char === "\t" || $char === "\n" || $char === "\r") {
                 $i++;
 
                 continue;
             }
 
-            if ($c === '-' && $i + 1 < $length && $sql[$i + 1] === '-') {
+            if ($char === '-' && $i + 1 < $length && $sql[$i + 1] === '-') {
                 throw new SqlGuardException('SQL comments are not permitted (--).');
             }
 
-            if ($c === '#') {
+            if ($char === '#') {
                 throw new SqlGuardException('SQL comments are not permitted (#).');
             }
 
-            if ($c === '/' && $i + 1 < $length && $sql[$i + 1] === '*') {
+            if ($char === '/' && $i + 1 < $length && $sql[$i + 1] === '*') {
                 throw new SqlGuardException('SQL comments are not permitted (/* */).');
             }
 
-            if ($c === ';') {
+            if ($char === ';') {
                 if (trim(substr($sql, $i + 1)) === '') {
-                    break; // one trailing ";" followed only by whitespace is a single statement
+                    break;
                 }
 
                 throw new SqlGuardException('Only a single statement is permitted (";" found).');
             }
 
-            if ($c === '\'' || $c === '"' || $c === '`') {
-                $i = $this->consumeString($sql, $i, $c, $length);
+            if ($char === '\'' || $char === '"' || $char === '`') {
+                $i = $this->consumeString($sql, $i, $char, $length);
 
                 continue;
             }
 
-            if (ord($c) < 0x20 || ord($c) >= 0x80) {
+            if (ord($char) < 0x20 || ord($char) >= 0x80) {
                 throw new SqlGuardException('Illegal character outside a string literal.');
             }
 
@@ -156,6 +156,20 @@ final class SqlReadOnlyGuard
         }
 
         return new SqlTokenStream($words);
+    }
+
+    /**
+     * True when a single byte is a valid SQL identifier/keyword character (A-Z, a-z, 0-9, underscore).
+     *
+     * @param  string  $char  Single-byte character to classify.
+     * @return bool
+     */
+    private static function isWordChar(string $char): bool
+    {
+        return ($char >= 'A' && $char <= 'Z')
+            || ($char >= 'a' && $char <= 'z')
+            || ($char >= '0' && $char <= '9')
+            || $char === '_';
     }
 
     /**
@@ -175,15 +189,15 @@ final class SqlReadOnlyGuard
         $i++;
 
         while ($i < $length) {
-            $c = $sql[$i];
+            $char = $sql[$i];
 
-            if ($backslashEscapes && $c === '\\') {
+            if ($backslashEscapes && $char === '\\') {
                 $i += 2;
 
                 continue;
             }
 
-            if ($c === $delim) {
+            if ($char === $delim) {
                 if ($i + 1 < $length && $sql[$i + 1] === $delim) {
                     $i += 2;
 

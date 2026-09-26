@@ -15,6 +15,8 @@ use PhpClaw\Guards\Contracts\RawInputGuardInterface;
 #[Guard(priority: 0, name: 'message_length', label: 'Message Length', enabledByDefault: true, since: '1.0.0')]
 final class MessageLengthGuard implements PromptOnlyGuardInterface, RawInputGuardInterface
 {
+    private const DEFAULT_MAX_LENGTH = 40000;
+
     /**
      * Create a new MessageLengthGuard instance.
      *
@@ -22,7 +24,7 @@ final class MessageLengthGuard implements PromptOnlyGuardInterface, RawInputGuar
      * @return void
      */
     public function __construct(
-        private readonly int $maxLength = 40000,
+        private readonly int $maxLength = self::DEFAULT_MAX_LENGTH,
     ) {}
 
     /**

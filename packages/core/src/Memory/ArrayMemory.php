@@ -16,6 +16,8 @@ final class ArrayMemory implements MemoryInterface
 {
     private const DRIVER_NAME = 'array';
 
+    private const DEFAULT_NAMESPACE = 'default';
+
     private array $store = [];
 
     private array $expiry = [];
@@ -27,7 +29,7 @@ final class ArrayMemory implements MemoryInterface
      * @param  string  $namespace  Memory namespace.
      * @return mixed
      */
-    public function get(string $key, string $namespace = 'default'): mixed
+    public function get(string $key, string $namespace = self::DEFAULT_NAMESPACE): mixed
     {
         NamespaceValidator::validate($namespace);
         if ($this->isExpired($key, $namespace)) {
@@ -53,7 +55,7 @@ final class ArrayMemory implements MemoryInterface
      * @param  int|null  $ttl  Time-to-live in seconds (null = no expiry).
      * @return void
      */
-    public function set(string $key, mixed $value, string $namespace = 'default', ?int $ttl = null): void
+    public function set(string $key, mixed $value, string $namespace = self::DEFAULT_NAMESPACE, ?int $ttl = null): void
     {
         NamespaceValidator::validate($namespace);
         $this->store[$namespace][$key] = $value;
@@ -71,7 +73,7 @@ final class ArrayMemory implements MemoryInterface
      * @param  string  $namespace  Memory namespace.
      * @return void
      */
-    public function forget(string $key, string $namespace = 'default'): void
+    public function forget(string $key, string $namespace = self::DEFAULT_NAMESPACE): void
     {
         NamespaceValidator::validate($namespace);
         unset($this->store[$namespace][$key], $this->expiry[$namespace][$key]);
@@ -85,7 +87,7 @@ final class ArrayMemory implements MemoryInterface
      * @param  string  $namespace  Memory namespace.
      * @return void
      */
-    public function flush(string $namespace = 'default'): void
+    public function flush(string $namespace = self::DEFAULT_NAMESPACE): void
     {
         NamespaceValidator::validate($namespace);
         unset($this->store[$namespace], $this->expiry[$namespace]);
@@ -97,7 +99,7 @@ final class ArrayMemory implements MemoryInterface
      * @param  string  $namespace  Namespace to scope the operation.
      * @return array<string, mixed>
      */
-    public function all(string $namespace = 'default'): array
+    public function all(string $namespace = self::DEFAULT_NAMESPACE): array
     {
         NamespaceValidator::validate($namespace);
         $entries = $this->store[$namespace] ?? [];
@@ -122,7 +124,7 @@ final class ArrayMemory implements MemoryInterface
      * @param  string  $namespace  Memory namespace.
      * @return bool
      */
-    public function has(string $key, string $namespace = 'default'): bool
+    public function has(string $key, string $namespace = self::DEFAULT_NAMESPACE): bool
     {
         NamespaceValidator::validate($namespace);
         if (! isset($this->store[$namespace][$key])) {

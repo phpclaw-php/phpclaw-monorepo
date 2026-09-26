@@ -16,7 +16,7 @@ use PhpClaw\Tools\Contracts\ToolRoutingInterface;
  * Packages a workspace folder into an installable ZIP under the system temp directory (requires ext-zip).
  */
 #[Tool(
-    name: 'zip_package',
+    name: self::TOOL_NAME,
     description: 'Zip a workspace folder into a temp-dir {output_name}.zip for CMS installation.',
     since: '1.0.0',
     default: false,
@@ -27,6 +27,8 @@ final class ZipPackagerTool implements AuthorizableToolInterface, MutatingToolIn
     use HasCoreToolBinding;
 
     public const DEFAULT_WORKSPACE_SUBPATH = 'storage/phpclaw';
+
+    private const TOOL_NAME = 'zip_package';
 
     private readonly string $workspaceRoot;
 
@@ -53,7 +55,7 @@ final class ZipPackagerTool implements AuthorizableToolInterface, MutatingToolIn
      */
     public function name(): string
     {
-        return 'zip_package';
+        return self::TOOL_NAME;
     }
 
     /**
@@ -111,19 +113,19 @@ final class ZipPackagerTool implements AuthorizableToolInterface, MutatingToolIn
             throw new ToolException('zip_package: source_dir and a valid output_name are required.');
         }
 
-        $abs = realpath($this->workspaceRoot.DIRECTORY_SEPARATOR.ltrim($sourceDir, '/\\'));
-        $ws = realpath($this->workspaceRoot) ?: $this->workspaceRoot;
+        $resolvedSourceDir = realpath($this->workspaceRoot.DIRECTORY_SEPARATOR.ltrim($sourceDir, '/\\'));
+        $workspaceBase = realpath($this->workspaceRoot) ?: $this->workspaceRoot;
 
-        if ($abs === false || ! is_dir($abs)) {
+        if ($resolvedSourceDir === false || ! is_dir($resolvedSourceDir)) {
             throw new ToolException("zip_package: source_dir not found: {$sourceDir}");
         }
 
-        if (! str_starts_with($abs.DIRECTORY_SEPARATOR, rtrim($ws, '/\\').DIRECTORY_SEPARATOR)) {
+        if (! str_starts_with($resolvedSourceDir.DIRECTORY_SEPARATOR, rtrim($workspaceBase, '/\\').DIRECTORY_SEPARATOR)) {
             throw new ToolException('zip_package: source_dir escapes workspace root - blocked.');
         }
 
         return [
-            'input' => ['source_dir' => $abs, 'output_name' => $outputName],
+            'input' => ['source_dir' => $resolvedSourceDir, 'output_name' => $outputName],
             'result' => null,
         ];
     }
@@ -138,7 +140,7 @@ final class ZipPackagerTool implements AuthorizableToolInterface, MutatingToolIn
      */
     protected function perform(array $input): array
     {
-        $abs = (string) $input['source_dir'];
+        $sourceDir = (string) $input['source_dir'];
         $outputName = (string) $input['output_name'];
 
         $zipPath = sys_get_temp_dir().DIRECTORY_SEPARATOR.$outputName.'.zip';
@@ -151,16 +153,16 @@ final class ZipPackagerTool implements AuthorizableToolInterface, MutatingToolIn
         }
 
         $count = 0;
-        $iter = new \RecursiveIteratorIterator(
-            new \RecursiveDirectoryIterator($abs, \FilesystemIterator::SKIP_DOTS),
+        $iterator = new \RecursiveIteratorIterator(
+            new \RecursiveDirectoryIterator($sourceDir, \FilesystemIterator::SKIP_DOTS),
         );
 
-        foreach ($iter as $file) {
+        foreach ($iterator as $file) {
             if (! $file->isFile()) {
                 continue;
             }
-            $rel = substr($file->getPathname(), strlen($abs) + 1);
-            $zip->addFile($file->getPathname(), $outputName.'/'.str_replace(DIRECTORY_SEPARATOR, '/', $rel));
+            $relativePath = substr($file->getPathname(), strlen($sourceDir) + 1);
+            $zip->addFile($file->getPathname(), $outputName.'/'.str_replace(DIRECTORY_SEPARATOR, '/', $relativePath));
             $count++;
         }
 
