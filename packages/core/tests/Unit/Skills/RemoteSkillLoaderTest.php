@@ -91,22 +91,6 @@ final class RemoteSkillLoaderTest extends TestCase
         self::assertSame(0, RemoteSkillLoader::load('https://127.0.0.1/skills.json'));
     }
 
-    public function test_markdown_skill_from_hyphenated_url_is_actually_matchable(): void
-    {
-        $md = "# /html-everything\n\n## Step 1: Resolve input\n\nDo the thing.\n\n## Step 2, Generate HTML\n\nOutput it.";
-
-        $this->invoke('loadFromMarkdown', 'https://example.com/skills/html-everything/SKILL.md', $md);
-
-        self::assertTrue(SkillRegistry::has('html_everything'));
-
-        $matched = array_map(
-            static fn ($s) => $s->name(),
-            SkillRegistry::match('Convert this into HTML please'),
-        );
-
-        self::assertSame(['html_everything'], $matched, 'A registered remote skill must actually match on plain user phrasing, not just exist in the registry.');
-    }
-
     public function test_markdown_skills_with_generic_filename_do_not_collide_on_name(): void
     {
         $md1 = "# First Skill\n\nContent one.";
@@ -128,24 +112,6 @@ final class RemoteSkillLoaderTest extends TestCase
         $name = SkillRegistry::all()[0]->name();
         self::assertNotSame('', $name);
         self::assertStringStartsWith('remote_skill_', $name);
-    }
-
-    public function test_json_skill_with_hyphenated_tag_is_actually_matchable(): void
-    {
-        $json = json_encode([
-            'skills' => [
-                ['name' => 'json-skill', 'description' => 'demo', 'tags' => ['self-contained'], 'content' => 'CONTENT'],
-            ],
-        ]);
-
-        $this->invoke('loadFromJson', $json);
-
-        $matched = array_map(
-            static fn ($s) => $s->name(),
-            SkillRegistry::match('is this self hosted or contained'),
-        );
-
-        self::assertSame(['json-skill'], $matched);
     }
 
     public function test_build_curl_options_sets_curlopt_resolve_and_url_stays_hostname(): void

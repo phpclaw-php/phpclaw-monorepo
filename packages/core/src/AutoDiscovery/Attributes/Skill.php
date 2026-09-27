@@ -17,7 +17,7 @@ final class Skill
      *
      * @param  string  $name  Skill identifier (kebab-case or snake_case, e.g. 'php_best_practices').
      * @param  string  $label  Human-readable display name. Falls back to a title-cased `name` when empty.
-     * @param  list<string>  $keywords  Trigger keywords used by `SkillRegistry::match()` keyword scoring.
+     * @param  list<string>  $keywords  Keywords shown on adapter admin pages; not read by the agent.
      * @param  string  $since  Package version this skill first shipped in.
      * @param  bool  $deprecated  Marked deprecated: discovered but flagged for adapter warnings.
      */

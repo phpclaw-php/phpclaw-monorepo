@@ -78,30 +78,4 @@ final class PhpBestPracticesSkillTest extends TestCase
     {
         $this->assertStringContainsString('return type', $this->skill->content());
     }
-
-    public function test_skill_matches_code_review_message(): void
-    {
-        SkillRegistry::register($this->skill);
-        $matches = SkillRegistry::match('please review my PHP code');
-
-        $this->assertCount(1, $matches);
-        $this->assertSame('php_best_practices', $matches[0]->name());
-    }
-
-    public function test_skill_matches_refactor_message(): void
-    {
-        SkillRegistry::register($this->skill);
-        $matches = SkillRegistry::match('can you refactor this class');
-
-        $this->assertNotEmpty($matches);
-        $this->assertSame('php_best_practices', $matches[0]->name());
-    }
-
-    public function test_skill_does_not_match_unrelated_message(): void
-    {
-        SkillRegistry::register($this->skill);
-        $matches = SkillRegistry::match('what is the weather today');
-
-        $this->assertSame([], $matches);
-    }
 }

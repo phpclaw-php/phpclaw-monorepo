@@ -105,7 +105,7 @@ SKILL;
     }
 
     /**
-     * Keyword tags used by SkillRegistry::match() for relevance scoring.
+     * Keyword tags shown on adapter admin pages.
      *
      * @return list<string> Defaults merged with any extraTags passed to the constructor.
      */
