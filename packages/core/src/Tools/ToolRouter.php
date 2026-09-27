@@ -92,7 +92,7 @@ final class ToolRouter
         $scorable = [];
 
         foreach ($allSchemas as $schema) {
-            if ($this->isPinned($this->schemaName($schema), $explicit)) {
+            if ($this->schemaName($schema) === LoadSkillTool::NAME || $this->isPinned($this->schemaName($schema), $explicit)) {
                 $pinned[] = $schema;
 
                 continue;

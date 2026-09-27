@@ -14,6 +14,7 @@ use PhpClaw\Tools\FileEditTool;
 use PhpClaw\Tools\FileReadTool;
 use PhpClaw\Tools\FileWriteTool;
 use PhpClaw\Tools\HttpTool;
+use PhpClaw\Tools\LoadSkillTool;
 use PhpClaw\Tools\ProjectTool;
 use PhpClaw\Tools\ShellTool;
 use PhpClaw\Tools\ToolCatalogue;
@@ -45,6 +46,7 @@ final class ToolAuthorizationTest extends TestCase
             'file_read' => [new FileReadTool($this->workspace), ['path' => '']],
             'file_write' => [new FileWriteTool($this->workspace), ['path' => '']],
             'http_request' => [new HttpTool, ['url' => '']],
+            'load_skill' => [new LoadSkillTool, ['name' => '']],
             'project_info' => [new ProjectTool($this->workspace.'/absent'), []],
             'shell_exec' => [new ShellTool, ['command' => '']],
             'zip_package' => [new ZipPackagerTool($this->workspace), ['source_dir' => '', 'output_name' => '']],
@@ -78,7 +80,7 @@ final class ToolAuthorizationTest extends TestCase
 
     public function test_every_core_tool_is_swept(): void
     {
-        self::assertCount(9, $this->tools());
+        self::assertCount(10, $this->tools());
     }
 
     public function test_authenticated_caller_reaches_all(): void
@@ -89,7 +91,7 @@ final class ToolAuthorizationTest extends TestCase
     public function test_no_identity_reaches_none(): void
     {
         self::assertSame(
-            ['code_search', 'db_query', 'file_edit', 'file_read', 'file_write', 'http_request', 'project_info', 'shell_exec', 'zip_package'],
+            ['code_search', 'db_query', 'file_edit', 'file_read', 'file_write', 'http_request', 'load_skill', 'project_info', 'shell_exec', 'zip_package'],
             $this->sweep(new FakeToolAuthorizer(allows: false)),
         );
     }

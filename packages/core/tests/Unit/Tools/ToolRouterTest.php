@@ -331,7 +331,7 @@ final class ToolRouterTest extends TestCase
         Claw::builder()
             ->providerOverride($provider)
             ->useDefaultGuards(false)
-            ->maxToolsPerTurn(1)
+            ->maxToolsPerTurn(2)
             ->tools([
                 $this->routedTool('alpha_publish', 'publish an article', []),
                 $this->routedTool('beta_fetch', 'fetch a url', ['fetch url']),
@@ -342,7 +342,7 @@ final class ToolRouterTest extends TestCase
 
         SkillRegistry::reset();
 
-        $this->assertSame(['beta_fetch'], $offered);
+        $this->assertSame(['beta_fetch', 'load_skill'], $offered);
     }
 
     /**

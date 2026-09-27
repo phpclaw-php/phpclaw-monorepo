@@ -758,7 +758,8 @@ final class Agent
         }
 
         try {
-            $result = $this->tools->get($toolName)->execute($toolInput);
+            $tool = $this->tools->get($toolName);
+            $result = $tool->execute(self::tidyToolInput($toolInput, $tool->inputSchema()));
 
             return $this->capToolResult($this->toolOutputGuard->sanitise($result, $toolName));
         } catch (ToolException $e) {
@@ -766,5 +767,77 @@ final class Agent
 
             return (string) json_encode(['error' => $e->getMessage()]);
         }
+    }
+
+    /**
+     * Drop optional arguments the model sent as null, blank or a "*"/"%" wildcard, and cap numbers to the schema range.
+     *
+     * @param  array<string, mixed>  $input  Arguments as sent by the model.
+     * @param  array<string, mixed>  $schema  The tool's input schema.
+     * @return array<string, mixed> Arguments passed to the tool.
+     */
+    private static function tidyToolInput(array $input, array $schema): array
+    {
+        $properties = (array) ($schema['properties'] ?? []);
+        $required = (array) ($schema['required'] ?? []);
+
+        foreach ($input as $key => $value) {
+            $spec = $properties[$key] ?? null;
+            if (! is_array($spec)) {
+                continue;
+            }
+
+            if (! in_array($key, $required, true) && self::isEmptyArgument($value, (array) ($spec['enum'] ?? []))) {
+                unset($input[$key]);
+
+                continue;
+            }
+
+            if (in_array($spec['type'] ?? '', ['integer', 'number'], true) && is_numeric($value)) {
+                $input[$key] = self::capToRange($spec['type'] === 'integer' ? (int) $value : (float) $value, $spec);
+            }
+        }
+
+        return $input;
+    }
+
+    /**
+     * Report whether an optional argument carries no real value: null, blank, or a wildcard that is not one of its enum values.
+     *
+     * @param  mixed  $value  Argument value.
+     * @param  array<int, mixed>  $enum  Allowed values from the schema, if any.
+     * @return bool True when the argument should be dropped.
+     */
+    private static function isEmptyArgument(mixed $value, array $enum): bool
+    {
+        if ($value === null) {
+            return true;
+        }
+        if (! is_string($value)) {
+            return false;
+        }
+
+        $text = trim($value);
+
+        return $text === '' || (in_array($text, ['*', '%'], true) && ! in_array($text, $enum, true));
+    }
+
+    /**
+     * Cap a number to the schema's minimum and maximum when they are set.
+     *
+     * @param  int|float  $number  Number sent by the model.
+     * @param  array<string, mixed>  $spec  Property schema.
+     * @return int|float The number within range.
+     */
+    private static function capToRange(int|float $number, array $spec): int|float
+    {
+        if (isset($spec['minimum']) && $number < $spec['minimum']) {
+            return $spec['minimum'];
+        }
+        if (isset($spec['maximum']) && $number > $spec['maximum']) {
+            return $spec['maximum'];
+        }
+
+        return $number;
     }
 }

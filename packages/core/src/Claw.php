@@ -23,6 +23,7 @@ use PhpClaw\Providers\Contracts\SupportsWebSearchInterface;
 use PhpClaw\Providers\Tools\WebSearch;
 use PhpClaw\Skills\RemoteSkillLoader;
 use PhpClaw\Skills\SkillRegistry;
+use PhpClaw\Tools\LoadSkillTool;
 use PhpClaw\Tools\ToolProfileResolver;
 use PhpClaw\Tools\ToolRegistry;
 use PhpClaw\Tools\ToolRouter;
@@ -65,17 +66,17 @@ final class Claw implements ClawInterface
         $this->config = $config;
         $this->memory = $config->memory;
         $this->storeMessages = $config->storeMessages;
-        $this->agent = $this->buildAgent();
-        $this->pipeline = new InvocationPipeline(
-            new MessageAugmenter($this->memory, $this->config->skillMatchLimit, ToolProfileResolver::skillContextChars($this->profile())),
-            $this->memory,
-        );
-
         $this->registerSkills();
 
         foreach ($this->config->remoteSkillUrls as $url) {
             RemoteSkillLoader::load($url);
         }
+
+        $this->agent = $this->buildAgent();
+        $this->pipeline = new InvocationPipeline(
+            new MessageAugmenter($this->memory, $this->config->skillMatchLimit, ToolProfileResolver::skillContextChars($this->profile())),
+            $this->memory,
+        );
 
         $this->registerDefaultGuards();
     }
@@ -265,7 +266,11 @@ final class Claw implements ClawInterface
      */
     private function buildAgent(): Agent
     {
-        $provider = $this->config->providerOverride ?? $this->config->buildProvider();
+        $hasSkills = SkillRegistry::count() > 0;
+        $config = $hasSkills
+            ? $this->config->withSystemPrompt($this->config->systemPrompt.LoadSkillTool::systemPromptSection())
+            : $this->config;
+        $provider = $this->config->providerOverride ?? $config->buildProvider();
 
         if ($provider instanceof SupportsWebSearchInterface) {
             $provider = $provider->withProviderTools(
@@ -276,6 +281,9 @@ final class Claw implements ClawInterface
         $toolRegistry = new ToolRegistry;
         if (! empty($this->config->tools)) {
             $toolRegistry->register($this->config->tools);
+        }
+        if ($hasSkills) {
+            $toolRegistry->register([new LoadSkillTool]);
         }
 
         return new Agent(
@@ -292,7 +300,7 @@ final class Claw implements ClawInterface
             maxToolResultTokens: $this->config->maxToolResultTokens,
             leanToolSchemas: $this->profile() === ToolProfileResolver::PROFILE_MINIMAL,
             requestBudgetTokens: ToolProfileResolver::requestBudget($this->profile()),
-            fixedPromptTokens: (int) ceil(strlen($this->config->systemPrompt) / 4),
+            fixedPromptTokens: (int) ceil(strlen($config->systemPrompt) / 4),
         );
     }
 

@@ -43,7 +43,7 @@ final class InvocationPipelineRunContextTest extends TestCase
         $pipeline = new InvocationPipeline(new MessageAugmenter(null), null);
 
         $response = $pipeline->execute(
-            'please build a widget',
+            'please build a widget with widget_builder',
             false,
             static fn (string $augmented, string $runId): AgentResponse => new AgentResponse(
                 text: 'done',

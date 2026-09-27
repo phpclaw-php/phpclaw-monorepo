@@ -639,10 +639,6 @@ final class AgentTest extends TestCase
         $this->assertSame(str_repeat('x', 4000), $this->runOneToolRound(str_repeat('x', 4000), 0));
     }
 
-    /**
-     * @param  list<array<string, mixed>>  $responses
-     * @param  list<array<int, array<string, mixed>>>|null  $toolsPerCall
-     */
     private function makeToolRecordingProvider(array $responses, ?array &$toolsPerCall): ProviderInterface
     {
         $toolsPerCall = [];

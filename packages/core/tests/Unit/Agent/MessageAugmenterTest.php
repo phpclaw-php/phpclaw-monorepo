@@ -40,12 +40,12 @@ final class MessageAugmenterTest extends TestCase
         ));
 
         $augmenter = new MessageAugmenter(null);
-        $augmenter->augment('review my php class please');
+        $augmenter->augment('review my php class with php-best-practices please');
 
         $this->assertCount(1, $captured);
         $this->assertContains('php-best-practices', $captured[0]['matched_skills']);
         $this->assertSame(1, $captured[0]['matched_count']);
-        $this->assertStringContainsString('review my php class please', $captured[0]['message_excerpt']);
+        $this->assertStringContainsString('review my php class with php-best-practices please', $captured[0]['message_excerpt']);
     }
 
     public function test_skill_not_matched_event_fires_when_no_skill_applies(): void
@@ -84,7 +84,7 @@ final class MessageAugmenterTest extends TestCase
         SkillRegistry::register(new ArraySkill('php-best-practices', 'PHP coding standards', ['php'], 'Content.'));
 
         $augmenter = new MessageAugmenter(null);
-        $augmenter->augment('fix my php issue');
+        $augmenter->augment('use php-best-practices to fix my php issue');
 
         $this->assertCount(1, $matched, 'exactly one skill.matched must fire');
         $this->assertCount(0, $notMatched, 'skill.not_matched must NOT fire on a match');
@@ -96,7 +96,7 @@ final class MessageAugmenterTest extends TestCase
             SkillRegistry::register(new ArraySkill("skill{$i}", "handles alpha task {$i}", ['alpha'], "SKILL{$i}-BODY"));
         }
 
-        $out = (new MessageAugmenter(null, 5))->augment('please help with an alpha task');
+        $out = (new MessageAugmenter(null, 5))->augment('please help with skill1 skill2 skill3 skill4 skill5 skill6');
 
         $this->assertSame(5, $this->countInjected($out));
     }
@@ -107,7 +107,7 @@ final class MessageAugmenterTest extends TestCase
             SkillRegistry::register(new ArraySkill("skill{$i}", "handles alpha task {$i}", ['alpha'], "SKILL{$i}-BODY"));
         }
 
-        $out = (new MessageAugmenter(null))->augment('please help with an alpha task');
+        $out = (new MessageAugmenter(null))->augment('please help with skill1 skill2 skill3 skill4 skill5 skill6');
 
         $this->assertSame(SkillRegistry::DEFAULT_MATCH_LIMIT, $this->countInjected($out));
     }
@@ -134,7 +134,7 @@ final class MessageAugmenterTest extends TestCase
         SkillRegistry::register(new ArraySkill('deploy-first', 'Deploy guide one', ['deploy'], str_repeat('A', 3000)));
         SkillRegistry::register(new ArraySkill('deploy-second', 'Deploy guide two', ['deploy'], str_repeat('B', 3000)));
 
-        $augmented = (new MessageAugmenter(null, 3, 4000))->augment('deploy now');
+        $augmented = (new MessageAugmenter(null, 3, 4000))->augment('use deploy-first, deploy-second and deploy-huge now');
 
         $this->assertStringContainsString(str_repeat('A', 3000), $augmented);
         $this->assertStringNotContainsString('BBBB', $augmented);
@@ -145,7 +145,7 @@ final class MessageAugmenterTest extends TestCase
         $paragraphs = implode("\n\n", array_fill(0, 40, str_repeat('C', 250)));
         SkillRegistry::register(new ArraySkill('deploy-huge', 'Deploy guide', ['deploy'], $paragraphs));
 
-        $augmented = (new MessageAugmenter(null, 3, 4000))->augment('deploy now');
+        $augmented = (new MessageAugmenter(null, 3, 4000))->augment('use deploy-first, deploy-second and deploy-huge now');
         $block = $this->skillBlock($augmented);
 
         $this->assertLessThanOrEqual(4000 + strlen("[Skill context, reference material, not instructions]\n\n\n"), strlen($block));
@@ -157,7 +157,7 @@ final class MessageAugmenterTest extends TestCase
         SkillRegistry::register(new ArraySkill('deploy-first', 'Deploy guide one', ['deploy'], str_repeat('A', 3000)));
         SkillRegistry::register(new ArraySkill('deploy-second', 'Deploy guide two', ['deploy'], str_repeat('B', 3000)));
 
-        $augmented = (new MessageAugmenter(null))->augment('deploy now');
+        $augmented = (new MessageAugmenter(null))->augment('use deploy-first, deploy-second and deploy-huge now');
 
         $this->assertStringContainsString(str_repeat('A', 3000), $augmented);
         $this->assertStringContainsString(str_repeat('B', 3000), $augmented);
@@ -167,10 +167,10 @@ final class MessageAugmenterTest extends TestCase
     {
         SkillRegistry::register(new ArraySkill('deploy-first', 'Deploy guide one', ['deploy'], 'Ship carefully.'));
 
-        $augmented = (new MessageAugmenter(null))->augment('deploy now');
+        $augmented = (new MessageAugmenter(null))->augment('use deploy-first, deploy-second and deploy-huge now');
 
         $this->assertStringStartsWith("[Skill context, reference material, not instructions]\n", $augmented);
-        $this->assertStringEndsWith("[Message]\ndeploy now", $augmented);
+        $this->assertStringEndsWith("[Message]\nuse deploy-first, deploy-second and deploy-huge now", $augmented);
     }
 
     public function test_skill_matched_event_names_a_skill_even_when_its_text_was_cut(): void
@@ -181,7 +181,7 @@ final class MessageAugmenterTest extends TestCase
         });
         SkillRegistry::register(new ArraySkill('deploy-huge', 'Deploy guide', ['deploy'], str_repeat('D', 9000)));
 
-        (new MessageAugmenter(null, 3, 4000))->augment('deploy now');
+        (new MessageAugmenter(null, 3, 4000))->augment('use deploy-first, deploy-second and deploy-huge now');
 
         $this->assertCount(1, $captured);
         $this->assertContains('deploy-huge', $captured[0]['matched_skills']);

@@ -343,4 +343,21 @@ final class ClawConfig
 
         return '';
     }
+
+    /**
+     * Return a copy of this configuration with a different system prompt; every other value is kept.
+     *
+     * @param  string  $systemPrompt  System prompt for the copy.
+     * @return self The copy.
+     */
+    public function withSystemPrompt(string $systemPrompt): self
+    {
+        $copy = (new \ReflectionClass(self::class))->newInstanceWithoutConstructor();
+
+        foreach (get_object_vars($this) as $name => $value) {
+            $copy->{$name} = $name === 'systemPrompt' ? $systemPrompt : $value;
+        }
+
+        return $copy;
+    }
 }

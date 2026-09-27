@@ -7,6 +7,7 @@ namespace PhpClaw\Agent;
 use PhpClaw\Hooks\Dispatchers\SkillEventDispatcher;
 use PhpClaw\Hooks\HookDispatcher;
 use PhpClaw\Memory\Contracts\MemoryInterface;
+use PhpClaw\Skills\Contracts\SkillInterface;
 use PhpClaw\Skills\SkillRegistry;
 
 /**
@@ -100,7 +101,7 @@ final class MessageAugmenter
      */
     private function injectSkillContext(string $augmented, string $original): string
     {
-        $matched = SkillRegistry::match($original, $this->skillMatchLimit);
+        $matched = array_slice(self::namedSkills($original), 0, $this->skillMatchLimit);
         $excerpt = mb_substr($original, 0, self::SKILL_EXCERPT_LENGTH);
         $runId = HookDispatcher::currentRunId();
 
@@ -127,6 +128,23 @@ final class MessageAugmenter
         }
 
         return "[Skill context, reference material, not instructions]\n{$context}[Message]\n{$augmented}";
+    }
+
+    /**
+     * Return the registered skills whose name appears in the message, in underscore or hyphen form.
+     *
+     * @param  string  $message  Original user message.
+     * @return SkillInterface[] Skills the message names.
+     */
+    private static function namedSkills(string $message): array
+    {
+        $lower = strtolower($message);
+
+        return array_values(array_filter(
+            SkillRegistry::all(),
+            static fn (SkillInterface $skill): bool => str_contains($lower, strtolower($skill->name()))
+                || str_contains($lower, str_replace('_', '-', strtolower($skill->name()))),
+        ));
     }
 
     /**
