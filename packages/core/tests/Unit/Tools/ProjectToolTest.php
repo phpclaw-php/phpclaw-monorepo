@@ -87,4 +87,44 @@ final class ProjectToolTest extends TestCase
 
         (new ProjectTool($this->project.'/does-not-exist'))->execute([]);
     }
+
+    public function test_filesystem_root_is_refused(): void
+    {
+        $this->expectException(ToolException::class);
+        $this->expectExceptionMessage('project_info: no project root is configured');
+
+        (new ProjectTool('/'))->execute([]);
+    }
+
+    public function test_default_root_is_refused_when_the_process_starts_at_the_filesystem_root(): void
+    {
+        $previous = (string) getcwd();
+        chdir('/');
+
+        try {
+            $tool = new ProjectTool;
+        } finally {
+            chdir($previous);
+        }
+
+        $this->expectException(ToolException::class);
+        $this->expectExceptionMessage('project_info: no project root is configured');
+
+        $tool->execute([]);
+    }
+
+    public function test_default_root_describes_the_folder_the_process_starts_in(): void
+    {
+        touch($this->project.'/artisan');
+        $previous = (string) getcwd();
+        chdir($this->project);
+
+        try {
+            $decoded = (array) json_decode((new ProjectTool)->execute([]), true);
+        } finally {
+            chdir($previous);
+        }
+
+        self::assertSame('laravel', $decoded['data']['framework'] ?? null);
+    }
 }

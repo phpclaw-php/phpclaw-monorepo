@@ -96,12 +96,12 @@ final class ProjectTool implements AuthorizableToolInterface, ToolInterface, Too
     }
 
     /**
-     * Authorize the caller and clamp the requested tree depth.
+     * Authorize the caller, refuse a filesystem-root or missing project root, and clamp the requested tree depth.
      *
      * @param  array<string, mixed>  $input  Optional 'depth' (1-4).
      * @return array{input: array<string, mixed>, result: string|null}
      *
-     * @throws ToolException When the project root does not exist.
+     * @throws ToolException When the project root is the filesystem root or does not exist.
      */
     protected function plan(array $input): array
     {
@@ -109,6 +109,10 @@ final class ProjectTool implements AuthorizableToolInterface, ToolInterface, Too
 
         if ($forbidden !== null) {
             return ['input' => $input, 'result' => $forbidden];
+        }
+
+        if (dirname($this->projectRoot) === $this->projectRoot) {
+            throw new ToolException('project_info: no project root is configured, and the process started at the filesystem root.');
         }
 
         if (! is_dir($this->projectRoot)) {
