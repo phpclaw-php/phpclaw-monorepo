@@ -9,6 +9,7 @@ use Orchestra\Testbench\TestCase;
 use PhpClaw\Laravel\Engine\EngineFactory;
 use PhpClaw\Laravel\LaravelConsole;
 use PhpClaw\Laravel\PhpClawServiceProvider;
+use PhpClaw\Tools\FileWriteTool;
 
 final class LaravelConsoleTest extends TestCase
 {
@@ -58,6 +59,7 @@ final class LaravelConsoleTest extends TestCase
 
     public function test_php_write_is_off_on_a_queue_worker_and_on_for_artisan(): void
     {
+        $this->app['config']->set('phpclaw.tools', [FileWriteTool::class]);
         $_SERVER['argv'] = ['artisan', 'phpclaw'];
         $this->assertTrue($this->phpWriteAllowed());
 

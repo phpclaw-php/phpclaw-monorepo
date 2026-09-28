@@ -37,6 +37,7 @@ final class PhpWriteApprovalGateTest extends TestCase
     {
         $app['config']->set('phpclaw.api_key', 'test-key');
         $app['config']->set('phpclaw.memory_driver', 'array');
+        $app['config']->set('phpclaw.tools', [FileWriteTool::class]);
     }
 
     public function test_cli_context_enables_php_write_and_wires_approval_gate(): void
