@@ -128,7 +128,7 @@ Your message → GuardRegistry (blocks injection/PII before the LLM ever sees it
 
 ## Trust signals
 
-2,054 tests, 5,665 assertions, zero real network calls or API keys required to run the suite, every provider and tool call is mocked. 80% line coverage enforced in CI as one whole-package figure (covered statements over total statements), not per class. One public API (`Claw::send`/`stream`/`conversation`) that doesn't break without a major version bump.
+2,208 tests, 6,059 assertions, zero real network calls or API keys required to run the suite, every provider and tool call is mocked. 80% line coverage enforced in CI as one whole-package figure (covered statements over total statements), not per class. One public API (`Claw::send`/`stream`/`conversation`) that doesn't break without a major version bump.
 
 ## Documentation
 
