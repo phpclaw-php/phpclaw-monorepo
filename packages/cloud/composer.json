@@ -1,6 +1,7 @@
 {
     "name": "phpclaw/phpclaw-cloud",
     "description": "phpClaw Cloud transport. Wildcard hook listener, payload builder, and HTTP client for the phpClaw Cloud service.",
+    "homepage": "https://phpclaw.ai",
     "type": "library",
     "license": "MIT",
     "keywords": [

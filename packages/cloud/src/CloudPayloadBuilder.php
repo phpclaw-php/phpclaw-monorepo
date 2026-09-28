@@ -460,7 +460,11 @@ final class CloudPayloadBuilder
      */
     private function fromGuardBlocked(array $context): array
     {
-        return ['reason' => self::str($context, 'reason')];
+        return [
+            'run_id' => self::str($context, 'run_id'),
+            'parent_run_id' => self::str($context, 'parent_run_id'),
+            'reason' => self::str($context, 'reason'),
+        ];
     }
 
     /**
@@ -472,6 +476,8 @@ final class CloudPayloadBuilder
     private function fromGuardRateLimit(array $context): array
     {
         return [
+            'run_id' => self::str($context, 'run_id'),
+            'parent_run_id' => self::str($context, 'parent_run_id'),
             'caller_id' => self::str($context, 'caller_id'),
             'count' => self::int($context, 'count'),
             'max_requests' => self::int($context, 'max_requests'),
@@ -488,6 +494,8 @@ final class CloudPayloadBuilder
     private function fromGuardToolOutputRedacted(array $context): array
     {
         return [
+            'run_id' => self::str($context, 'run_id'),
+            'parent_run_id' => self::str($context, 'parent_run_id'),
             'tool_name' => self::str($context, 'tool_name'),
             'pattern' => self::str($context, 'pattern'),
         ];
@@ -501,7 +509,11 @@ final class CloudPayloadBuilder
      */
     private function fromGuardPhpTagRemoved(array $context): array
     {
-        return ['tag' => self::str($context, 'tag')];
+        return [
+            'run_id' => self::str($context, 'run_id'),
+            'parent_run_id' => self::str($context, 'parent_run_id'),
+            'tag' => self::str($context, 'tag'),
+        ];
     }
 
     /**
@@ -512,7 +524,11 @@ final class CloudPayloadBuilder
      */
     private function fromGuardFunctionRedacted(array $context): array
     {
-        return ['function' => self::str($context, 'function')];
+        return [
+            'run_id' => self::str($context, 'run_id'),
+            'parent_run_id' => self::str($context, 'parent_run_id'),
+            'function' => self::str($context, 'function'),
+        ];
     }
 
     /**
@@ -631,6 +647,8 @@ final class CloudPayloadBuilder
     private function fromShellDenied(array $context): array
     {
         return [
+            'run_id' => self::str($context, 'run_id'),
+            'parent_run_id' => self::str($context, 'parent_run_id'),
             'command' => self::str($context, 'command'),
             'cmd_name' => self::str($context, 'cmd_name'),
             'reason' => self::str($context, 'reason'),
@@ -647,6 +665,8 @@ final class CloudPayloadBuilder
     private function fromShellExec(array $context): array
     {
         return [
+            'run_id' => self::str($context, 'run_id'),
+            'parent_run_id' => self::str($context, 'parent_run_id'),
             'command' => self::str($context, 'command'),
             'cmd_name' => self::str($context, 'cmd_name'),
         ];
