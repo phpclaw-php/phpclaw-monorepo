@@ -429,4 +429,70 @@ final class RedisMemoryTest extends TestCase
         $this->expectException(MemoryException::class);
         new RedisMemory(url: 'redis://:somepass@127.0.0.1:1/3');
     }
+
+    public function test_invalid_url_message_does_not_contain_the_url(): void
+    {
+        if (! extension_loaded('redis')) {
+            $this->markTestSkipped('ext-redis not installed.');
+        }
+
+        try {
+            new RedisMemory(url: 'rediss://:TOP-SECRET-PW@/0');
+            $this->fail('Expected a MemoryException for a URL without a host.');
+        } catch (MemoryException $e) {
+            $this->assertStringContainsString('invalid REDIS_URL', $e->getMessage());
+            $this->assertStringNotContainsString('TOP-SECRET-PW', $e->getMessage());
+        }
+    }
+
+    public function test_rediss_url_opens_a_tls_connection(): void
+    {
+        $firstBytes = $this->bytesSentFor('rediss', 'WIRE-SECRET-PW');
+
+        $this->assertNotSame('', $firstBytes);
+        $this->assertSame("\x16", $firstBytes[0]);
+        $this->assertStringNotContainsString('WIRE-SECRET-PW', $firstBytes);
+    }
+
+    public function test_redis_url_opens_a_plain_connection(): void
+    {
+        $firstBytes = $this->bytesSentFor('redis', 'PLAIN-PW');
+
+        $this->assertStringStartsWith('*', $firstBytes);
+    }
+
+    private function bytesSentFor(string $scheme, string $password): string
+    {
+        if (! extension_loaded('redis')) {
+            $this->markTestSkipped('ext-redis not installed.');
+        }
+
+        $capture = (string) tempnam(sys_get_temp_dir(), 'phpclaw_wire_');
+        $port = $this->freePort();
+        $listener = '$s = stream_socket_server("tcp://127.0.0.1:'.$port.'"); '
+            .'$c = stream_socket_accept($s, 10); stream_set_timeout($c, 2); '
+            .'file_put_contents('.var_export($capture, true).', (string) fread($c, 512));';
+        $process = proc_open([PHP_BINARY, '-r', $listener], [], $pipes);
+        usleep(300000);
+
+        try {
+            @new RedisMemory(url: "{$scheme}://:{$password}@127.0.0.1:{$port}");
+        } catch (\Throwable) {
+        }
+
+        proc_close($process);
+        $bytes = (string) file_get_contents($capture);
+        @unlink($capture);
+
+        return $bytes;
+    }
+
+    private function freePort(): int
+    {
+        $probe = stream_socket_server('tcp://127.0.0.1:0');
+        $name = (string) stream_socket_get_name($probe, false);
+        fclose($probe);
+
+        return (int) substr($name, (int) strrpos($name, ':') + 1);
+    }
 }

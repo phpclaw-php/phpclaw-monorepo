@@ -294,9 +294,9 @@ final class RedisMemory implements MemoryInterface
     }
 
     /**
-     * Parse a Redis URL and open a connection.
+     * Parse a Redis URL and open a connection, over TLS when the scheme is `rediss`.
      *
-     * @param  string  $url  Redis URL in the form `redis://[:password@]host[:port][/db]`.
+     * @param  string  $url  Redis URL in the form `redis[s]://[:password@]host[:port][/db]`.
      * @return \Redis Open connection with auth + database selection applied as parsed from the URL.
      *
      * @throws MemoryException When the URL is invalid or the connection cannot be opened.
@@ -306,14 +306,20 @@ final class RedisMemory implements MemoryInterface
         $parsed = parse_url($url);
 
         if ($parsed === false || ! isset($parsed['host'])) {
-            throw new MemoryException("RedisMemory: invalid REDIS_URL '{$url}'.");
+            throw new MemoryException('RedisMemory: invalid REDIS_URL.');
+        }
+
+        $host = (string) $parsed['host'];
+
+        if (strtolower((string) ($parsed['scheme'] ?? '')) === 'rediss') {
+            $host = 'tls://'.$host;
         }
 
         $redis = new \Redis;
 
         try {
             $connected = $redis->connect(
-                (string) $parsed['host'],
+                $host,
                 (int) ($parsed['port'] ?? self::DEFAULT_PORT),
                 self::DEFAULT_CONNECT_TIMEOUT,
             );
