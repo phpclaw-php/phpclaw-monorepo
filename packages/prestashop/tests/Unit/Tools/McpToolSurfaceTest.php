@@ -31,7 +31,7 @@ final class McpToolSurfaceTest extends TestCase
 
     #[RunInSeparateProcess]
     #[PreserveGlobalState(false)]
-    public function test_every_tool_the_mcp_surface_advertises_also_executes(): void
+    public function test_every_mcp_tool_executes_except_raw_sql_which_needs_a_superadmin(): void
     {
         define('PHPCLAW_PS_CONSOLE', true);
 
@@ -48,18 +48,10 @@ final class McpToolSurfaceTest extends TestCase
             }
         }
 
-        $executable = $advertised - count($refused);
-
         self::assertSame(
-            [],
+            ['database'],
             $refused,
-            'The MCP server advertises tools it refuses to run on the console: '
-            .implode(', ', $refused),
-        );
-        self::assertSame(
-            $advertised,
-            $executable,
-            "The MCP surface advertised {$advertised} tools but only {$executable} execute.",
+            'Over MCP only raw SQL may be refused, and it must be: '.implode(', ', $refused),
         );
     }
 

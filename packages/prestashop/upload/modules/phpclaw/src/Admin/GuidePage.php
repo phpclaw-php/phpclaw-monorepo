@@ -84,12 +84,8 @@ final class GuidePage
     ];
 
     private const CORE_TOOL_META = [
-        'HttpTool' => ['status' => 'Ready', 'notes' => 'Fetch an HTTP response (GET/POST) from a public URL'],
         'FileReadTool' => ['status' => 'Ready', 'notes' => 'Read files inside the workspace directory'],
-        'FileWriteTool' => ['status' => 'Ready', 'notes' => 'Write files inside the workspace directory'],
-        'ShellTool' => ['status' => 'Ready', 'notes' => 'Default allowlisted commands'],
         'CodeSearchTool' => ['status' => 'Ready', 'notes' => 'Search for text across files in the workspace directory'],
-        'FileEditTool' => ['status' => 'Ready', 'notes' => 'Apply a targeted find-and-replace edit to a workspace file'],
         'ProjectTool' => ['status' => 'Ready', 'notes' => 'Detect framework, Composer packages, and file tree (read-only)'],
     ];
 

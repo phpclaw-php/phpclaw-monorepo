@@ -256,9 +256,9 @@ final class GuidePageTest extends TestCase
         );
     }
 
-    public function test_get_core_utility_tools_returns_exactly_seven_entries(): void
+    public function test_get_core_utility_tools_returns_exactly_three_entries(): void
     {
-        self::assertCount(7, GuidePage::getCoreUtilityTools());
+        self::assertCount(3, GuidePage::getCoreUtilityTools());
     }
 
     public function test_get_core_utility_tools_rows_have_required_keys(): void
@@ -270,20 +270,6 @@ final class GuidePageTest extends TestCase
         }
     }
 
-    public function test_get_core_utility_tools_includes_http_tool(): void
-    {
-        $tools = array_column(GuidePage::getCoreUtilityTools(), 'tool');
-
-        self::assertContains('HttpTool', $tools);
-    }
-
-    public function test_get_core_utility_tools_includes_shell_tool(): void
-    {
-        $tools = array_column(GuidePage::getCoreUtilityTools(), 'tool');
-
-        self::assertContains('ShellTool', $tools);
-    }
-
     public function test_get_core_utility_tools_includes_file_read_tool(): void
     {
         $tools = array_column(GuidePage::getCoreUtilityTools(), 'tool');
@@ -291,11 +277,17 @@ final class GuidePageTest extends TestCase
         self::assertContains('FileReadTool', $tools);
     }
 
-    public function test_get_core_utility_tools_includes_file_write_tool(): void
+    public function test_get_core_utility_tools_matches_the_default_true_core_tools_and_their_notes(): void
     {
-        $tools = array_column(GuidePage::getCoreUtilityTools(), 'tool');
+        $meta = (new \ReflectionClassConstant(GuidePage::class, 'CORE_TOOL_META'))->getValue();
 
-        self::assertContains('FileWriteTool', $tools);
+        $expected = [];
+        foreach ($meta as $tool => $m) {
+            $expected[] = ['tool' => $tool, 'status' => $m['status'], 'notes' => $m['notes']];
+        }
+        usort($expected, static fn (array $a, array $b): int => strcmp($a['tool'], $b['tool']));
+
+        self::assertSame($expected, GuidePage::getCoreUtilityTools());
     }
 
     public function test_get_core_utility_tools_fallback_when_discovery_cache_throws(): void
@@ -1042,11 +1034,6 @@ final class GuidePageTest extends TestCase
         self::assertSame(['invoice', 'order'], $record['keywords']);
     }
 
-    /**
-     * Build a skill double standing in for one loaded from a remote collection.
-     *
-     * @return SkillInterface
-     */
     private function makeRemoteSkill(): SkillInterface
     {
         return new class implements SkillInterface

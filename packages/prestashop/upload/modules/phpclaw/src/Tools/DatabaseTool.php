@@ -21,9 +21,7 @@ use PhpClaw\Tools\ToolRoutingMetadata;
  */
 final class DatabaseTool implements ToolInterface, ToolRoutingInterface
 {
-    use HasToolExecutionContract {
-        runningInConsole as private consoleMarkerIsSet;
-    }
+    use HasToolExecutionContract;
 
     private const REQUIRED_CAPABILITY = 'AdminPhpClawDebug';
 
@@ -171,14 +169,13 @@ final class DatabaseTool implements ToolInterface, ToolRoutingInterface
     }
 
     /**
-     * Report whether this request runs through the console. This tool is also handed the flag
-     * by the entry point that built it, so both console signals gate it identically.
+     * Report whether the entry point that built this tool declared an interactive console session; the process-wide console marker is not read, so over the MCP server this tool keeps both gates.
      *
      * @return bool
      */
     protected function runningInConsole(): bool
     {
-        return $this->isConsole || $this->consoleMarkerIsSet();
+        return $this->isConsole;
     }
 
     /**

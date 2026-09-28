@@ -5,12 +5,17 @@ declare(strict_types=1);
 namespace PhpClaw\PrestaShop\Tests\Unit\Engine;
 
 use PhpClaw\Agent\CliApprovalGate;
+use PhpClaw\Exceptions\ToolException;
 use PhpClaw\Memory\MemoryRegistry;
 use PhpClaw\PrestaShop\Contracts\PsDbInterface;
 use PhpClaw\PrestaShop\Engine\EngineFactory;
 use PhpClaw\PrestaShop\Plugin;
+use PhpClaw\Tools\Contracts\ToolInterface;
+use PhpClaw\Tools\FileWriteTool;
 use PhpClaw\Tools\ToolRegistry;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\PreserveGlobalState;
+use PHPUnit\Framework\Attributes\RunInSeparateProcess;
 use PHPUnit\Framework\TestCase;
 
 #[CoversClass(EngineFactory::class)]
@@ -20,6 +25,8 @@ final class EngineFactoryTest extends TestCase
     {
         parent::setUp();
 
+        \Hook::reset();
+
         $ref = new \ReflectionProperty(Plugin::class, 'instance');
         $ref->setAccessible(true);
         $ref->setValue(null, null);
@@ -27,6 +34,8 @@ final class EngineFactoryTest extends TestCase
 
     protected function tearDown(): void
     {
+        \Hook::reset();
+
         $ref = new \ReflectionProperty(Plugin::class, 'instance');
         $ref->setAccessible(true);
         $ref->setValue(null, null);
@@ -110,29 +119,49 @@ final class EngineFactoryTest extends TestCase
         self::assertTrue($flag, 'Interactive CLI must permit .php writes, gated by CliApprovalGate.');
     }
 
-    public function test_guide_tools_forces_php_write_off_for_the_mcp_path_even_under_cli(): void
+    public function test_guide_tools_turns_php_write_off_when_plugin_built_as_console(): void
     {
-        self::assertSame('cli', \PHP_SAPI, 'This test only proves the fix if PHPUnit itself runs under CLI, the exact condition that used to leak allowPhpWrite=true into MCP.');
+        \Hook::setResult('actionPhpclawExtraTools', [[FileWriteTool::class]]);
 
-        $db = $this->createMock(PsDbInterface::class);
-        $plugin = Plugin::getInstance($db, 'ps_');
+        $fileWrite = $this->toolNamed(
+            Plugin::getInstance($this->createMock(PsDbInterface::class), 'ps_', 0, false, true)->guideTools(),
+            'file_write',
+        );
 
-        $tools = $plugin->guideTools();
+        $this->expectException(ToolException::class);
+        $this->expectExceptionMessage('Writing .php files is blocked by default');
 
-        $fileWrite = null;
-        foreach ($tools as $tool) {
-            if (method_exists($tool, 'name') && $tool->name() === 'file_write') {
-                $fileWrite = $tool;
-                break;
-            }
-        }
+        $fileWrite->execute(['path' => 'mcp-probe.php', 'content' => '<?php echo 1;']);
+    }
 
-        self::assertNotNull($fileWrite, 'file_write must be present in the MCP tool list.');
+    #[RunInSeparateProcess]
+    #[PreserveGlobalState(false)]
+    public function test_guide_tools_database_tool_requires_superadmin_when_plugin_built_as_console(): void
+    {
+        define('PHPCLAW_PS_CONSOLE', true);
 
-        $flag = new \ReflectionProperty($fileWrite, 'allowPhpWrite');
-        $flag->setAccessible(true);
+        $database = $this->toolNamed(Plugin::getInstance(null, 'ps_', 0, false, true)->guideTools(), 'database');
 
-        self::assertFalse((bool) $flag->getValue($fileWrite), 'MCP tool list must never allow PHP writes.');
+        $result = json_decode($database->execute(['sql' => 'SELECT 1']), true);
+
+        self::assertSame('FORBIDDEN', $result['error']['code'] ?? null);
+    }
+
+    #[RunInSeparateProcess]
+    #[PreserveGlobalState(false)]
+    public function test_the_interactive_console_build_keeps_the_database_console_exemption(): void
+    {
+        define('PHPCLAW_PS_CONSOLE', true);
+
+        $factory = new EngineFactory([], [], null, 'ps_', 0, false, true);
+        $factory->bootRegistries();
+
+        $database = $this->toolNamed($factory->buildTools(applyProfile: false), 'database');
+
+        $this->expectException(ToolException::class);
+        $this->expectExceptionMessage('no database connection available');
+
+        $database->execute(['sql' => 'SELECT 1']);
     }
 
     public function test_deny_config_and_registry_together_remove_a_denied_tool_from_the_mcp_path(): void
@@ -153,6 +182,8 @@ final class EngineFactoryTest extends TestCase
 
     private function allowPhpWriteFlag(bool $isCli): bool
     {
+        \Hook::setResult('actionPhpclawExtraTools', [[FileWriteTool::class]]);
+
         $db = $this->createMock(PsDbInterface::class);
         $factory = new EngineFactory([], ['workspace_root' => sys_get_temp_dir()], $db, 'ps_');
         $factory->bootRegistries();
@@ -170,7 +201,7 @@ final class EngineFactoryTest extends TestCase
             }
         }
 
-        self::assertNotNull($fileWrite, 'file_write must be registered as a default core tool.');
+        self::assertNotNull($fileWrite, 'file_write must be registered via the extra-tools hook.');
 
         $flag = new \ReflectionProperty($fileWrite, 'allowPhpWrite');
         $flag->setAccessible(true);
@@ -206,6 +237,8 @@ final class EngineFactoryTest extends TestCase
 
     private function allowPhpWriteFromFactory(EngineFactory $factory): bool
     {
+        \Hook::setResult('actionPhpclawExtraTools', [[FileWriteTool::class]]);
+
         $buildTools = new \ReflectionMethod($factory, 'buildTools');
         $buildTools->setAccessible(true);
         /** @var array<int, object> $tools */
@@ -221,5 +254,16 @@ final class EngineFactoryTest extends TestCase
         }
 
         self::fail('file_write must be registered as a default core tool.');
+    }
+
+    private function toolNamed(array $tools, string $name): ToolInterface
+    {
+        foreach ($tools as $tool) {
+            if ($tool->name() === $name) {
+                return $tool;
+            }
+        }
+
+        self::fail("The tool list has no {$name} tool.");
     }
 }

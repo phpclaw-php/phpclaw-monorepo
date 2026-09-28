@@ -114,14 +114,13 @@ final class Plugin
     }
 
     /**
-     * Return the tool set for the Guide page and the MCP server: no provider profile applied,
-     * but the configured deny list and tool groups still removed.
+     * Return the tool set for the Guide page and the MCP server, always built as non-interactive: no provider profile applied, but the configured deny list and tool groups still removed.
      *
      * @return array<int, ToolInterface>
      */
     public function guideTools(): array
     {
-        $tools = $this->engineFactory->buildTools(applyProfile: false);
+        $tools = $this->engineFactory->buildTools(applyProfile: false, isCli: false);
 
         ['deny' => $deny, 'groups' => $groups] = $this->engineFactory->denyConfig();
 

@@ -44,6 +44,9 @@ use PhpClaw\Skills\SkillCatalogue;
 use PhpClaw\Skills\SkillRegistry;
 use PhpClaw\Skills\SkillResolver;
 use PhpClaw\Tools\Contracts\ToolInterface;
+use PhpClaw\Tools\FileEditTool;
+use PhpClaw\Tools\FileWriteTool;
+use PhpClaw\Tools\ShellTool;
 use PhpClaw\Tools\ToolCatalogue;
 use PhpClaw\Tools\ToolProfileResolver;
 
@@ -223,12 +226,16 @@ final class EngineFactory
     public function buildTools(bool $applyProfile = true, ?bool $isCli = null): array
     {
         $isCli = $isCli ?? $this->isConsole;
+        $workspaceRoot = (string) (($this->saved['workspace_root'] ?? '') ?: ($this->config['workspace_root'] ?? ''));
+        $workspaceRoot = $workspaceRoot !== '' ? $workspaceRoot : null;
+        $shellAllowlist = (array) ($this->config['shell_allowlist'] ?? []);
 
-        $extra = $this->fireExtraEvent('phpclaw/extra/tools', []);
-        $extra = array_values(array_filter(
-            $extra,
-            static fn ($t): bool => $t instanceof ToolInterface,
-        ));
+        $extra = $this->resolveExtraTools(
+            $this->fireExtraEvent('phpclaw/extra/tools', []),
+            $workspaceRoot,
+            $shellAllowlist,
+            $isCli,
+        );
 
         $tools = array_merge($extra, [
             new PsProductTool($this->db, $this->tablePrefix),
@@ -248,11 +255,9 @@ final class EngineFactory
         ]);
 
         if (class_exists(ToolCatalogue::class)) {
-            $workspaceRoot = (string) (($this->saved['workspace_root'] ?? '') ?: ($this->config['workspace_root'] ?? ''));
-
             foreach (ToolCatalogue::instantiateDefaults([
-                'workspaceRoot' => $workspaceRoot !== '' ? $workspaceRoot : null,
-                'allowlist' => (array) ($this->config['shell_allowlist'] ?? []),
+                'workspaceRoot' => $workspaceRoot,
+                'allowlist' => $shellAllowlist,
                 'allowPhpWrite' => $isCli,
             ]) as $tool) {
                 $tools[] = $tool;
@@ -528,5 +533,65 @@ final class EngineFactory
     private function fireExtraEvent(string $eventName, array $bucket): array
     {
         return PsHookBridge::fireExtra($eventName, $bucket);
+    }
+
+    /**
+     * Resolve `phpclaw/extra/tools` contributions: objects pass through, `ShellTool` / `FileWriteTool` /
+     * `FileEditTool` class names get this adapter's config, and any other no-argument class is built plain.
+     *
+     * @param  array<mixed>  $extra  Raw contributions from the extension event.
+     * @param  ?string  $workspaceRoot  Configured workspace root, or null for the tool's own default.
+     * @param  array<int, string>  $shellAllowlist  Configured shell command allowlist.
+     * @param  bool  $isCli  True only when the current entrypoint is an interactive console.
+     * @return list<ToolInterface>
+     */
+    private function resolveExtraTools(array $extra, ?string $workspaceRoot, array $shellAllowlist, bool $isCli): array
+    {
+        $resolved = [];
+
+        foreach ($extra as $item) {
+            if ($item instanceof ToolInterface) {
+                $resolved[] = $item;
+
+                continue;
+            }
+
+            if (! is_string($item) || $item === '' || ! class_exists($item)) {
+                continue;
+            }
+
+            $tool = match ($item) {
+                ShellTool::class => new ShellTool(allowlist: $shellAllowlist),
+                FileWriteTool::class => new FileWriteTool(workspaceRoot: $workspaceRoot, allowPhpWrite: $isCli),
+                FileEditTool::class => new FileEditTool(workspaceRoot: $workspaceRoot),
+                default => $this->instantiatePlainTool($item),
+            };
+
+            if ($tool instanceof ToolInterface) {
+                $resolved[] = $tool;
+            }
+        }
+
+        return $resolved;
+    }
+
+    /**
+     * Instantiate an arbitrary `ToolInterface` class name that takes no required constructor arguments.
+     *
+     * @param  class-string  $class  FQCN contributed via `phpclaw/extra/tools`.
+     * @return ?ToolInterface Null when the class is not a `ToolInterface` or requires arguments.
+     */
+    private function instantiatePlainTool(string $class): ?ToolInterface
+    {
+        if (! is_a($class, ToolInterface::class, true)) {
+            return null;
+        }
+
+        $constructor = (new \ReflectionClass($class))->getConstructor();
+        if ($constructor !== null && $constructor->getNumberOfRequiredParameters() > 0) {
+            return null;
+        }
+
+        return new $class;
     }
 }

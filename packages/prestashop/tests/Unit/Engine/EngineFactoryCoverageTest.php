@@ -20,6 +20,9 @@ use PhpClaw\Providers\OpenAIProvider;
 use PhpClaw\Providers\ProviderRegistry;
 use PhpClaw\Skills\SkillRegistry;
 use PhpClaw\Tools\Contracts\ToolInterface;
+use PhpClaw\Tools\FileEditTool;
+use PhpClaw\Tools\FileWriteTool;
+use PhpClaw\Tools\ShellTool;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
@@ -31,6 +34,7 @@ final class EngineFactoryCoverageTest extends TestCase
         parent::setUp();
 
         GuardRegistry::reset();
+        \Hook::reset();
 
         $ref = new \ReflectionProperty(Plugin::class, 'instance');
         $ref->setAccessible(true);
@@ -40,6 +44,7 @@ final class EngineFactoryCoverageTest extends TestCase
     protected function tearDown(): void
     {
         GuardRegistry::reset();
+        \Hook::reset();
 
         $ref = new \ReflectionProperty(Plugin::class, 'instance');
         $ref->setAccessible(true);
@@ -583,9 +588,191 @@ final class EngineFactoryCoverageTest extends TestCase
             'ps_product', 'ps_order', 'ps_customer', 'ps_category', 'ps_manufacturer',
             'ps_cart', 'ps_stock', 'ps_coupon', 'ps_module', 'ps_report',
             'ps_config', 'ps_employee', 'database', 'ps_log',
-            'code_search', 'project_info', 'file_read', 'http_request',
-            'shell_exec', 'file_edit', 'file_write',
+            'code_search', 'project_info', 'file_read',
         ], array_map(static fn (ToolInterface $t): string => $t->name(), $ref->invoke($factory)));
+    }
+
+    public function test_build_tools_builds_shell_tool_with_the_configured_allowlist_from_the_extra_hook(): void
+    {
+        \Hook::setResult('actionPhpclawExtraTools', [[ShellTool::class]]);
+
+        $db = $this->createMock(PsDbInterface::class);
+        $factory = new EngineFactory([], ['shell_allowlist' => ['ls', 'whoami']], $db, 'ps_');
+        $factory->bootRegistries();
+
+        $tools = $this->rawBuildTools($factory, false);
+        $shell = $this->findToolByName($tools, 'shell_exec');
+
+        self::assertInstanceOf(ShellTool::class, $shell);
+
+        $allowlist = new \ReflectionProperty(ShellTool::class, 'allowlist');
+        $allowlist->setAccessible(true);
+
+        self::assertSame(['ls', 'whoami'], $allowlist->getValue($shell));
+    }
+
+    public function test_build_tools_builds_file_write_tool_with_the_configured_workspace_and_permits_php_write_under_cli(): void
+    {
+        \Hook::setResult('actionPhpclawExtraTools', [[FileWriteTool::class]]);
+
+        $db = $this->createMock(PsDbInterface::class);
+        $factory = new EngineFactory([], ['workspace_root' => sys_get_temp_dir()], $db, 'ps_');
+        $factory->bootRegistries();
+
+        $tools = $this->rawBuildTools($factory, true);
+        $write = $this->findToolByName($tools, 'file_write');
+
+        self::assertInstanceOf(FileWriteTool::class, $write);
+
+        $workspaceRoot = new \ReflectionProperty(FileWriteTool::class, 'workspaceRoot');
+        $workspaceRoot->setAccessible(true);
+        self::assertSame(realpath(sys_get_temp_dir()), $workspaceRoot->getValue($write));
+
+        $allowPhpWrite = new \ReflectionProperty(FileWriteTool::class, 'allowPhpWrite');
+        $allowPhpWrite->setAccessible(true);
+        self::assertTrue((bool) $allowPhpWrite->getValue($write));
+    }
+
+    public function test_build_tools_builds_file_write_tool_blocks_php_write_when_not_cli(): void
+    {
+        \Hook::setResult('actionPhpclawExtraTools', [[FileWriteTool::class]]);
+
+        $db = $this->createMock(PsDbInterface::class);
+        $factory = new EngineFactory([], ['workspace_root' => sys_get_temp_dir()], $db, 'ps_');
+        $factory->bootRegistries();
+
+        $tools = $this->rawBuildTools($factory, false);
+        $write = $this->findToolByName($tools, 'file_write');
+
+        self::assertInstanceOf(FileWriteTool::class, $write);
+
+        $allowPhpWrite = new \ReflectionProperty(FileWriteTool::class, 'allowPhpWrite');
+        $allowPhpWrite->setAccessible(true);
+        self::assertFalse((bool) $allowPhpWrite->getValue($write));
+    }
+
+    public function test_build_tools_builds_file_edit_tool_with_the_configured_workspace(): void
+    {
+        \Hook::setResult('actionPhpclawExtraTools', [[FileEditTool::class]]);
+
+        $db = $this->createMock(PsDbInterface::class);
+        $factory = new EngineFactory([], ['workspace_root' => sys_get_temp_dir()], $db, 'ps_');
+        $factory->bootRegistries();
+
+        $tools = $this->rawBuildTools($factory, false);
+        $edit = $this->findToolByName($tools, 'file_edit');
+
+        self::assertInstanceOf(FileEditTool::class, $edit);
+
+        $workspaceRoot = new \ReflectionProperty(FileEditTool::class, 'workspaceRootConfigured');
+        $workspaceRoot->setAccessible(true);
+        self::assertSame(rtrim(sys_get_temp_dir(), \DIRECTORY_SEPARATOR), $workspaceRoot->getValue($edit));
+    }
+
+    public function test_build_tools_passes_a_tool_object_from_the_extra_hook_through_unchanged(): void
+    {
+        $tool = new class implements ToolInterface
+        {
+            public function name(): string
+            {
+                return 'ext_tool';
+            }
+
+            public function description(): string
+            {
+                return '';
+            }
+
+            public function inputSchema(): array
+            {
+                return [];
+            }
+
+            public function execute(array $input): string
+            {
+                return '';
+            }
+        };
+
+        \Hook::setResult('actionPhpclawExtraTools', [[$tool]]);
+
+        $db = $this->createMock(PsDbInterface::class);
+        $factory = new EngineFactory([], [], $db, 'ps_');
+        $factory->bootRegistries();
+
+        $tools = $this->rawBuildTools($factory, false);
+
+        self::assertSame($tool, $this->findToolByName($tools, 'ext_tool'));
+    }
+
+    public function test_build_tools_builds_an_unrelated_no_argument_tool_class_from_the_extra_hook(): void
+    {
+        $class = (new class implements ToolInterface
+        {
+            public function name(): string
+            {
+                return 'plain_tool';
+            }
+
+            public function description(): string
+            {
+                return '';
+            }
+
+            public function inputSchema(): array
+            {
+                return [];
+            }
+
+            public function execute(array $input): string
+            {
+                return '';
+            }
+        })::class;
+
+        \Hook::setResult('actionPhpclawExtraTools', [[$class]]);
+
+        $db = $this->createMock(PsDbInterface::class);
+        $factory = new EngineFactory([], [], $db, 'ps_');
+        $factory->bootRegistries();
+
+        $tools = $this->rawBuildTools($factory, false);
+        $built = $this->findToolByName($tools, 'plain_tool');
+
+        self::assertInstanceOf($class, $built);
+    }
+
+    public function test_build_tools_skips_a_non_tool_class_name_from_the_extra_hook(): void
+    {
+        \Hook::setResult('actionPhpclawExtraTools', [[\stdClass::class]]);
+
+        $db = $this->createMock(PsDbInterface::class);
+        $factory = new EngineFactory([], [], $db, 'ps_');
+        $factory->bootRegistries();
+
+        self::assertSame($this->baselineToolNames(), $this->toolNames($this->rawBuildTools($factory, false)));
+    }
+
+    public function test_build_tools_skips_a_class_name_that_does_not_exist(): void
+    {
+        \Hook::setResult('actionPhpclawExtraTools', [['PhpClaw\\PrestaShop\\Tests\\Unit\\Engine\\DoesNotExist']]);
+
+        $db = $this->createMock(PsDbInterface::class);
+        $factory = new EngineFactory([], [], $db, 'ps_');
+        $factory->bootRegistries();
+
+        self::assertSame($this->baselineToolNames(), $this->toolNames($this->rawBuildTools($factory, false)));
+    }
+
+    public function test_build_tools_skips_a_non_string_extra_hook_contribution(): void
+    {
+        \Hook::setResult('actionPhpclawExtraTools', [[123]]);
+
+        $db = $this->createMock(PsDbInterface::class);
+        $factory = new EngineFactory([], [], $db, 'ps_');
+        $factory->bootRegistries();
+
+        self::assertSame($this->baselineToolNames(), $this->toolNames($this->rawBuildTools($factory, false)));
     }
 
     public function test_a_saved_memory_driver_is_ignored_and_the_router_is_always_built(): void
@@ -602,5 +789,45 @@ final class EngineFactoryCoverageTest extends TestCase
         $factory->bootRegistries();
 
         self::assertInstanceOf(PsRouterMemory::class, $factory->build()->memory());
+    }
+
+    private function rawBuildTools(EngineFactory $factory, bool $isCli): array
+    {
+        $ref = new \ReflectionMethod(EngineFactory::class, 'buildTools');
+        $ref->setAccessible(true);
+
+        return $ref->invoke($factory, false, $isCli);
+    }
+
+    private function findToolByName(array $tools, string $name): ?ToolInterface
+    {
+        foreach ($tools as $tool) {
+            if ($tool->name() === $name) {
+                return $tool;
+            }
+        }
+
+        return null;
+    }
+
+    private function toolNames(array $tools): array
+    {
+        $names = array_map(static fn (ToolInterface $t): string => $t->name(), $tools);
+        sort($names);
+
+        return $names;
+    }
+
+    private function baselineToolNames(): array
+    {
+        $names = [
+            'ps_product', 'ps_order', 'ps_customer', 'ps_category', 'ps_manufacturer',
+            'ps_cart', 'ps_stock', 'ps_coupon', 'ps_module', 'ps_report',
+            'ps_config', 'ps_employee', 'database', 'ps_log',
+            'code_search', 'project_info', 'file_read',
+        ];
+        sort($names);
+
+        return $names;
     }
 }

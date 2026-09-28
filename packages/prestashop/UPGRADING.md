@@ -14,6 +14,19 @@ Settings live in PrestaShop `Configuration` (the `ps_configuration` table), so t
 overwrite. The Settings page also checks the update server and shows a notice when a newer version
 is available; the check fails silently when the server is unreachable.
 
+## The MCP server runs tools as non-interactive
+
+`php modules/phpclaw/cli/phpclaw.php mcp-server` builds its tools as non-interactive, the same way the
+Guide page does. Two things follow for an MCP client:
+
+- `database` runs raw SQL only for a PrestaShop SuperAdmin employee. The MCP process has no employee
+  session, so raw SQL over MCP is refused.
+- A `file_write` tool that an extension adds through `actionPhpclawExtraTools` refuses `.php` files.
+
+The interactive `send` command keeps the console behaviour: `database` runs raw SQL without the
+SuperAdmin check, and an added `file_write` may write `.php` files, each write behind the
+command-line approval prompt.
+
 ## Rolling back
 
 Back up your database, then upload the older `phpclaw-prestashop-<version>.zip` the same way. Do not

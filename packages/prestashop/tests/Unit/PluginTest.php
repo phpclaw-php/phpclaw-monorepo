@@ -88,7 +88,7 @@ final class PluginTest extends TestCase
         $plugin = Plugin::getInstance(null, 'ps_');
 
         self::assertSame(
-            ['ls', 'pwd', 'df', 'cat', 'head', 'tail', 'grep', 'wc', 'date', 'uptime', 'hostname', 'whoami'],
+            ['ls', 'pwd', 'df', 'wc', 'date', 'uptime', 'hostname', 'whoami'],
             $plugin->config()['shell_allowlist'],
         );
     }
