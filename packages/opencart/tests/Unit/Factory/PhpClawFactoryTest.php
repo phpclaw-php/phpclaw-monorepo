@@ -49,7 +49,7 @@ final class PhpClawFactoryTest extends OcDbTestCase
         define('PHPCLAW_OC_CONSOLE', true);
 
         $factory = new PhpClawFactory;
-        $engine = $factory->create();
+        $engine = $factory->create($this->prefix, $this->fileWriteToolRegistry());
 
         self::assertInstanceOf(CliApprovalGate::class, $this->approvalGate($engine));
         self::assertTrue(
@@ -66,10 +66,34 @@ final class PhpClawFactoryTest extends OcDbTestCase
         );
 
         $factory = new PhpClawFactory;
-        $engine = $factory->create();
+        $engine = $factory->create($this->prefix, $this->fileWriteToolRegistry());
 
         self::assertInstanceOf(CliApprovalGate::class, $this->approvalGate($engine));
         self::assertFalse($this->fileWriteAllowsPhp($engine));
+    }
+
+    private function fileWriteToolRegistry(): object
+    {
+        return new class
+        {
+            public function has(string $name): bool
+            {
+                return $name === 'event';
+            }
+
+            public function get(string $name): object
+            {
+                return new class
+                {
+                    public function trigger(string $event, array $args): void
+                    {
+                        if ($event === 'phpclaw/extra/tools') {
+                            $args[0][] = FileWriteTool::class;
+                        }
+                    }
+                };
+            }
+        };
     }
 
     private function approvalGate(ClawInterface $engine): ?object

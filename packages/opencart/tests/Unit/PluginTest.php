@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace PhpClaw\OpenCart\Tests\Unit;
 
 use PhpClaw\Exceptions\AdapterException;
+use PhpClaw\Exceptions\ToolException;
 use PhpClaw\Guards\Contracts\GuardInterface;
 use PhpClaw\Guards\GuardRegistry;
 use PhpClaw\Guards\RateLimitGuard;
@@ -23,6 +24,8 @@ use PhpClaw\Providers\Contracts\ProviderInterface;
 use PhpClaw\Providers\OpenAIProvider;
 use PhpClaw\Skills\Contracts\SkillInterface;
 use PhpClaw\Skills\SkillRegistry;
+use PHPUnit\Framework\Attributes\PreserveGlobalState;
+use PHPUnit\Framework\Attributes\RunInSeparateProcess;
 
 final class PluginTest extends OcDbTestCase
 {
@@ -514,6 +517,22 @@ final class PluginTest extends OcDbTestCase
 
         self::assertNotContains('oc_product', $names, 'guideTools() must apply tool_deny for the MCP/Guide path.');
         self::assertContains('oc_order', $names);
+    }
+
+    #[RunInSeparateProcess]
+    #[PreserveGlobalState(false)]
+    public function test_guide_tools_db_query_refuses_raw_sql_without_grant_when_console_marker_is_set(): void
+    {
+        define('PHPCLAW_OC_CONSOLE', true);
+
+        $plugin = Plugin::getInstance($this->prefix, null, $this->makeFullDb());
+        $tools = $plugin->guideTools(callerMayUseModule: true);
+        $dbQuery = $tools[array_search('db_query', array_map(static fn ($tool): string => $tool->name(), $tools), true)];
+
+        $this->expectException(ToolException::class);
+        $this->expectExceptionMessage('running raw SQL requires the phpClaw manage-all permission');
+
+        $dbQuery->execute(['sql' => 'SELECT 1 AS one']);
     }
 
     public function test_engine_with_max_iterations_from_saved_settings(): void

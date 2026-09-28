@@ -17,6 +17,19 @@ with `CREATE TABLE IF NOT EXISTS`, so both survive a ZIP overwrite.
 When you open Settings, the module checks the update server and shows a banner if a newer version is
 available. The check fails silently when the server is unreachable.
 
+## The MCP server runs tools as non-interactive
+
+The CLI script's `mcp-server` command builds its tools as non-interactive, the same way the Guide
+page does. Two things follow for an MCP client:
+
+- `db_query` runs raw SQL only for a caller holding the raw-SQL grant. The MCP server does not grant
+  it, so raw SQL over MCP is refused.
+- A `file_write` tool that an extension adds through `phpclaw/extra/tools` by class name refuses
+  `.php` files.
+
+The interactive `send` command keeps both: it runs raw SQL, and an added `file_write` may write
+`.php` files, each write behind the command-line approval prompt.
+
 ## Rolling back
 
 Back up your database, then upload the older ZIP the same way. Do not uninstall first.

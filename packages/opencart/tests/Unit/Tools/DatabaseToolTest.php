@@ -606,6 +606,29 @@ final class DatabaseToolTest extends OcDbTestCase
         self::assertTrue($decoded['success'], 'The console marker exempts both the module gate and the raw-SQL gate.');
     }
 
+    #[RunInSeparateProcess]
+    #[PreserveGlobalState(false)]
+    public function test_a_non_interactive_build_keeps_the_raw_sql_gate_under_the_console_marker(): void
+    {
+        define('PHPCLAW_OC_CONSOLE', true);
+
+        $tool = new DatabaseTool($this->db, $this->prefix, callerMayUseModule: true, mayQueryRaw: false, isConsole: false);
+
+        $this->expectException(ToolException::class);
+        $this->expectExceptionMessage('running raw SQL requires the phpClaw manage-all permission');
+
+        $tool->execute(['sql' => 'SELECT 1 AS one']);
+    }
+
+    public function test_an_interactive_build_is_exempt_without_the_console_marker(): void
+    {
+        $tool = new DatabaseTool($this->db, $this->prefix, callerMayUseModule: false, mayQueryRaw: false, isConsole: true);
+
+        $decoded = json_decode($tool->execute(['sql' => 'SELECT 1 AS one']), true);
+
+        self::assertTrue($decoded['success']);
+    }
+
     public function test_the_setting_table_is_refused_and_says_no_tool_replaces_it(): void
     {
         $this->expectException(ToolException::class);

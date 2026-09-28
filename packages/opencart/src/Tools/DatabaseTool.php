@@ -20,7 +20,9 @@ use PhpClaw\Tools\ToolRoutingMetadata;
  */
 final class DatabaseTool implements ToolInterface, ToolRoutingInterface
 {
-    use HasToolExecutionContract;
+    use HasToolExecutionContract {
+        runningInConsole as private consoleMarkerIsSet;
+    }
 
     private const REQUIRED_ACTION = 'access';
 
@@ -39,18 +41,20 @@ final class DatabaseTool implements ToolInterface, ToolRoutingInterface
     private readonly string $tablePrefix;
 
     /**
-     * Bind the database handle, the table prefix, and the module and raw-SQL grants.
+     * Bind the database handle, the table prefix, the module and raw-SQL grants, and the console flag.
      *
      * @param  OcDbInterface|null  $db  OpenCart native DB instance, or null when DB is unavailable.
      * @param  string|null  $tablePrefix  OpenCart table prefix; defaults to DB_PREFIX, or 'oc_' when undefined.
      * @param  bool  $callerMayUseModule  Whether the acting caller holds the phpClaw module grant.
      * @param  bool  $mayQueryRaw  Whether the caller holds the grant that permits raw SQL.
+     * @param  bool|null  $isConsole  Whether the entry point declared an interactive console session; null reads the console marker.
      */
     public function __construct(
         private readonly ?OcDbInterface $db,
         ?string $tablePrefix,
         private readonly bool $callerMayUseModule,
         private readonly bool $mayQueryRaw,
+        private readonly ?bool $isConsole = null,
     ) {
         $this->tablePrefix = OcTablePrefix::resolve($tablePrefix);
     }
@@ -342,6 +346,16 @@ final class DatabaseTool implements ToolInterface, ToolRoutingInterface
                 throw new ToolException('db_query: query references a restricted table or column and was blocked.');
             }
         }
+    }
+
+    /**
+     * Report whether this tool runs in an interactive console session: the flag its entry point passed, or the console marker when none was passed.
+     *
+     * @return bool
+     */
+    protected function runningInConsole(): bool
+    {
+        return $this->isConsole ?? $this->consoleMarkerIsSet();
     }
 
     /**

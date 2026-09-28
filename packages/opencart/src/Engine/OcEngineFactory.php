@@ -29,6 +29,9 @@ use PhpClaw\Providers\ProviderCatalogue;
 use PhpClaw\Providers\ProviderRegistry;
 use PhpClaw\Skills\SkillResolver;
 use PhpClaw\Tools\Contracts\ToolInterface;
+use PhpClaw\Tools\FileEditTool;
+use PhpClaw\Tools\FileWriteTool;
+use PhpClaw\Tools\ShellTool;
 use PhpClaw\Tools\ToolCatalogue;
 use PhpClaw\Tools\ToolProfileResolver;
 
@@ -194,7 +197,7 @@ final class OcEngineFactory
     }
 
     /**
-     * Build the list of OpenCart-native tools.
+     * Build the tool list: developer-added extra tools, the OpenCart-native tools, and core's default tools.
      *
      * @param  array<string, mixed>  $config  Package default config.
      * @param  OcDbInterface|null  $db  OC native DB adapter.
@@ -203,6 +206,7 @@ final class OcEngineFactory
      * @param  bool  $callerMayUseModule  Whether the acting caller holds the phpClaw module grant.
      * @param  bool  $mayQueryRaw  Whether the caller holds the grant that permits raw SQL.
      * @param  bool  $applyProfile  Whether to apply the configured tool deny list.
+     * @param  bool|null  $interactive  Whether the tools serve an interactive console session; null reads the console marker.
      * @return array<ToolInterface>
      */
     public function buildTools(
@@ -213,12 +217,10 @@ final class OcEngineFactory
         bool $callerMayUseModule,
         bool $mayQueryRaw,
         bool $applyProfile = true,
+        ?bool $interactive = null,
     ): array {
-        $extra = $eventFirer->fire('phpclaw/extra/tools', []);
-        $extra = array_values(array_filter(
-            $extra,
-            static fn ($t): bool => $t instanceof ToolInterface,
-        ));
+        $toolConfig = $this->configuredToolValues($config, $interactive);
+        $extra = $this->resolveExtraTools($eventFirer->fire('phpclaw/extra/tools', []), $toolConfig);
 
         $tools = array_merge($extra, [
             new OcProductTool($db, $prefix, $callerMayUseModule),
@@ -229,19 +231,12 @@ final class OcEngineFactory
             new OcReviewTool($db, $prefix, $callerMayUseModule),
             new OcCouponTool($db, $prefix, $callerMayUseModule),
             new OcShippingTool($db, $prefix, $callerMayUseModule),
-            new DatabaseTool($db, $prefix, $callerMayUseModule, $mayQueryRaw),
+            new DatabaseTool($db, $prefix, $callerMayUseModule, $mayQueryRaw, isConsole: $interactive),
             new LogTool('', $callerMayUseModule),
         ]);
 
         if (class_exists(ToolCatalogue::class)) {
-            $workspaceRoot = (string) ($config['workspace_root'] ?? '');
-            $allowlist = (array) ($config['shell_allowlist'] ?? []);
-
-            foreach (ToolCatalogue::instantiateDefaults([
-                'workspaceRoot' => $workspaceRoot !== '' ? $workspaceRoot : null,
-                'allowlist' => $allowlist,
-                'allowPhpWrite' => defined('PHPCLAW_OC_CONSOLE') && constant('PHPCLAW_OC_CONSOLE') === true,
-            ]) as $tool) {
+            foreach (ToolCatalogue::instantiateDefaults($toolConfig) as $tool) {
                 $tools[] = $tool;
             }
         }
@@ -271,6 +266,77 @@ final class OcEngineFactory
                 'group:system' => ['db_query', 'read_log', 'oc_shipping'],
             ],
         ];
+    }
+
+    /**
+     * Compute the workspace root, shell allowlist and CLI-only PHP-write rule shared by the
+     * extras loop and {@see ToolCatalogue::instantiateDefaults()}.
+     *
+     * @param  array<string, mixed>  $config  Package default config.
+     * @param  bool|null  $interactive  Whether the tools serve an interactive console session; null reads the console marker.
+     * @return array{workspaceRoot: ?string, allowlist: array<int, string>, allowPhpWrite: bool}
+     */
+    private function configuredToolValues(array $config, ?bool $interactive): array
+    {
+        $workspaceRoot = (string) ($config['workspace_root'] ?? '');
+
+        return [
+            'workspaceRoot' => $workspaceRoot !== '' ? $workspaceRoot : null,
+            'allowlist' => (array) ($config['shell_allowlist'] ?? []),
+            'allowPhpWrite' => $interactive ?? (defined('PHPCLAW_OC_CONSOLE') && constant('PHPCLAW_OC_CONSOLE') === true),
+        ];
+    }
+
+    /**
+     * Resolve the raw `phpclaw/extra/tools` bucket: an object passes through, `ShellTool`,
+     * `FileWriteTool` and `FileEditTool` by class name get the configured values, any other no-arg class name is instantiated, everything else is dropped.
+     *
+     * @param  array<array-key, mixed>  $extra  Raw bucket from the extension event.
+     * @param  array{workspaceRoot: ?string, allowlist: array<int, string>, allowPhpWrite: bool}  $toolConfig  Values from {@see configuredToolValues()}.
+     * @return list<ToolInterface>
+     */
+    private function resolveExtraTools(array $extra, array $toolConfig): array
+    {
+        $resolved = [];
+
+        foreach ($extra as $item) {
+            if ($item instanceof ToolInterface) {
+                $resolved[] = $item;
+
+                continue;
+            }
+
+            if (! is_string($item) || ! class_exists($item) || ! is_a($item, ToolInterface::class, true)) {
+                continue;
+            }
+
+            if ($item === ShellTool::class) {
+                $resolved[] = new ShellTool(allowlist: $toolConfig['allowlist']);
+
+                continue;
+            }
+
+            if ($item === FileWriteTool::class) {
+                $resolved[] = new FileWriteTool(workspaceRoot: $toolConfig['workspaceRoot'], allowPhpWrite: $toolConfig['allowPhpWrite']);
+
+                continue;
+            }
+
+            if ($item === FileEditTool::class) {
+                $resolved[] = new FileEditTool(workspaceRoot: $toolConfig['workspaceRoot']);
+
+                continue;
+            }
+
+            $constructor = (new \ReflectionClass($item))->getConstructor();
+            if ($constructor !== null && $constructor->getNumberOfRequiredParameters() > 0) {
+                continue;
+            }
+
+            $resolved[] = new $item;
+        }
+
+        return $resolved;
     }
 
     /**

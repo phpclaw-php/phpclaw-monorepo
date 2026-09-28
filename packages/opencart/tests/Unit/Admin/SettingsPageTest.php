@@ -370,7 +370,7 @@ final class SettingsPageTest extends TestCase
     public function test_core_utility_tools_rows_have_expected_shape(): void
     {
         $rows = SettingsPage::coreUtilityTools();
-        self::assertCount(7, $rows);
+        self::assertCount(3, $rows);
 
         foreach ($rows as $row) {
             self::assertArrayHasKey('tool', $row);

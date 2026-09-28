@@ -148,7 +148,7 @@ final class Plugin
     }
 
     /**
-     * Live tool instances for the Guide, profile-unfiltered.
+     * Live tool instances for the Guide and the MCP server, profile-unfiltered and always built as non-interactive.
      *
      * @param  bool  $callerMayUseModule  Whether the acting caller holds the phpClaw module grant.
      * @return array<ToolInterface>
@@ -163,6 +163,7 @@ final class Plugin
             callerMayUseModule: $callerMayUseModule,
             mayQueryRaw: false,
             applyProfile: false,
+            interactive: false,
         );
 
         ['deny' => $deny, 'groups' => $groups] = OcEngineFactory::denyConfig($this->config);
