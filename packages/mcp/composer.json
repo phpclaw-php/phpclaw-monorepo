@@ -1,6 +1,7 @@
 {
     "name": "phpclaw/phpclaw-mcp",
     "description": "MCP (Model Context Protocol) server adapter for phpClaw. Expose any PHP app's tools to Claude Desktop, Claude Code, Cursor, and other MCP clients.",
+    "homepage": "https://phpclaw.ai",
     "type": "library",
     "license": "MIT",
     "keywords": [
