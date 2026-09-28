@@ -23,7 +23,7 @@ use PhpClaw\Tools\Security\BlockedPaths;
     name: 'shell',
     description: 'Execute shell commands from an explicit allowlist.',
     since: '1.0.0',
-    default: true,
+    default: false,
     needsConfig: ['allowlist' => 'array'],
 )]
 final class ShellTool implements AuthorizableToolInterface, MutatingToolInterface, PerInvocationMutabilityInterface, ToolInterface, ToolRoutingInterface
@@ -41,12 +41,14 @@ final class ShellTool implements AuthorizableToolInterface, MutatingToolInterfac
     private const SIGKILL = 9;
 
     private const DEFAULT_ALLOWLIST = [
-        'ls', 'pwd', 'df',
-        'cat', 'head', 'tail', 'grep', 'wc',
+        'ls', 'pwd', 'df', 'wc',
         'date', 'uptime', 'hostname', 'whoami',
     ];
 
-    private const READONLY_COMMANDS = self::DEFAULT_ALLOWLIST;
+    private const READONLY_COMMANDS = [
+        'ls', 'pwd', 'df', 'cat', 'head', 'tail', 'grep', 'wc',
+        'date', 'uptime', 'hostname', 'whoami',
+    ];
 
     private const HARD_BLOCKED = [
         'rm', 'mv', 'dd', 'mkfs', 'fdisk', 'shred', 'mkfifo', 'mknod',
@@ -300,20 +302,23 @@ final class ShellTool implements AuthorizableToolInterface, MutatingToolInterfac
     }
 
     /**
-     * Extract the leading command name from an already-validated command string.
+     * Extract the leading program token from an already-validated command string, split the same way {@see runProcess()} builds its argv so the allowlist checks the exact token that would be executed.
      *
      * @param  string  $command  Raw command string from the LLM.
-     * @return string Lower-cased first word of the command.
+     * @return string Byte-exact first whitespace-delimited token of the command, case preserved.
      */
     private function parseCommand(string $command): string
     {
-        preg_match('/^([a-zA-Z0-9_\-]+)/', $command, $matches);
+        $parts = array_values(array_filter(
+            preg_split('/\s+/', trim($command)) ?: [],
+            static fn (string $part): bool => $part !== '',
+        ));
 
-        return strtolower($matches[1] ?? '');
+        return $parts[0] ?? '';
     }
 
     /**
-     * Apply HARD_BLOCKED and allowlist checks. Fires the shell.denied hook on rejection.
+     * Refuse a hard-blocked program by its lower-cased base name, then any program not exactly on the allowlist. Fires the shell.denied hook on rejection.
      *
      * @param  string  $command  Full command string (used in the hook payload).
      * @param  string  $cmdName  First-word command name.
@@ -323,7 +328,7 @@ final class ShellTool implements AuthorizableToolInterface, MutatingToolInterfac
      */
     private function enforceCommandBlocklists(string $command, string $cmdName): void
     {
-        if (in_array($cmdName, self::HARD_BLOCKED, true)) {
+        if (in_array(strtolower(basename($cmdName)), self::HARD_BLOCKED, true)) {
             HookDispatcher::shellDenied($command, $cmdName, 'hard_blocked');
 
             throw new ShellDeniedException(

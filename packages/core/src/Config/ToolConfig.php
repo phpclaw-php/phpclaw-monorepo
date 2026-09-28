@@ -13,7 +13,7 @@ use PhpClaw\Tools\Contracts\ToolInterface;
 final class ToolConfig
 {
     public const DEFAULT_SHELL_ALLOWLIST = [
-        'ls', 'pwd', 'df', 'cat', 'head', 'tail', 'grep', 'wc',
+        'ls', 'pwd', 'df', 'wc',
         'date', 'uptime', 'hostname', 'whoami',
     ];
 

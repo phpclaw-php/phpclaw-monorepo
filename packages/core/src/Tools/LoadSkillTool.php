@@ -12,7 +12,7 @@ use PhpClaw\Tools\Contracts\ToolInterface;
 use PhpClaw\Tools\Contracts\ToolRoutingInterface;
 
 /**
- * Lets the model read a registered skill's full instructions by name, the way LangChain Deep Agents load a SKILL.md.
+ * Lets the model read a registered skill's full instructions by name.
  */
 final class LoadSkillTool implements AuthorizableToolInterface, ToolInterface, ToolRoutingInterface
 {

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace PhpClaw\Tests\Unit\Tools;
 
+use PhpClaw\AutoDiscovery\DiscoveryCache;
 use PhpClaw\Exceptions\ToolException;
 use PhpClaw\Tools\FileWriteTool;
 use PhpClaw\Tools\ToolCatalogue;
@@ -22,6 +23,7 @@ final class FileWriteToolTest extends TestCase
     protected function tearDown(): void
     {
         $this->rrm($this->workspace);
+        DiscoveryCache::reset();
     }
 
     private function rrm(string $path): void
@@ -212,12 +214,25 @@ final class FileWriteToolTest extends TestCase
 
     private function fileWriteFromCatalogue(array $config): FileWriteTool
     {
+        DiscoveryCache::reset();
+        $scan = DiscoveryCache::rebuild('');
+        $scan['tools'][FileWriteTool::class]['default'] = true;
+        $this->injectDiscoveryState($scan);
+
         foreach (ToolCatalogue::instantiateDefaults($config) as $tool) {
             if ($tool instanceof FileWriteTool) {
                 return $tool;
             }
         }
         self::fail('file_write not present among default tools');
+    }
+
+    private function injectDiscoveryState(array $state): void
+    {
+        $reflection = new \ReflectionClass(DiscoveryCache::class);
+        $prop = $reflection->getProperty('memoryCache');
+        $prop->setAccessible(true);
+        $prop->setValue(null, $state);
     }
 
     public function test_execute_blocks_sh_extension(): void

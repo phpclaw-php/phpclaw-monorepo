@@ -24,7 +24,7 @@ use PhpClaw\Tools\Security\BlockedPaths;
     name: self::TOOL_NAME,
     description: 'Replace a unique string in a workspace file (surgical edit, not a full rewrite).',
     since: '1.0.0',
-    default: true,
+    default: false,
     needsConfig: ['workspaceRoot' => 'string'],
 )]
 final class FileEditTool implements AuthorizableToolInterface, MutatingToolInterface, ResettableInterface, ToolInterface, ToolRoutingInterface

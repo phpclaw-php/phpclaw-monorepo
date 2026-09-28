@@ -19,7 +19,7 @@ use PhpClaw\Tools\Contracts\ToolRoutingInterface;
     name: 'http',
     description: 'Make outbound HTTP GET/POST requests with SSRF protection and response truncation.',
     since: '1.0.0',
-    default: true,
+    default: false,
 )]
 final class HttpTool implements AuthorizableToolInterface, ToolInterface, ToolRoutingInterface
 {

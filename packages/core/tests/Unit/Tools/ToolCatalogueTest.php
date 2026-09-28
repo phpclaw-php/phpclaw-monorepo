@@ -4,15 +4,26 @@ declare(strict_types=1);
 
 namespace PhpClaw\Tests\Unit\Tools;
 
+use PhpClaw\AutoDiscovery\DiscoveryCache;
+use PhpClaw\Tools\CodeSearchTool;
+use PhpClaw\Tools\FileReadTool;
 use PhpClaw\Tools\HttpTool;
+use PhpClaw\Tools\ProjectTool;
 use PhpClaw\Tools\ToolCatalogue;
 use PHPUnit\Framework\TestCase;
 
 final class ToolCatalogueTest extends TestCase
 {
+    protected function setUp(): void
+    {
+        DiscoveryCache::reset();
+        DiscoveryCache::rebuild('');
+    }
+
     protected function tearDown(): void
     {
         ToolCatalogue::reset();
+        DiscoveryCache::reset();
     }
 
     public function test_all_returns_built_in_tools(): void
@@ -64,5 +75,22 @@ final class ToolCatalogueTest extends TestCase
 
         $this->assertFalse(ToolCatalogue::has($fakeClass));
         $this->assertTrue(ToolCatalogue::has(HttpTool::class));
+    }
+
+    public function test_defaults_exclude_shell_http_write_edit(): void
+    {
+        $workspaceRoot = sys_get_temp_dir().'/phpclaw-tool-catalogue-'.uniqid('', true);
+
+        $tools = ToolCatalogue::instantiateDefaults([
+            'workspaceRoot' => $workspaceRoot,
+            'projectRoot' => $workspaceRoot,
+        ]);
+
+        $classes = array_map(static fn (object $tool): string => $tool::class, $tools);
+
+        $this->assertEqualsCanonicalizing(
+            [CodeSearchTool::class, FileReadTool::class, ProjectTool::class],
+            $classes
+        );
     }
 }

@@ -13,6 +13,10 @@ use PHPUnit\Framework\TestCase;
 
 final class ShellToolTest extends TestCase
 {
+    private const SENSITIVE_DENIAL_REASONS = [
+        'sensitive_file', 'sensitive_extension', 'sensitive_directory', 'sensitive_path',
+    ];
+
     private ShellTool $tool;
 
     protected function setUp(): void
@@ -24,6 +28,22 @@ final class ShellToolTest extends TestCase
     protected function tearDown(): void
     {
         HookRegistry::reset();
+    }
+
+    private function captureDenialReason(ShellTool $tool, string $command): ?string
+    {
+        $reason = null;
+
+        HookRegistry::on('shell.denied', function (array $ctx) use (&$reason): void {
+            $reason = $ctx['reason'];
+        });
+
+        try {
+            $tool->execute(['command' => $command]);
+        } catch (ShellDeniedException) {
+        }
+
+        return $reason;
     }
 
     public function test_name_returns_shell_exec(): void
@@ -244,8 +264,11 @@ final class ShellToolTest extends TestCase
     #[DataProvider('sensitiveFileProvider')]
     public function test_file_reading_commands_block_sensitive_files(string $command): void
     {
-        $this->expectException(ShellDeniedException::class);
-        $this->tool->execute(['command' => $command]);
+        $tool = new ShellTool(allowlist: ['cat', 'head', 'tail', 'grep']);
+
+        $reason = $this->captureDenialReason($tool, $command);
+
+        $this->assertContains($reason, self::SENSITIVE_DENIAL_REASONS);
     }
 
     public static function sensitiveFileProvider(): array
@@ -291,8 +314,11 @@ final class ShellToolTest extends TestCase
     #[DataProvider('sharedBlockedPathsFilenameProvider')]
     public function test_it_blocks_filenames_only_present_in_the_shared_blocked_paths_list(string $command): void
     {
-        $this->expectException(ShellDeniedException::class);
-        $this->tool->execute(['command' => $command]);
+        $tool = new ShellTool(allowlist: ['cat', 'head', 'tail', 'grep']);
+
+        $reason = $this->captureDenialReason($tool, $command);
+
+        $this->assertContains($reason, self::SENSITIVE_DENIAL_REASONS);
     }
 
     public static function sharedBlockedPathsFilenameProvider(): array
@@ -305,10 +331,11 @@ final class ShellToolTest extends TestCase
 
     public function test_cat_safe_file_is_allowed(): void
     {
+        $tool = new ShellTool(allowlist: ['cat']);
         $file = (string) tempnam(sys_get_temp_dir(), 'phpclaw_');
 
         try {
-            $result = $this->tool->execute(['command' => 'cat '.$file]);
+            $result = $tool->execute(['command' => 'cat '.$file]);
             $this->assertIsString($result);
         } finally {
             @unlink($file);
@@ -330,6 +357,7 @@ final class ShellToolTest extends TestCase
 
     public function test_sensitive_file_hook_fires(): void
     {
+        $tool = new ShellTool(allowlist: ['cat', 'head', 'tail', 'grep']);
         $fired = false;
 
         HookRegistry::on('shell.denied', function (array $ctx) use (&$fired): void {
@@ -339,7 +367,7 @@ final class ShellToolTest extends TestCase
         });
 
         try {
-            $this->tool->execute(['command' => 'cat wp-config.php']);
+            $tool->execute(['command' => 'cat wp-config.php']);
         } catch (ShellDeniedException) {
         }
 
@@ -360,8 +388,11 @@ final class ShellToolTest extends TestCase
 
     public function test_dev_path_is_blocked(): void
     {
-        $this->expectException(ShellDeniedException::class);
-        $this->tool->execute(['command' => 'cat /dev/mem']);
+        $tool = new ShellTool(allowlist: ['cat', 'head', 'tail', 'grep']);
+
+        $reason = $this->captureDenialReason($tool, 'cat /dev/mem');
+
+        $this->assertContains($reason, self::SENSITIVE_DENIAL_REASONS);
     }
 
     public function test_php_command_is_denied(): void
@@ -378,12 +409,16 @@ final class ShellToolTest extends TestCase
 
     public function test_relative_traversal_to_proc_is_denied(): void
     {
-        $this->expectException(ShellDeniedException::class);
-        $this->tool->execute(['command' => 'cat ../../proc/self/environ']);
+        $tool = new ShellTool(allowlist: ['cat', 'head', 'tail', 'grep']);
+
+        $reason = $this->captureDenialReason($tool, 'cat ../../proc/self/environ');
+
+        $this->assertContains($reason, self::SENSITIVE_DENIAL_REASONS);
     }
 
     public function test_symlink_to_sensitive_file_is_denied(): void
     {
+        $tool = new ShellTool(allowlist: ['cat', 'head', 'tail', 'grep']);
         $link = sys_get_temp_dir().'/phpclaw_shell_link_'.getmypid();
         @unlink($link);
 
@@ -392,11 +427,12 @@ final class ShellToolTest extends TestCase
         }
 
         try {
-            $this->expectException(ShellDeniedException::class);
-            $this->tool->execute(['command' => 'cat '.$link]);
+            $reason = $this->captureDenialReason($tool, 'cat '.$link);
         } finally {
             @unlink($link);
         }
+
+        $this->assertContains($reason, self::SENSITIVE_DENIAL_REASONS);
     }
 
     public function test_array_form_executes_multiarg_command(): void
@@ -414,15 +450,19 @@ final class ShellToolTest extends TestCase
 
     public function test_flag_embedded_env_file_is_blocked(): void
     {
-        $this->expectException(ShellDeniedException::class);
-        $this->tool->execute(['command' => 'grep --file=.env.local']);
+        $tool = new ShellTool(allowlist: ['cat', 'head', 'tail', 'grep']);
+
+        $reason = $this->captureDenialReason($tool, 'grep --file=.env.local');
+
+        $this->assertContains($reason, self::SENSITIVE_DENIAL_REASONS);
     }
 
     public function test_flag_with_glob_value_is_not_blocked(): void
     {
+        $tool = new ShellTool(allowlist: ['grep']);
         $file = (string) tempnam(sys_get_temp_dir(), 'phpclaw_');
         try {
-            $result = $this->tool->execute(['command' => 'grep --color=auto x '.$file]);
+            $result = $tool->execute(['command' => 'grep --color=auto x '.$file]);
             $this->assertIsString($result);
         } finally {
             @unlink($file);
@@ -467,5 +507,142 @@ final class ShellToolTest extends TestCase
             $ref->invoke($this->tool, 'cat '.$clean, 'cat', $clean);
         }
         $this->assertTrue(true, 'clean tokens must not throw');
+    }
+
+    public function test_bare_ls_still_runs_on_default_allowlist(): void
+    {
+        $result = $this->tool->execute(['command' => 'ls']);
+        $this->assertIsString($result);
+    }
+
+    public function test_path_traversal_program_token_is_denied(): void
+    {
+        $binary = is_executable('/bin/echo') ? '/bin/echo' : '/bin/pwd';
+
+        $tempDir = sys_get_temp_dir().'/phpclaw_shell_traversal_'.getmypid();
+        @mkdir($tempDir.'/ls', 0755, true);
+
+        $expectedTarget = realpath($binary);
+        $token = null;
+
+        for ($climb = 0; $climb <= 20; $climb++) {
+            $candidate = 'ls/../'.str_repeat('../', $climb).ltrim($binary, '/');
+
+            if (realpath($tempDir.'/'.$candidate) === $expectedTarget) {
+                $token = $candidate;
+
+                break;
+            }
+        }
+
+        if ($token === null) {
+            @rmdir($tempDir.'/ls');
+            @rmdir($tempDir);
+            self::markTestSkipped('Could not construct a resolvable traversal token on this platform.');
+        }
+
+        $originalCwd = (string) getcwd();
+        chdir($tempDir);
+
+        $reason = null;
+        HookRegistry::on('shell.denied', function (array $ctx) use (&$reason): void {
+            $reason = $ctx['reason'];
+        });
+
+        try {
+            $this->tool->execute(['command' => (string) $token.' BYPASS']);
+            $this->fail('Expected ShellDeniedException for a traversal program token');
+        } catch (ShellDeniedException) {
+        } finally {
+            chdir($originalCwd);
+            @rmdir($tempDir.'/ls');
+            @rmdir($tempDir);
+        }
+
+        $this->assertSame('not_in_allowlist', $reason);
+    }
+
+    public function test_uppercase_program_token_is_denied(): void
+    {
+        $tool = new ShellTool(allowlist: ['ls']);
+
+        $reason = null;
+        HookRegistry::on('shell.denied', function (array $ctx) use (&$reason): void {
+            $reason = $ctx['reason'];
+        });
+
+        try {
+            $tool->execute(['command' => 'LS']);
+            $this->fail('Expected ShellDeniedException for an uppercase program token');
+        } catch (ShellDeniedException) {
+        }
+
+        $this->assertSame('not_in_allowlist', $reason);
+    }
+
+    public static function hardBlockedVariantProvider(): array
+    {
+        return [
+            'upper case' => ['RM'],
+            'mixed case' => ['Rm'],
+            'absolute path' => ['/bin/rm'],
+        ];
+    }
+
+    #[DataProvider('hardBlockedVariantProvider')]
+    public function test_hard_blocked_command_is_refused_even_when_a_variant_is_allowlisted(string $program): void
+    {
+        $tool = new ShellTool(allowlist: [$program]);
+
+        $reason = null;
+        HookRegistry::on('shell.denied', function (array $ctx) use (&$reason): void {
+            $reason = $ctx['reason'];
+        });
+
+        try {
+            $tool->execute(['command' => $program.' phpclaw-missing-file']);
+            $this->fail('Expected ShellDeniedException for a hard-blocked program variant');
+        } catch (ShellDeniedException) {
+        }
+
+        $this->assertSame('hard_blocked', $reason);
+    }
+
+    #[DataProvider('defaultDeniedFileReadingCommandProvider')]
+    public function test_default_allowlist_refuses_file_reading_commands(string $command): void
+    {
+        $file = (string) tempnam(sys_get_temp_dir(), 'phpclaw_');
+
+        $reason = null;
+        HookRegistry::on('shell.denied', function (array $ctx) use (&$reason): void {
+            $reason = $ctx['reason'];
+        });
+
+        try {
+            $this->tool->execute(['command' => $command.' '.$file]);
+            $this->fail('Expected ShellDeniedException for: '.$command);
+        } catch (ShellDeniedException) {
+        } finally {
+            @unlink($file);
+        }
+
+        $this->assertSame('not_in_allowlist', $reason);
+    }
+
+    public static function defaultDeniedFileReadingCommandProvider(): array
+    {
+        return [
+            ['cat'],
+            ['head'],
+            ['tail'],
+            ['grep'],
+        ];
+    }
+
+    public function test_readonly_commands_still_include_file_readers(): void
+    {
+        $tool = new ShellTool(allowlist: ['grep']);
+
+        $this->assertFalse($tool->isMutating(['command' => 'grep x f']));
     }
 }

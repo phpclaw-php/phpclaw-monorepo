@@ -1,5 +1,39 @@
 # Upgrading phpclaw/phpclaw
 
+## Power tools are opt-in
+
+`shell_exec`, `http_request`, `file_write` and `file_edit` are no longer among the tools
+`ToolCatalogue::instantiateDefaults()` returns; that call now returns only `file_read`, `code_search`
+and `project_info`. Code that builds its tool set from `instantiateDefaults()` (most adapters do)
+needs to add these tools itself when it wants them, the same way it registers any custom tool:
+
+```php
+$tools = ToolCatalogue::instantiateDefaults($config);
+$tools[] = new ShellTool(allowlist: ['ls', 'pwd', 'cat', 'grep']);
+```
+
+`ClawBuilder` never auto-registered these tools; `tools()` and `addTool()` were already the only way
+to add them there, so no `ClawBuilder` call needs to change.
+
+The default shell allowlist no longer includes `cat`, `head`, `tail` or `grep`. `file_read` already
+reads workspace files without a shell, so most installs need no replacement. To keep a shell reader
+available, pass an explicit allowlist that includes it, either directly:
+
+```php
+new ShellTool(allowlist: ['ls', 'pwd', 'cat', 'grep']);
+```
+
+or through `ClawBuilder::shellAllowlist()`, if the code that constructs your `ShellTool` reads the
+allowlist back off `ToolConfig::$shellAllowlist`:
+
+```php
+$builder->shellAllowlist(['ls', 'pwd', 'cat', 'grep']);
+```
+
+`ShellTool` now matches the program name exactly and case-sensitively against the allowlist, on the
+same token the process actually runs. A command like `LS` or `ls/../../bin/echo` is refused as
+`not_in_allowlist` instead of being parsed down to a safe-looking prefix.
+
 ## Update
 
 ```bash

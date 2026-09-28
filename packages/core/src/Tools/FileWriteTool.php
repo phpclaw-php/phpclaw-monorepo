@@ -21,7 +21,7 @@ use PhpClaw\Tools\Security\BlockedPaths;
     name: 'file_write',
     description: 'Write content to a file in the sandboxed workspace directory.',
     since: '1.0.0',
-    default: true,
+    default: false,
     needsConfig: ['workspaceRoot' => 'string', 'allowPhpWrite' => 'bool'],
 )]
 final class FileWriteTool implements AuthorizableToolInterface, MutatingToolInterface, ToolInterface, ToolRoutingInterface
