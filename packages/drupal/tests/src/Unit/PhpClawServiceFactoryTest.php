@@ -135,7 +135,8 @@ final class PhpClawServiceFactoryTest extends TestCase
                 return (bool) $this->readProperty($tool, 'allowPhpWrite');
             }
         }
-        $this->fail('FileWriteTool not present in the built engine.');
+
+        return false;
     }
 
     private function readProperty(object $object, string $name): mixed

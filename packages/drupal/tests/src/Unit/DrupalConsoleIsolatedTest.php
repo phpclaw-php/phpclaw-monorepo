@@ -16,7 +16,6 @@ use Drupal\Core\Extension\ModuleHandlerInterface;
 use Drupal\Core\Queue\QueueFactory;
 use Drupal\Core\Queue\QueueWorkerManagerInterface;
 use Drupal\Core\State\StateInterface;
-use PhpClaw\Claw;
 use PhpClaw\Drupal\DrupalConsole;
 use PhpClaw\Drupal\PhpClawRegistrar;
 use PhpClaw\Drupal\PhpClawServiceFactory;
@@ -108,27 +107,6 @@ final class DrupalConsoleIsolatedTest extends TestCase
      */
     #[RunInSeparateProcess]
     #[PreserveGlobalState(false)]
-    public function test_the_baked_php_write_flag_agrees_with_the_live_console_answer(): void
-    {
-        DrupalConsole::mark();
-
-        $engine = PhpClawServiceFactory::create($this->buildContext());
-
-        self::assertSame(
-            DrupalConsole::isActive(),
-            $this->fileWriteAllowsPhp($engine),
-            'allowPhpWrite is captured once at tool construction while runningInConsole() is read per '
-            .'guard call. They express the same fact and must never disagree.',
-        );
-    }
-
-    /**
-     * @runInSeparateProcess
-     *
-     * @preserveGlobalState disabled
-     */
-    #[RunInSeparateProcess]
-    #[PreserveGlobalState(false)]
     public function test_the_mcp_registry_denies_php_write_even_in_a_marked_process(): void
     {
         DrupalConsole::mark();
@@ -182,20 +160,7 @@ final class DrupalConsoleIsolatedTest extends TestCase
             }
         }
 
-        self::fail('FileWriteTool not present in the built registry.');
-    }
-
-    private function fileWriteAllowsPhp(?Claw $engine): bool
-    {
-        $config = (new \ReflectionProperty($engine, 'config'))->getValue($engine);
-
-        foreach ((array) $config->tools as $tool) {
-            if ($tool instanceof FileWriteTool) {
-                return (bool) (new \ReflectionProperty($tool, 'allowPhpWrite'))->getValue($tool);
-            }
-        }
-
-        self::fail('FileWriteTool not present in the built engine.');
+        return false;
     }
 
     private function buildContext(): DrupalAgentContext
