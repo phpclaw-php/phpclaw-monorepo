@@ -68,6 +68,17 @@ final class JoomlaBuilderSkillTest extends TestCase
         $this->assertStringContainsString('NOT supported yet', $this->skill->content());
     }
 
+    public function test_content_states_file_write_must_be_enabled_and_is_cli_only(): void
+    {
+        $content = $this->skill->content();
+
+        $this->assertStringContainsString('file_write', $content);
+        $this->assertStringContainsString('not enabled by default', $content);
+        $this->assertStringContainsString('onPhpClawExtraTools', $content);
+        $this->assertStringContainsString('FileWriteTool::class', $content);
+        $this->assertStringContainsString('Joomla CLI', $content);
+    }
+
     public function test_content_states_the_joomla_generation_rules(): void
     {
         $content = $this->skill->content();

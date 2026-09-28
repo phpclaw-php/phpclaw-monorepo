@@ -74,6 +74,8 @@ scope note at the end).
 1. State that you are building a Joomla plugin and its group (system, content, …).
 2. Plan the file list first and state it.
 3. Write each file with file_write (one file per call). Parent folders are created automatically.
+   file_write is not enabled by default: a developer adds it through the onPhpClawExtraTools event
+   (FileWriteTool::class or a tool object), and writing .php files works only from the Joomla CLI.
 4. After every PHP file: verify it parses (re-read it; check braces/quotes).
 5. Package ONLY with joomla_zip_extension (never zip_package directly for extensions).
 

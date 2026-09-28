@@ -11,9 +11,14 @@ use PhpClaw\Joomla\Component\Administrator\Tools\JoomlaCategoryTool;
 use PhpClaw\Joomla\Component\Administrator\Tools\JoomlaExtensionTool;
 use PhpClaw\Joomla\Component\Administrator\Tools\JoomlaUserTool;
 use PhpClaw\Joomla\Component\Administrator\Tools\JoomlaZipBuilderTool;
+use PhpClaw\Tools\Contracts\ToolInterface;
+use PhpClaw\Tools\FileEditTool;
+use PhpClaw\Tools\FileWriteTool;
+use PhpClaw\Tools\ShellTool;
 use PhpClaw\Tools\ToolCatalogue;
 use PhpClaw\Tools\ToolProfileResolver;
 use PhpClaw\Tools\ZipPackagerTool;
+use ReflectionClass;
 
 /**
  * Assembles the tool list for a given config.
@@ -42,6 +47,8 @@ final class ToolBuilder
         $extra = [];
         JoomlaEventDispatcher::fire('onPhpClawExtraTools', 'tools', $extra);
 
+        $extra = $this->resolveExtraTools($extra, $config, $allowPhpWrite);
+
         $builtin = $this->builtinTools(JoomlaEventDispatcher::db(), $config, $allowPhpWrite);
 
         $all = array_merge($extra, $builtin);
@@ -51,6 +58,61 @@ final class ToolBuilder
         }
 
         return ToolProfileResolver::filter($all, $config->toolDeny, self::TOOL_GROUPS);
+    }
+
+    /**
+     * Turn the `onPhpClawExtraTools` payload into tools: objects kept, shell and file class names built with this adapter's settings, other no-argument tool classes built with `new`, the rest skipped.
+     *
+     * @param  array<int, mixed>  $extra  Tool objects or class names returned by the event listeners.
+     * @param  PhpClawConfig  $config  Component settings; supplies the shell allowlist.
+     * @param  bool  $allowPhpWrite  True only for an interactive console run; passed to a class-name FileWriteTool.
+     * @return array<int, object> The resolved tool objects.
+     */
+    private function resolveExtraTools(array $extra, PhpClawConfig $config, bool $allowPhpWrite): array
+    {
+        $resolved = [];
+
+        foreach ($extra as $entry) {
+            if (is_object($entry)) {
+                $resolved[] = $entry;
+
+                continue;
+            }
+
+            if (! is_string($entry) || ! class_exists($entry) || ! is_a($entry, ToolInterface::class, true)) {
+                continue;
+            }
+
+            $tool = match ($entry) {
+                ShellTool::class => new ShellTool(allowlist: $config->shellAllowlist),
+                FileWriteTool::class => new FileWriteTool(workspaceRoot: $this->workspaceRoot(), allowPhpWrite: $allowPhpWrite),
+                FileEditTool::class => new FileEditTool(workspaceRoot: $this->workspaceRoot()),
+                default => $this->instantiateNoArgTool($entry),
+            };
+
+            if ($tool !== null) {
+                $resolved[] = $tool;
+            }
+        }
+
+        return $resolved;
+    }
+
+    /**
+     * Instantiate a class name with no required constructor argument, or return null when it has one.
+     *
+     * @param  class-string<ToolInterface>  $class
+     * @return ToolInterface|null
+     */
+    private function instantiateNoArgTool(string $class): ?ToolInterface
+    {
+        $constructor = (new ReflectionClass($class))->getConstructor();
+
+        if ($constructor !== null && $constructor->getNumberOfRequiredParameters() > 0) {
+            return null;
+        }
+
+        return new $class;
     }
 
     /**

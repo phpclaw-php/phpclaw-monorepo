@@ -52,19 +52,30 @@ final class GuideToolCoverageTest extends TestCase
         );
     }
 
-    public function test_the_two_tables_together_cover_all_fourteen_tools(): void
+    public function test_the_two_tables_together_cover_every_default_tool(): void
     {
         $coreNamespace = $this->constant('CORE_TOOL_NAMESPACE');
 
         $core = $joomla = 0;
+        $coreNames = [];
 
         foreach ($this->registry()->all() as $tool) {
-            str_starts_with($tool::class, $coreNamespace) ? $core++ : $joomla++;
+            if (str_starts_with($tool::class, $coreNamespace)) {
+                $core++;
+                $coreNames[] = $tool->name();
+            } else {
+                $joomla++;
+            }
         }
 
         self::assertSame(6, $joomla, 'The Joomla table must list six tools.');
-        self::assertSame(8, $core, 'The core table must list eight tools, including zip_package.');
-        self::assertSame(14, $core + $joomla, 'The Guide must account for every registered tool.');
+        self::assertSame(4, $core, 'The core table must list its four default-enabled tools, including zip_package.');
+        self::assertSame(
+            ['code_search', 'project_info', 'file_read', 'zip_package'],
+            $coreNames,
+            'shell_exec, http_request, file_write and file_edit are opt-in and absent from the default core table.',
+        );
+        self::assertSame(10, $core + $joomla, 'The Guide must account for every registered default tool.');
     }
 
     public function test_zip_package_is_visible_to_the_core_table(): void

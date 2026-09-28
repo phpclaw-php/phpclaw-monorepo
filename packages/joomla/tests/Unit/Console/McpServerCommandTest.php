@@ -7,7 +7,11 @@ namespace PhpClaw\Joomla\Tests\Unit\Console;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Plugin\PluginHelper;
 use Joomla\Database\DatabaseInterface;
+use Joomla\Event\Dispatcher;
+use Joomla\Event\Event;
+use PhpClaw\Exceptions\ToolException;
 use PhpClaw\Joomla\Component\Administrator\Console\McpServerCommand;
+use PhpClaw\Tools\FileWriteTool;
 use PhpClaw\Tools\ToolRegistry;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Console\Input\ArrayInput;
@@ -76,26 +80,27 @@ final class McpServerCommandTest extends TestCase
         }
     }
 
-    public function test_it_exposes_the_core_utility_tools_over_mcp(): void
+    public function test_it_exposes_the_default_enabled_core_utility_tools_over_mcp(): void
     {
         $names = $this->registryFromRun()->names();
 
-        foreach ([
-            'file_read',
-            'file_write',
-            'file_edit',
-            'code_search',
-            'project_info',
-            'shell_exec',
-            'http_request',
-        ] as $tool) {
-            self::assertContains($tool, $names);
+        foreach (['file_read', 'code_search', 'project_info'] as $tool) {
+            self::assertContains($tool, $names, 'The MCP server must expose every default-enabled core tool.');
         }
     }
 
-    public function test_it_serves_the_same_tool_count_the_about_page_advertises(): void
+    public function test_it_never_exposes_the_opt_in_core_tools_by_default_over_mcp(): void
     {
-        self::assertCount(14, $this->registryFromRun()->names());
+        $names = $this->registryFromRun()->names();
+
+        foreach (['file_write', 'file_edit', 'shell_exec', 'http_request'] as $tool) {
+            self::assertNotContains($tool, $names, 'These core tools are opt-in and must stay off until a developer adds them.');
+        }
+    }
+
+    public function test_it_serves_the_full_default_tool_count_over_mcp(): void
+    {
+        self::assertCount(10, $this->registryFromRun()->names());
     }
 
     public function test_it_honours_a_configured_tool_deny_list(): void
@@ -124,18 +129,31 @@ final class McpServerCommandTest extends TestCase
     {
         PluginHelper::$plugin = (object) ['params' => json_encode(['provider' => 'ollama', 'model' => 'qwen2.5:7b'])];
 
-        self::assertCount(14, $this->registryFromRun()->names());
+        self::assertCount(10, $this->registryFromRun()->names());
     }
 
     public function test_it_never_grants_php_write_access_to_mcp_clients(): void
     {
-        $source = (string) file_get_contents(dirname(__DIR__, 3).'/component/src/Console/McpServerCommand.php');
+        $dispatcher = new Dispatcher;
+        $dispatcher->addListener('onPhpClawExtraTools', static function (Event $event): void {
+            $event->setArgument('tools', [FileWriteTool::class]);
+        });
+        Factory::$application = new class($dispatcher)
+        {
+            public function __construct(private Dispatcher $dispatcher) {}
 
-        self::assertStringContainsString(
-            'allowPhpWrite: false',
-            $source,
-            'An MCP client is remote: it must never be handed the CLI-only PHP write permission.',
-        );
+            public function getDispatcher(): Dispatcher
+            {
+                return $this->dispatcher;
+            }
+        };
+
+        $fileWrite = $this->registryFromRun()->get('file_write');
+
+        $this->expectException(ToolException::class);
+        $this->expectExceptionMessage('Writing .php files is blocked by default');
+
+        $fileWrite->execute(['path' => 'mcp-probe.php', 'content' => '<?php echo 1;']);
     }
 
     private function registryFromRun(): ToolRegistry
