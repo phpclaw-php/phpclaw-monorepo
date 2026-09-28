@@ -17,6 +17,15 @@ php artisan vendor:publish --tag=phpclaw-config --force
 php artisan vendor:publish --tag=phpclaw-routes --force
 ```
 
+## The REST API needs a memory driver that keeps conversations per user
+
+`/phpclaw/send` and `/phpclaw/chat/stream` answer `503` and log a warning when the configured memory
+cannot keep each user's conversations private. The drivers that can are `database`, `eloquent`,
+`database_conversation` and `eloquent_conversation` (the default is `database`). `cache`,
+`database_kv`, `eloquent_kv`, `file`, `array` and custom memory bindings cannot, so with one of them
+set, either switch `PHPCLAW_MEMORY_DRIVER` to `database` or turn the API off with
+`PHPCLAW_API_ENABLED=false`. Artisan commands are not affected.
+
 ## Rolling back
 
 Back up the database first, then:
