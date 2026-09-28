@@ -41,6 +41,14 @@ same token the process actually runs. A command like `LS` or `ls/../../bin/echo`
 `file_edit` protects, such as `composer.json`, `.gitignore` and `phpunit.xml`. The match is on the
 lower-cased file name, anywhere in the workspace, and applies even when `allowPhpWrite` is on.
 
+## `SkillRegistry::match()` is removed
+
+`SkillRegistry::match()` no longer exists. Skills are not picked by keyword matching any more: when
+at least one skill is registered, the system prompt lists every skill's name and description in a
+Skills System section, and the model reads a skill's full instructions by calling the `load_skill` tool. Code that called
+`SkillRegistry::match()` should stop doing so; `SkillRegistry::all()` and `SkillRegistry::names()`
+still return the registered skills.
+
 ## Update
 
 ```bash

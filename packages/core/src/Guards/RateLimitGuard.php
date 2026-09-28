@@ -68,7 +68,7 @@ final class RateLimitGuard implements GuardInterface
     }
 
     /**
-     * Reset the in-process buckets and this guard's APCu counters. Required between tests.
+     * Reset the in-process buckets, the per-process warning flag and this guard's APCu counters. Required between tests.
      *
      * @return void
      */
