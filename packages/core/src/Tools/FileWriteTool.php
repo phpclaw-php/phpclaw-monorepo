@@ -348,12 +348,12 @@ final class FileWriteTool implements AuthorizableToolInterface, MutatingToolInte
     }
 
     /**
-     * Reject blocked extensions and .env* dotfiles.
+     * Reject .env* dotfiles, blocked file names (the shared sensitive and edit-protected lists) and blocked extensions.
      *
      * @param  string  $path  Relative path to check.
      * @return void
      *
-     * @throws ToolException When the extension is blocked or basename starts with .env.
+     * @throws ToolException When the basename starts with .env or is a blocked name, or the extension is blocked.
      */
     private function checkExtension(string $path): void
     {
@@ -362,6 +362,10 @@ final class FileWriteTool implements AuthorizableToolInterface, MutatingToolInte
 
         if (str_starts_with($basename, '.env')) {
             throw new ToolException("Writing to '".$this->sanitizeForMessage($basename)."' files is blocked.");
+        }
+
+        if (in_array($basename, BlockedPaths::FILENAMES, true) || in_array($basename, BlockedPaths::EDIT_FILENAMES, true)) {
+            throw new ToolException("Writing to '".$this->sanitizeForMessage($basename)."' is blocked.");
         }
 
         if (in_array($extension, self::PHP_EXTENSIONS, true)) {

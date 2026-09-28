@@ -35,6 +35,12 @@ final class BlockedPaths
         '.dockerenv',
     ];
 
+    public const EDIT_FILENAMES = [
+        'composer.json', 'composer.lock', 'package.json', 'package-lock.json',
+        '.gitignore', 'phpunit.xml', 'phpunit.xml.dist', 'dockerfile',
+        '.gitlab-ci.yml', 'artisan',
+    ];
+
     public const SECURITY_DIRS = [
         '.git', '.ssh', '.gnupg',
         '.aws', '.azure', '.gcloud', '.kube',

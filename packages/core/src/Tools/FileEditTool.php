@@ -45,11 +45,7 @@ final class FileEditTool implements AuthorizableToolInterface, MutatingToolInter
 
     private const BLOCKED_FILENAMES = BlockedPaths::FILENAMES;
 
-    private const EDIT_BLOCKED_FILENAMES = [
-        'composer.json', 'composer.lock', 'package.json', 'package-lock.json',
-        '.gitignore', 'phpunit.xml', 'phpunit.xml.dist', 'dockerfile',
-        '.gitlab-ci.yml', 'artisan',
-    ];
+    private const EDIT_BLOCKED_FILENAMES = BlockedPaths::EDIT_FILENAMES;
 
     private const SECURITY_BLOCKED_DIRS = BlockedPaths::SECURITY_DIRS;
 

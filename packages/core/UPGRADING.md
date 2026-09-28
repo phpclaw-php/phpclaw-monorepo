@@ -34,6 +34,13 @@ $builder->shellAllowlist(['ls', 'pwd', 'cat', 'grep']);
 same token the process actually runs. A command like `LS` or `ls/../../bin/echo` is refused as
 `not_in_allowlist` instead of being parsed down to a safe-looking prefix.
 
+## `file_write` refuses sensitive file names
+
+`file_write` refuses the same file names `file_read` and `file_edit` refuse, for example
+`.htaccess`, `.htpasswd`, `id_rsa`, `credentials.json` and `wp-config.php`, and the build files
+`file_edit` protects, such as `composer.json`, `.gitignore` and `phpunit.xml`. The match is on the
+lower-cased file name, anywhere in the workspace, and applies even when `allowPhpWrite` is on.
+
 ## Update
 
 ```bash

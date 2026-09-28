@@ -8,6 +8,7 @@ use PhpClaw\AutoDiscovery\DiscoveryCache;
 use PhpClaw\Exceptions\ToolException;
 use PhpClaw\Tools\FileWriteTool;
 use PhpClaw\Tools\ToolCatalogue;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
 final class FileWriteToolTest extends TestCase
@@ -251,6 +252,53 @@ final class FileWriteToolTest extends TestCase
         $this->expectException(ToolException::class);
 
         $tool->execute(['path' => 'id_rsa.key', 'content' => '-----BEGIN-----']);
+    }
+
+    public static function blockedFileNameProvider(): array
+    {
+        return [
+            'web server override' => ['.htaccess', '.htaccess'],
+            'private key' => ['id_rsa', 'id_rsa'],
+            'cloud credentials' => ['credentials.json', 'credentials.json'],
+            'upper case' => ['.HTACCESS', '.htaccess'],
+            'nested folder' => ['site/public/.htpasswd', '.htpasswd'],
+            'build manifest' => ['composer.json', 'composer.json'],
+            'vcs ignore file' => ['.gitignore', '.gitignore'],
+        ];
+    }
+
+    #[DataProvider('blockedFileNameProvider')]
+    public function test_execute_refuses_a_blocked_file_name(string $path, string $reportedName): void
+    {
+        $tool = new FileWriteTool($this->workspace);
+
+        try {
+            $tool->execute(['path' => $path, 'content' => 'x']);
+            self::fail("Expected a ToolException for writing {$path}.");
+        } catch (ToolException $e) {
+            self::assertSame("Writing to '{$reportedName}' is blocked.", $e->getMessage());
+        }
+
+        self::assertFileDoesNotExist($this->workspace.'/'.$path);
+    }
+
+    public function test_execute_refuses_a_blocked_php_file_name_even_when_php_write_is_allowed(): void
+    {
+        $tool = new FileWriteTool($this->workspace, allowPhpWrite: true);
+
+        $this->expectException(ToolException::class);
+        $this->expectExceptionMessage("Writing to 'wp-config.php' is blocked.");
+
+        $tool->execute(['path' => 'wp-config.php', 'content' => '<?php']);
+    }
+
+    public function test_execute_still_writes_an_ordinary_php_file_when_php_write_is_allowed(): void
+    {
+        $tool = new FileWriteTool($this->workspace, allowPhpWrite: true);
+
+        $tool->execute(['path' => 'plugin/my-plugin.php', 'content' => '<?php']);
+
+        self::assertFileExists($this->workspace.'/plugin/my-plugin.php');
     }
 
     public function test_execute_blocks_path_traversal_with_dotdot(): void
