@@ -14,6 +14,7 @@ use PhpClaw\Exceptions\ProviderException;
 use PhpClaw\Hooks\HookRegistry;
 use PhpClaw\Magento\Factory\PhpClawFactoryInterface;
 use PhpClaw\Magento\Model\Api\Stream;
+use PhpClaw\Magento\Model\IdentityResolver;
 use PhpClaw\Magento\Service\ToolHistorySplicer;
 use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
@@ -27,6 +28,8 @@ final class StreamTest extends TestCase
 
     private LoggerInterface&MockObject $logger;
 
+    private IdentityResolver&MockObject $identity;
+
     private Stream $model;
 
     protected function setUp(): void
@@ -37,7 +40,9 @@ final class StreamTest extends TestCase
 
         $this->phpClawFactory->method('create')->willReturn($this->engine);
 
-        $this->model = new Stream($this->phpClawFactory, $this->logger, new ToolHistorySplicer);
+        $this->identity = $this->createMock(IdentityResolver::class);
+
+        $this->model = new Stream($this->phpClawFactory, $this->logger, new ToolHistorySplicer, $this->identity);
     }
 
     protected function tearDown(): void
@@ -354,5 +359,21 @@ final class StreamTest extends TestCase
 
         self::assertStringContainsString('event: tool_after', $output);
         self::assertStringContainsString('"tool_name":"db_query"', $output);
+    }
+
+    public function test_caller_denial_refuses_a_web_api_caller_that_is_not_an_admin_user(): void
+    {
+        $this->identity->method('isNonAdminApiCaller')->willReturn(true);
+
+        $denial = (new \ReflectionMethod($this->model, 'callerDenial'))->invoke($this->model);
+
+        self::assertSame(403, $denial['code'] ?? null);
+    }
+
+    public function test_caller_denial_lets_an_admin_caller_through(): void
+    {
+        $this->identity->method('isNonAdminApiCaller')->willReturn(false);
+
+        self::assertNull((new \ReflectionMethod($this->model, 'callerDenial'))->invoke($this->model));
     }
 }

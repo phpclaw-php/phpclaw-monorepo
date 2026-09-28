@@ -149,9 +149,9 @@ class PhpClawFactory implements PhpClawFactoryInterface
     }
 
     /**
-     * Whether this run is a console command rather than an HTTP request.
+     * Whether this run is a command-line command, as the identity resolver reports it.
      *
-     * @return bool True in Magento console commands; false in Adminhtml web requests.
+     * @return bool True for a CLI run outside the web and cron areas; false otherwise.
      */
     protected function isConsole(): bool
     {

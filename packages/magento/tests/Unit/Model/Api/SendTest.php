@@ -15,6 +15,7 @@ use PhpClaw\Exceptions\MaxIterationsException;
 use PhpClaw\Exceptions\ProviderException;
 use PhpClaw\Magento\Factory\PhpClawFactoryInterface;
 use PhpClaw\Magento\Model\Api\Send;
+use PhpClaw\Magento\Model\IdentityResolver;
 use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\LoggerInterface;
@@ -27,6 +28,8 @@ final class SendTest extends TestCase
 
     private LoggerInterface&MockObject $logger;
 
+    private IdentityResolver&MockObject $identity;
+
     private Send $model;
 
     protected function setUp(): void
@@ -36,7 +39,9 @@ final class SendTest extends TestCase
         $this->logger = $this->createMock(LoggerInterface::class);
         $this->phpClawFactory->method('create')->willReturn($this->engine);
 
-        $this->model = new Send($this->phpClawFactory, $this->logger);
+        $this->identity = $this->createMock(IdentityResolver::class);
+
+        $this->model = new Send($this->phpClawFactory, $this->logger, $this->identity);
     }
 
     private function makeResponse(string $text = 'ok'): AgentResponse
@@ -134,6 +139,19 @@ final class SendTest extends TestCase
             self::fail('Expected WebapiException was not thrown.');
         } catch (WebapiException $e) {
             self::assertSame(500, $e->getHttpCode());
+        }
+    }
+
+    public function test_a_web_api_caller_that_is_not_an_admin_user_is_refused_with_403(): void
+    {
+        $this->identity->method('isNonAdminApiCaller')->willReturn(true);
+        $this->phpClawFactory->expects(self::never())->method('create');
+
+        try {
+            $this->model->send('list orders');
+            self::fail('A non-admin Web API caller must be refused.');
+        } catch (WebapiException $e) {
+            self::assertSame(403, $e->getHttpCode());
         }
     }
 }

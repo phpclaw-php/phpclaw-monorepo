@@ -10,6 +10,7 @@ use PhpClaw\Magento\Api\Data\StreamResponseInterface;
 use PhpClaw\Magento\Api\StreamInterface;
 use PhpClaw\Magento\Exception\ConversationAccessDeniedException;
 use PhpClaw\Magento\Factory\PhpClawFactoryInterface;
+use PhpClaw\Magento\Model\IdentityResolver;
 use PhpClaw\Magento\Service\SseTransport;
 use PhpClaw\Magento\Service\ToolHistorySplicer;
 use PhpClaw\Magento\Service\TurnErrorFrames;
@@ -26,17 +27,19 @@ class Stream implements StreamInterface
     use TurnErrorFrames;
 
     /**
-     * Bind the agent factory and logger this REST endpoint streams through.
+     * Bind the agent factory, logger, history splicer and identity resolver this REST endpoint streams through.
      *
      * @param  PhpClawFactoryInterface  $phpClawFactory  Factory that builds the configured agent.
      * @param  LoggerInterface  $logger  PSR-3 logger for unexpected errors.
      * @param  ToolHistorySplicer  $splicer  Splices tool-call entries into conversation history.
+     * @param  IdentityResolver  $identity  Resolves whether the Web API caller is an admin user.
      * @return void
      */
     public function __construct(
         private readonly PhpClawFactoryInterface $phpClawFactory,
         private readonly LoggerInterface $logger,
         private readonly ToolHistorySplicer $splicer,
+        private readonly IdentityResolver $identity,
     ) {}
 
     /**
@@ -48,7 +51,7 @@ class Stream implements StreamInterface
      */
     public function stream(string $message, string $conversationId = ''): StreamResponseInterface
     {
-        $denial = $this->conversationDenial($conversationId);
+        $denial = $this->callerDenial() ?? $this->conversationDenial($conversationId);
         if ($denial !== null) {
             http_response_code($denial['code']);
             header('Content-Type: application/json; charset=utf-8');
@@ -68,6 +71,20 @@ class Stream implements StreamInterface
         $emit($event, $frame);
 
         exit;
+    }
+
+    /**
+     * Refuse a Web API caller that is not an admin user before any SSE header is sent, so the refusal keeps its 403 status.
+     *
+     * @return array{error: string, code: int}|null Error frame for a caller that is not an admin user, null otherwise.
+     */
+    private function callerDenial(): ?array
+    {
+        if (! $this->identity->isNonAdminApiCaller()) {
+            return null;
+        }
+
+        return ['error' => 'The phpClaw chat API is available to admin users only.', 'code' => 403];
     }
 
     /**

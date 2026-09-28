@@ -37,13 +37,38 @@ class IdentityResolver
     ) {}
 
     /**
-     * Whether this run is a console command rather than an HTTP request.
+     * Whether this run is a command-line command: the CLI SAPI, in an area that serves no web request and is not cron.
      *
      * @return bool
      */
     public function runningInConsole(): bool
     {
-        return ! $this->isHttpArea();
+        if ($this->sapi() !== 'cli') {
+            return false;
+        }
+
+        return ! in_array($this->areaCode(), [
+            Area::AREA_ADMINHTML,
+            Area::AREA_WEBAPI_REST,
+            Area::AREA_WEBAPI_SOAP,
+            Area::AREA_GRAPHQL,
+            Area::AREA_FRONTEND,
+            Area::AREA_CRONTAB,
+        ], true);
+    }
+
+    /**
+     * Whether the current request is a Web API call whose caller is not an admin user, such as an integration token or a customer.
+     *
+     * @return bool
+     */
+    public function isNonAdminApiCaller(): bool
+    {
+        if (! in_array($this->areaCode(), [Area::AREA_WEBAPI_REST, Area::AREA_WEBAPI_SOAP], true)) {
+            return false;
+        }
+
+        return $this->actingUserId() === 0;
     }
 
     /**
@@ -94,18 +119,36 @@ class IdentityResolver
     }
 
     /**
-     * Whether the current run serves an admin or Web API request rather than console or cron.
+     * Return the PHP SAPI this process runs under.
+     *
+     * @return string
+     */
+    protected function sapi(): string
+    {
+        return PHP_SAPI;
+    }
+
+    /**
+     * Whether the current run serves an admin or Web API request, the areas that carry an admin identity.
      *
      * @return bool
      */
     private function isHttpArea(): bool
     {
-        try {
-            $area = $this->appState->getAreaCode();
-        } catch (LocalizedException) {
-            return false;
-        }
+        return in_array($this->areaCode(), [Area::AREA_ADMINHTML, Area::AREA_WEBAPI_REST, Area::AREA_WEBAPI_SOAP], true);
+    }
 
-        return $area === Area::AREA_ADMINHTML || $area === Area::AREA_WEBAPI_REST;
+    /**
+     * Return the application area code, or null when no area is set.
+     *
+     * @return string|null
+     */
+    private function areaCode(): ?string
+    {
+        try {
+            return $this->appState->getAreaCode();
+        } catch (LocalizedException) {
+            return null;
+        }
     }
 }

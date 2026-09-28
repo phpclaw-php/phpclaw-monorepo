@@ -12,6 +12,7 @@ use PhpClaw\Magento\Api\Data\SendResponseInterface;
 use PhpClaw\Magento\Api\SendInterface;
 use PhpClaw\Magento\Factory\PhpClawFactoryInterface;
 use PhpClaw\Magento\Model\Api\Data\SendResponse;
+use PhpClaw\Magento\Model\IdentityResolver;
 use Psr\Log\LoggerInterface;
 
 /**
@@ -21,15 +22,17 @@ use Psr\Log\LoggerInterface;
 class Send implements SendInterface
 {
     /**
-     * Bind the agent factory and logger this REST endpoint runs through.
+     * Bind the agent factory, logger and identity resolver this REST endpoint runs through.
      *
      * @param  PhpClawFactoryInterface  $phpClawFactory  Factory that builds the configured agent.
      * @param  LoggerInterface  $logger  PSR-3 logger for unexpected errors.
+     * @param  IdentityResolver  $identity  Resolves whether the Web API caller is an admin user.
      * @return void
      */
     public function __construct(
         private readonly PhpClawFactoryInterface $phpClawFactory,
         private readonly LoggerInterface $logger,
+        private readonly IdentityResolver $identity,
     ) {}
 
     /**
@@ -39,10 +42,18 @@ class Send implements SendInterface
      * @return SendResponseInterface Structured response with text, provider, model, tokens, iterations.
      *
      * @throws InputException When `$message` is empty after trimming.
-     * @throws WebapiException HTTP 422 on guard block; HTTP 500 on agent/provider failure.
+     * @throws WebapiException HTTP 403 for a caller that is not an admin user; HTTP 422 on guard block; HTTP 500 on agent/provider failure.
      */
     public function send(string $message): SendResponseInterface
     {
+        if ($this->identity->isNonAdminApiCaller()) {
+            throw new WebapiException(
+                new Phrase('The phpClaw chat API is available to admin users only.'),
+                0,
+                WebapiException::HTTP_FORBIDDEN,
+            );
+        }
+
         $message = trim($message);
 
         if ($message === '') {

@@ -13,6 +13,17 @@ If you deploy by copying files rather than by Composer, replace the module direc
 then run the same commands. Conversation, message and memory rows are preserved, and your settings
 stay in `core_config_data`.
 
+## Console rights and Web API callers
+
+- The console is a command-line run only: PHP's CLI in an area other than `adminhtml`,
+  `webapi_rest`, `webapi_soap`, `graphql`, `frontend` and `crontab`. Cron, SOAP, GraphQL and
+  storefront runs no longer skip the tool ACL check, and `file_write` refuses `.php` files there. An
+  agent run from a cron job has no admin user, so its tools refuse.
+- `/V1/phpclaw/send` and `/V1/phpclaw/chat/stream` answer `403` to any caller that is not an admin
+  user, such as an integration token. Use an admin bearer token.
+- `Model\Api\Send` and `Model\Api\Stream` take `IdentityResolver` as a new constructor
+  argument. Production installs run `bin/magento setup:di:compile` after updating, as above.
+
 ## Rolling back
 
 Back up the database first, then:
