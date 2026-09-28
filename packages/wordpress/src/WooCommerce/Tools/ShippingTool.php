@@ -182,7 +182,7 @@ DESC;
             'properties' => [
                 'zone_id' => [
                     'type' => 'integer',
-                    'description' => 'Return only this zone. 0 is the rest-of-the-world fallback zone.',
+                    'description' => 'Return only this one zone (1 or more). Omit it, or send 0, to list every zone including the rest-of-the-world fallback.',
                     'minimum' => 0,
                 ],
                 'include_settings' => [
@@ -337,7 +337,7 @@ DESC;
         }
 
         $zones = is_array($zones) ? $zones : [];
-        $wantedId = array_key_exists('zone_id', $input) ? (int) $input['zone_id'] : null;
+        $wantedId = empty($input['zone_id']) ? null : (int) $input['zone_id'];
         $includeSettings = ($input['include_settings'] ?? false) === true;
 
         $rows = [];

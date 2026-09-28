@@ -222,6 +222,29 @@ final class ShippingToolTest extends TestCase
         self::assertSame([0, 2, 5], array_column($r['data']['zones'], 'id'));
     }
 
+    public function test_zone_id_zero_lists_every_zone(): void
+    {
+        $tool = new ShippingTool($this->zoneFetcher([
+            ['id' => 0, 'zone_name' => 'Rest', 'zone_locations' => [], 'shipping_methods' => []],
+            ['id' => 2, 'zone_name' => 'UK', 'zone_locations' => [], 'shipping_methods' => []],
+        ]));
+
+        $r = json_decode($tool->execute(['zone_id' => 0]), true);
+
+        self::assertSame(2, $r['meta']['count']);
+        self::assertSame(['Rest', 'UK'], array_column($r['data']['zones'], 'name'));
+    }
+
+    public function test_no_zone_id_lists_every_zone(): void
+    {
+        $tool = new ShippingTool($this->zoneFetcher([
+            ['id' => 0, 'zone_name' => 'Rest', 'zone_locations' => [], 'shipping_methods' => []],
+            ['id' => 2, 'zone_name' => 'UK', 'zone_locations' => [], 'shipping_methods' => []],
+        ]));
+
+        self::assertSame(2, json_decode($tool->execute([]), true)['meta']['count']);
+    }
+
     public function test_zone_id_filter_selects_one_zone(): void
     {
         $tool = new ShippingTool($this->zoneFetcher([

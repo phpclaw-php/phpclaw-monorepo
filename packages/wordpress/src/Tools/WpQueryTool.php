@@ -289,7 +289,12 @@ DESC;
     protected function perform(array $input): array
     {
         if (($input['schema'] ?? false) === true) {
-            return ['type' => 'schema', 'payload' => $this->schemaData()];
+            $payload = $this->schemaData();
+            if (isset($input['post_type']) || isset($input['post_status'])) {
+                $payload['stats'] = $this->aggregateData($input)['stats'];
+            }
+
+            return ['type' => 'schema', 'payload' => $payload];
         }
 
         if (($input['aggregate'] ?? false) === true) {
@@ -609,9 +614,11 @@ DESC;
 
         $stickyIds = get_option('sticky_posts', []);
 
+        $requested = (string) ($input['post_status'] ?? '');
+
         return [
             'stats' => [
-                'total' => $total,
+                'total' => isset($byCounts[$requested]) ? $byCounts[$requested] : $total,
                 'by_status' => $byCounts,
                 'by_type' => $byType,
                 'sticky' => count((array) $stickyIds),

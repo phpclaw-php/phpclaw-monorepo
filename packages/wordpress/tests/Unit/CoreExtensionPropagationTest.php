@@ -19,12 +19,16 @@ use PhpClaw\Providers\ProviderCatalogue;
 use PhpClaw\Skills\PhpBestPracticesSkill;
 use PhpClaw\Skills\SkillCatalogue;
 use PhpClaw\Skills\SkillRegistry;
+use PhpClaw\Tools\CodeSearchTool;
 use PhpClaw\Tools\DatabaseQueryTool;
+use PhpClaw\Tools\FileEditTool;
 use PhpClaw\Tools\FileReadTool;
 use PhpClaw\Tools\FileWriteTool;
 use PhpClaw\Tools\HttpTool;
+use PhpClaw\Tools\ProjectTool;
 use PhpClaw\Tools\ShellTool;
 use PhpClaw\Tools\ToolCatalogue;
+use PhpClaw\WordPress\Engine\EngineFactory;
 use PhpClaw\WordPress\Plugin;
 use PHPUnit\Framework\TestCase;
 use ReflectionClass;
@@ -100,19 +104,60 @@ final class CoreExtensionPropagationTest extends TestCase
 
         $classes = array_map(static fn (object $t): string => $t::class, $coreTools);
 
-        $this->assertContains(HttpTool::class, $classes);
         $this->assertContains(FileReadTool::class, $classes);
-        $this->assertContains(FileWriteTool::class, $classes);
-        $this->assertContains(ShellTool::class, $classes);
+        $this->assertContains(CodeSearchTool::class, $classes);
+        $this->assertContains(ProjectTool::class, $classes);
+        $this->assertNotContains(HttpTool::class, $classes);
+        $this->assertNotContains(FileWriteTool::class, $classes);
+        $this->assertNotContains(ShellTool::class, $classes);
     }
 
-    public function test_non_default_tools_propagate_via_tool_catalogue(): void
+    public function test_opt_in_core_tools_are_not_offered(): void
     {
         $this->bootPlugin();
 
         $extraToolClasses = Plugin::extraToolClasses();
 
-        $this->assertContains(DatabaseQueryTool::class, $extraToolClasses);
+        $this->assertNotContains(ShellTool::class, $extraToolClasses);
+        $this->assertNotContains(HttpTool::class, $extraToolClasses);
+        $this->assertNotContains(FileWriteTool::class, $extraToolClasses);
+        $this->assertNotContains(FileEditTool::class, $extraToolClasses);
+        $this->assertNotContains(DatabaseQueryTool::class, $extraToolClasses);
+    }
+
+    public function test_filter_can_add_an_opt_in_tool(): void
+    {
+        Functions\when('apply_filters')->alias(
+            static function (string $tag, mixed $value, mixed ...$args): mixed {
+                if ($tag === 'phpclaw_extra_tools') {
+                    $value[] = ShellTool::class;
+                }
+
+                return $value;
+            },
+        );
+
+        $this->bootPlugin();
+
+        $extraToolClasses = Plugin::extraToolClasses();
+
+        $this->assertContains(ShellTool::class, $extraToolClasses);
+    }
+
+    public function test_registered_tools_exclude_power_tools_by_default(): void
+    {
+        $plugin = $this->bootPlugin();
+
+        $tools = EngineFactory::registeredTools($plugin->config(), [], Plugin::extraToolClasses());
+        $names = array_map(static fn (object $t): string => $t->name(), $tools);
+
+        $this->assertNotContains('shell_exec', $names);
+        $this->assertNotContains('http_request', $names);
+        $this->assertNotContains('file_write', $names);
+        $this->assertNotContains('file_edit', $names);
+        $this->assertContains('file_read', $names);
+        $this->assertContains('code_search', $names);
+        $this->assertContains('project_info', $names);
     }
 
     public function test_native_providers_resolve_via_bootstrap(): void

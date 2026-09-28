@@ -63,13 +63,15 @@ final class WPPluginSkill implements SkillInterface
 ### Workflow
 1. Plan the file list first and state it.
 2. Write each file with file_write (one file per call); parent folders are created automatically.
+   file_write is not enabled by default: a developer adds it with the phpclaw_extra_tools filter
+   (PhpClaw\Tools\FileWriteTool::class), and writing .php files only completes from WP-CLI.
 3. After every PHP file: verify it parses (re-read it; check braces/quotes).
 4. Package ONLY with wp_zip_plugin (never zip_package directly for plugins).
 
 ### File structure - exactly this shape (slug = lowercase-hyphen):
 {slug}/
   {slug}.php        <- main file: header + wiring only, no HTML
-  admin/settings.php
+  admin/settings-page.php
   public/render.php
   uninstall.php     <- deletes the plugin option
   assets/           <- css/js only when needed
@@ -89,7 +91,7 @@ Every PHP file's first statement after the header/docblock:
 defined('ABSPATH') || exit;
 Never add a PHP closing tag to pure-PHP files; omit it entirely.
 
-### Settings API (admin/settings.php):
+### Settings API (admin/settings-page.php):
 - ONE option, an array: get_option('{slug}_options', [])
 - register_setting('{slug}_group', '{slug}_options', ['sanitize_callback' => ...])
 - Sanitize on save: esc_url_raw() for URL fields, sanitize_text_field() for text,

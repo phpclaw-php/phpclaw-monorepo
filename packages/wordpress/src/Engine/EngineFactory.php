@@ -22,6 +22,9 @@ use PhpClaw\Providers\ProviderRegistry;
 use PhpClaw\Skills\Contracts\SkillInterface;
 use PhpClaw\Tools\Contracts\ConfigurableToolInterface;
 use PhpClaw\Tools\Contracts\ToolInterface;
+use PhpClaw\Tools\FileEditTool;
+use PhpClaw\Tools\FileWriteTool;
+use PhpClaw\Tools\ShellTool;
 use PhpClaw\Tools\ToolCatalogue;
 use PhpClaw\Tools\ToolProfileResolver;
 use PhpClaw\Tools\ToolRegistry;
@@ -397,19 +400,17 @@ final class EngineFactory
     private static function buildTools(string $workspaceRoot, array $config, array $saved, array $extraToolClasses, bool $applyProfile = true, bool $allowPhpWrite = false): array
     {
         $hasWoo = class_exists('WooCommerce');
+        $resolvedWorkspaceRoot = $workspaceRoot !== '' ? $workspaceRoot : null;
+        $shellAllowlist = (array) ($config['shell_allowlist'] ?? []);
 
         $coreTools = ToolCatalogue::instantiateDefaults([
-            'workspaceRoot' => $workspaceRoot !== '' ? $workspaceRoot : null,
-            'allowlist' => (array) ($config['shell_allowlist'] ?? []),
+            'workspaceRoot' => $resolvedWorkspaceRoot,
+            'allowlist' => $shellAllowlist,
             'allowPhpWrite' => $allowPhpWrite,
         ]);
 
-        $coreTools[] = new ZipPackagerTool(
-            $workspaceRoot !== '' ? $workspaceRoot : null,
-        );
-        $coreTools[] = new WpZipBuilderTool(
-            $workspaceRoot !== '' ? $workspaceRoot : null,
-        );
+        $coreTools[] = new ZipPackagerTool($resolvedWorkspaceRoot);
+        $coreTools[] = new WpZipBuilderTool($resolvedWorkspaceRoot);
 
         if ($hasWoo) {
             $tools = [
@@ -468,7 +469,7 @@ final class EngineFactory
                 continue;
             }
 
-            $tool = new $class;
+            $tool = self::instantiateExtraTool($class, $resolvedWorkspaceRoot, $shellAllowlist, $allowPhpWrite);
 
             if (isset($registered[$tool->name()])) {
                 continue;
@@ -503,5 +504,24 @@ final class EngineFactory
             deny: $deny,
             groups: $groups,
         );
+    }
+
+    /**
+     * Instantiate one extra-tool class name; ShellTool, FileWriteTool and FileEditTool get this adapter's configured shell allowlist, workspace root and CLI-only PHP-write rule, every other class is built with its own constructor defaults.
+     *
+     * @param  class-string  $class  Extra tool class name from the phpclaw_extra_tools filter.
+     * @param  ?string  $workspaceRoot  Resolved workspace root, or null to use the tool's own default.
+     * @param  string[]  $shellAllowlist  Configured shell command allowlist.
+     * @param  bool  $allowPhpWrite  True to permit file_write to write .php/.phtml/.phar files.
+     * @return object Instantiated tool.
+     */
+    private static function instantiateExtraTool(string $class, ?string $workspaceRoot, array $shellAllowlist, bool $allowPhpWrite): object
+    {
+        return match ($class) {
+            ShellTool::class => new ShellTool(allowlist: $shellAllowlist),
+            FileWriteTool::class => new FileWriteTool(workspaceRoot: $workspaceRoot, allowPhpWrite: $allowPhpWrite),
+            FileEditTool::class => new FileEditTool(workspaceRoot: $workspaceRoot),
+            default => new $class,
+        };
     }
 }

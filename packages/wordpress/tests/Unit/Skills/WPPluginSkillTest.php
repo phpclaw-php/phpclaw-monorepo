@@ -7,6 +7,7 @@ namespace PhpClaw\WordPress\Tests\Unit\Skills;
 use PhpClaw\AutoDiscovery\Attributes\Skill;
 use PhpClaw\Guards\CodeInjectionGuard;
 use PhpClaw\Skills\Contracts\SkillInterface;
+use PhpClaw\Tools\Security\BlockedPaths;
 use PhpClaw\WordPress\Skills\WPPluginSkill;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
@@ -51,6 +52,26 @@ final class WPPluginSkillTest extends TestCase
         self::assertStringContainsString('esc_url_raw', $content);
         self::assertStringContainsString('never echoes', $content);
         self::assertStringContainsString('wp_zip_plugin', $content);
+    }
+
+    public function test_content_notes_file_write_must_be_enabled(): void
+    {
+        $content = $this->skill->content();
+
+        self::assertStringContainsString('file_write is not enabled by default', $content);
+        self::assertStringContainsString('phpclaw_extra_tools', $content);
+        self::assertStringContainsString('WP-CLI', $content);
+    }
+
+    public function test_content_asks_for_no_file_name_that_file_write_refuses(): void
+    {
+        preg_match_all('/[\w{}.\/-]+\.(?:php|json|xml|lock|yml|yaml|dist)\b/', $this->skill->content(), $matches);
+
+        $requested = array_unique(array_map(static fn (string $path): string => strtolower(basename($path)), $matches[0]));
+        $refused = [...BlockedPaths::FILENAMES, ...BlockedPaths::EDIT_FILENAMES];
+
+        self::assertNotSame([], $requested);
+        self::assertSame([], array_values(array_intersect($requested, $refused)));
     }
 
     public function test_content_does_not_trip_the_code_injection_guard(): void

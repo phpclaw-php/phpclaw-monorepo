@@ -1,5 +1,26 @@
 # Upgrading phpClaw for WordPress
 
+## Power tools are opt-in
+
+`shell_exec`, `http_request`, `file_write` and `file_edit` are no longer offered on chat, WP-CLI or
+the MCP server by default; only `file_read`, `code_search` and `project_info` are. If your site
+relies on one of the four, add it back with the `phpclaw_extra_tools` filter, in your theme's
+`functions.php` or a small must-use plugin:
+
+```php
+add_filter('phpclaw_extra_tools', function (array $classes): array {
+    $classes[] = \PhpClaw\Tools\ShellTool::class;
+
+    return $classes;
+});
+```
+
+`ShellTool`, `FileWriteTool` and `FileEditTool` added this way are built with this adapter's own
+configured values: a shell tool gets the configured `shell_allowlist`, and a file tool gets the
+configured `workspace_root`. Any other class is built with its own constructor defaults. On the web
+chat the approval gate still refuses a file write regardless of this filter; only WP-CLI can complete
+a `.php`/`.phtml`/`.phar` write.
+
 ## Update
 
 **Automatic.** phpClaw ships a self-hosted updater, so updates appear in wp-admin like any

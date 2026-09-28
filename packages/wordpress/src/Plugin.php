@@ -6,6 +6,7 @@ namespace PhpClaw\WordPress;
 
 use PhpClaw\Agent\AgentResponse;
 use PhpClaw\AutoDiscovery\Bootstrap;
+use PhpClaw\AutoDiscovery\DiscoveryCache;
 use PhpClaw\Claw as PhpClaw;
 use PhpClaw\ClawConfig;
 use PhpClaw\Cloud\CloudManager;
@@ -145,17 +146,45 @@ class Plugin
     }
 
     /**
-     * List of extra tool classes to auto-discover.
+     * Extra tool classes to auto-discover: every catalogue class except an opt-in core tool
+     * (#[Tool(default: false)]), then the phpclaw_extra_tools filter.
      *
      * @return array<class-string>
      */
     public static function extraToolClasses(): array
     {
-        $defaults = class_exists(ToolCatalogue::class)
-            ? ToolCatalogue::all()
+        $classes = class_exists(ToolCatalogue::class)
+            ? self::withoutOptInCoreTools(ToolCatalogue::all())
             : [];
 
-        return (array) apply_filters('phpclaw_extra_tools', $defaults);
+        return (array) apply_filters('phpclaw_extra_tools', $classes);
+    }
+
+    /**
+     * Drop any class core's discovery data marks #[Tool(default: false)]; a class not present
+     * in discovery data (custom-registered or third-party) is kept.
+     *
+     * @param  array<class-string>  $classes
+     * @return array<class-string>
+     */
+    private static function withoutOptInCoreTools(array $classes): array
+    {
+        if (! class_exists(DiscoveryCache::class)) {
+            return $classes;
+        }
+
+        $discovered = (array) (DiscoveryCache::load()['tools'] ?? []);
+
+        return array_values(array_filter(
+            $classes,
+            static function (string $class) use ($discovered): bool {
+                if (! isset($discovered[$class])) {
+                    return true;
+                }
+
+                return (bool) ($discovered[$class]['default'] ?? false);
+            },
+        ));
     }
 
     /**

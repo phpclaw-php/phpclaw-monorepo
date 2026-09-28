@@ -270,7 +270,12 @@ final class EngineFactoryTest extends TestCase
 
         self::assertGreaterThan(5, count($names), 'buildTools no longer slices; ToolRouter selects per message');
         self::assertContains('wp_query', $names);
-        self::assertContains('shell_exec', $names, 'a tool declared late must still be registered');
+        self::assertContains('file_read', $names, 'a default core tool must still be registered');
+        self::assertContains('code_search', $names, 'a default core tool must still be registered');
+        self::assertNotContains('shell_exec', $names, 'an opt-in core tool is not registered by default');
+        self::assertNotContains('http_request', $names, 'an opt-in core tool is not registered by default');
+        self::assertNotContains('file_write', $names, 'an opt-in core tool is not registered by default');
+        self::assertNotContains('file_edit', $names, 'an opt-in core tool is not registered by default');
         self::assertSame(
             5,
             ToolProfileResolver::maxTools(ToolProfileResolver::resolve('ollama', 'qwen2.5:7b')),
@@ -309,27 +314,32 @@ final class EngineFactoryTest extends TestCase
             [],
         );
 
-        self::assertContains('shell_exec', self::toolNames($tools));
+        self::assertNotContains(
+            'shell_exec',
+            self::toolNames($tools),
+            'shell_exec is opt-in; a shell_allowlist alone does not register it',
+        );
     }
 
     public function test_build_tools_with_workspace_root_configures_the_file_tools(): void
     {
         $tools = $this->invoke('buildTools', '/var/www', [], [], []);
 
-        $writers = array_values(array_filter(
+        $readers = array_values(array_filter(
             $tools,
-            static fn ($tool): bool => $tool->name() === 'file_write',
+            static fn ($tool): bool => $tool->name() === 'file_read',
         ));
 
-        self::assertCount(1, $writers);
-        self::assertSame(realpath('/var/www') ?: '/var/www', $writers[0]->workspaceRoot());
+        self::assertCount(1, $readers);
+        self::assertSame(realpath('/var/www') ?: '/var/www', $readers[0]->workspaceRoot());
+        self::assertContains('code_search', self::toolNames($tools));
     }
 
     public function test_every_tool_is_registered_and_only_the_budget_differs_by_provider(): void
     {
         $roster = self::toolNames($this->invoke('buildTools', '', [], [], []));
 
-        self::assertContains('shell_exec', $roster, 'every tool is registered; the budget decides what is offered');
+        self::assertNotContains('shell_exec', $roster, 'shell_exec is opt-in; it is not part of the default roster');
 
         self::assertSame(5, ToolProfileResolver::maxTools(ToolProfileResolver::resolve('ollama', 'qwen2.5:7b')));
         self::assertSame(

@@ -235,6 +235,57 @@ final class WpQueryToolTest extends TestCase
         self::assertArrayHasKey('total', $r['data']['stats']);
     }
 
+    public function test_aggregate_total_counts_only_the_requested_status(): void
+    {
+        $this->stubAggregate();
+
+        $r = json_decode((new WpQueryTool)->execute(['aggregate' => true, 'post_status' => 'publish']), true);
+
+        self::assertSame(5, $r['data']['stats']['total']);
+    }
+
+    public function test_aggregate_total_without_a_status_sums_every_status(): void
+    {
+        $this->stubAggregate();
+
+        $r = json_decode((new WpQueryTool)->execute(['aggregate' => true]), true);
+
+        self::assertSame(25, $r['data']['stats']['total']);
+    }
+
+    public function test_schema_with_a_post_type_or_status_filter_also_returns_the_counts(): void
+    {
+        $this->stubAggregate();
+
+        $r = json_decode((new WpQueryTool)->execute(['schema' => true, 'post_type' => 'post', 'post_status' => 'publish']), true);
+
+        self::assertSame(5, $r['data']['stats']['total']);
+        self::assertArrayHasKey('available_columns', $r['data']);
+    }
+
+    public function test_schema_without_filters_returns_no_counts(): void
+    {
+        $this->stubAggregate();
+
+        $r = json_decode((new WpQueryTool)->execute(['schema' => true]), true);
+
+        self::assertArrayNotHasKey('stats', $r['data']);
+        self::assertArrayHasKey('available_columns', $r['data']);
+    }
+
+    private function stubAggregate(): void
+    {
+        \WP_Query::$testFoundPosts = 5;
+        \WP_Query::$testMaxNumPages = 1;
+
+        Functions\expect('get_post_types')->zeroOrMoreTimes()->andReturn(['post' => 'post']);
+        Functions\expect('get_option')->zeroOrMoreTimes()->andReturn([]);
+        Functions\stubs([
+            'sanitize_text_field' => fn ($v) => $v,
+            'sanitize_key' => fn ($v) => $v,
+        ]);
+    }
+
     public function test_resolve_columns_reflection(): void
     {
         $tool = new WpQueryTool;

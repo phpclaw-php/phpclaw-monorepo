@@ -205,7 +205,7 @@ DESC;
                 ],
                 'hide_empty' => [
                     'type' => 'boolean',
-                    'description' => 'Exclude categories that have no products assigned.',
+                    'description' => 'true = only categories that have products. Use it for questions like "categories that have products".',
                     'default' => false,
                 ],
                 'parent_id' => [
