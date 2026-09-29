@@ -19,6 +19,7 @@ use PhpClaw\Exceptions\ProviderException;
 use PhpClaw\Exceptions\ToolException;
 use PhpClaw\Guards\GuardRegistry;
 use PhpClaw\Memory\Contracts\MemoryInterface;
+use PhpClaw\Memory\PrivacyAwareMemory;
 use PhpClaw\Providers\Contracts\SupportsWebSearchInterface;
 use PhpClaw\Providers\Tools\WebSearch;
 use PhpClaw\Skills\RemoteSkillLoader;
@@ -64,8 +65,8 @@ final class Claw implements ClawInterface
     public function __construct(ClawConfig $config)
     {
         $this->config = $config;
-        $this->memory = $config->memory;
         $this->storeMessages = $config->storeMessages;
+        $this->memory = $this->gatedMemory($config->memory);
         $this->registerSkills();
 
         foreach ($this->config->remoteSkillUrls as $url) {
@@ -220,7 +221,7 @@ final class Claw implements ClawInterface
     }
 
     /**
-     * Return the configured memory driver (if any).
+     * Return the memory driver in use (if any), write-gated when message storage is off.
      *
      * @return MemoryInterface|null The result.
      */
@@ -302,6 +303,25 @@ final class Claw implements ClawInterface
             requestBudgetTokens: ToolProfileResolver::requestBudget($this->profile()),
             fixedPromptTokens: (int) ceil(strlen($config->systemPrompt) / 4),
         );
+    }
+
+    /**
+     * Wrap the memory driver so writes are dropped when message storage is off; reads still pass through.
+     *
+     * @param  MemoryInterface|null  $memory  Configured memory driver.
+     * @return MemoryInterface|null The driver to use.
+     */
+    private function gatedMemory(?MemoryInterface $memory): ?MemoryInterface
+    {
+        if ($memory === null || $this->storeMessages) {
+            return $memory;
+        }
+
+        if ($memory instanceof PrivacyAwareMemory && ! $memory->storeMessages()) {
+            return $memory;
+        }
+
+        return new PrivacyAwareMemory($memory, storeMessages: false);
     }
 
     /**

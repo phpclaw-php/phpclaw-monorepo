@@ -11,7 +11,9 @@ use PhpClaw\Claw;
 use PhpClaw\Exceptions\GuardException;
 use PhpClaw\Guards\GuardRegistry;
 use PhpClaw\Hooks\HookRegistry;
+use PhpClaw\Memory\ArrayMemory;
 use PhpClaw\Memory\Contracts\MemoryInterface;
+use PhpClaw\Memory\PrivacyAwareMemory;
 use PhpClaw\Providers\Contracts\ProviderInterface;
 use PhpClaw\Skills\ArraySkill;
 use PhpClaw\Skills\SkillRegistry;
@@ -201,6 +203,78 @@ final class ClawTest extends TestCase
             ->build();
 
         $this->assertFalse($agent->storeMessages());
+    }
+
+    public function test_store_messages_false_keeps_every_turn_out_of_memory(): void
+    {
+        $memory = new ArrayMemory;
+        $agent = Claw::builder()
+            ->storeMessages(false)
+            ->providerOverride($this->makeProvider('ok'))
+            ->memory($memory)
+            ->build();
+
+        $conversation = $agent->conversation();
+        $agent->sendInConversation($conversation, 'Keep this private');
+        $agent->streamInConversation($conversation, 'Keep this private too', static function (string $_): void {});
+
+        $this->assertNull($memory->get($conversation->id, Conversation::MEMORY_NAMESPACE));
+        $this->assertSame([], $memory->all(Conversation::MEMORY_NAMESPACE));
+    }
+
+    public function test_store_messages_false_still_loads_a_stored_conversation(): void
+    {
+        $memory = new ArrayMemory;
+        $memory->set('01HWZZZZZZZZZZZZZZZZZZZZZZ', [
+            'id' => '01HWZZZZZZZZZZZZZZZZZZZZZZ',
+            'created_at' => '2024-06-01T10:00:00+00:00',
+            'metadata' => ['source' => 'restored'],
+            'history' => [],
+        ], Conversation::MEMORY_NAMESPACE);
+
+        $agent = Claw::builder()
+            ->storeMessages(false)
+            ->providerOverride($this->makeProvider())
+            ->memory($memory)
+            ->build();
+
+        $this->assertSame('restored', $agent->conversation('01HWZZZZZZZZZZZZZZZZZZZZZZ')->metadata['source']);
+    }
+
+    public function test_store_messages_false_gates_writes_through_an_open_privacy_wrapper(): void
+    {
+        $inner = new ArrayMemory;
+        $agent = Claw::builder()
+            ->storeMessages(false)
+            ->providerOverride($this->makeProvider('ok'))
+            ->memory(new PrivacyAwareMemory($inner, storeMessages: true))
+            ->build();
+
+        $agent->sendInConversation($agent->conversation(), 'Keep this private');
+
+        $this->assertSame([], $inner->all(Conversation::MEMORY_NAMESPACE));
+    }
+
+    public function test_store_messages_false_keeps_an_already_closed_privacy_wrapper(): void
+    {
+        $memory = new PrivacyAwareMemory(new ArrayMemory, storeMessages: false);
+        $agent = Claw::builder()
+            ->storeMessages(false)
+            ->providerOverride($this->makeProvider())
+            ->memory($memory)
+            ->build();
+
+        $this->assertSame($memory, $agent->memory());
+    }
+
+    public function test_store_messages_false_without_memory_keeps_memory_null(): void
+    {
+        $agent = Claw::builder()
+            ->storeMessages(false)
+            ->providerOverride($this->makeProvider())
+            ->build();
+
+        $this->assertNull($agent->memory());
     }
 
     public function test_safe_messages_are_processed_without_exception(): void
