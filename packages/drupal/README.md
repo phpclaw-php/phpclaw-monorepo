@@ -111,7 +111,7 @@ Full setup, configuration, and provider options are documented at [phpclaw.ai/do
 
 ✅ **Natural language**: ask in plain English, no query syntax to learn
 
-✅ **15 Drupal-native tools + 7 core utility tools (22 total)**: entities, config, database, log, modules, cron, menus, media, views, user roles, blocks, path aliases, cache, content moderation, webforms. The log tool reads Drupal's `watchdog` table, so it needs the core `dblog` module enabled.
+✅ **15 Drupal-native tools + 5 core utility tools**: entities, config, database, log, modules, cron, menus, media, views, user roles, blocks, path aliases, cache, content moderation, webforms, plus shell, HTTP, code search, file read and project info in Drush, the MCP server and the `phpclaw.agent` service. The admin chat and REST API get the Drupal-native tools only. The log, menu, media, views, block, content-moderation and webform tools need their modules enabled; the log tool reads Drupal's `watchdog` table through `dblog`.
 
 ✅ **Admin chat**: inside the Drupal back-end, where your team already works
 
