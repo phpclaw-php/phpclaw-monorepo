@@ -22,7 +22,7 @@ No SQL. No dashboards. No prompts to memorize. Just ask:
 * "Any pending comments to moderate?"
 * "Revenue this week?"
 
-**30 built-in tools** covering posts, users, plugins, menus, media, comments, taxonomies, cron, options, database, logs, HTTP, file read/write/edit, shell, code search, project info, plugin ZIP builder, and 10 WooCommerce tools (orders, products, customers, reports, stock, coupons, categories, reviews, shipping, tax).
+**26 built-in tools** (16 without WooCommerce) covering posts, users, plugins, menus, media, comments, taxonomies, cron, options, database, logs, file read, code search, project info, ZIP packager, plugin ZIP builder, and 10 WooCommerce tools (orders, products, customers, reports, stock, coupons, categories, reviews, shipping, tax). Shell, HTTP, file write and file edit are opt-in through the `phpclaw_extra_tools` filter.
 
 **8 AI providers** - Anthropic Claude, OpenAI GPT, Groq, Google Gemini, Mistral, DeepSeek, Ollama (free, local), or Custom (any OpenAI-compatible endpoint). Switch providers from Settings - zero code changes.
 
@@ -84,11 +84,11 @@ By default, message content is stored in your WordPress database. Disable this b
 
 = Does it work without WooCommerce? =
 
-Yes. The 20 WordPress tools (11 WP-native + 7 core utility + 2 plugin-builder) work without WooCommerce. The 10 commerce tools (orders, products, stock, etc.) auto-register when WooCommerce is detected.
+Yes. The 16 WordPress tools (11 WP-native + 3 core utility + 2 ZIP builders) work without WooCommerce. The 10 commerce tools (orders, products, stock, etc.) auto-register when WooCommerce is detected.
 
 = Is it safe? =
 
-Yes. The plugin has multi-layered security: prompt injection scanning on every message, read-only database access (no writes), command allowlist, character limits, and CSRF protection on all endpoints.
+Yes. The plugin has multi-layered security: prompt injection scanning on every message, read-only database access (no writes), a command allowlist on the opt-in shell tool, character limits, and CSRF protection on all endpoints.
 
 = Can I use it via the REST API? =
 
