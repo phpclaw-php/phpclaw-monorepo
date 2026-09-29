@@ -103,7 +103,7 @@ Full setup, configuration, and provider options are documented at [phpclaw.ai/do
 
 ✅ **Doctrine-backed memory**: conversation + key-value drivers via DBAL, plus a cache-store driver
 
-✅ **2 Symfony-native tools**: database (read-only SELECT via Doctrine DBAL), log tail (`var/log/*.log`)
+✅ **2 Symfony-native tools**: database (read-only SELECT via Doctrine DBAL), log tail (`var/log/*.log`). Opt-in: add `PhpClaw\Symfony\Tools\DatabaseTool` / `LogTool` under `phpclaw.tools` in `config/packages/phpclaw.yaml`, the same way as the core shell, HTTP and file tools
 
 ✅ **Web Profiler integration**: a dedicated data collector panel for every agent run
 
