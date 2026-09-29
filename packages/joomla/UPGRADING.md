@@ -16,6 +16,15 @@ updating.
 Afterwards confirm your provider, API key and model under **Extensions → Plugins → System -
 phpClaw**. Settings live in the plugin's parameters, not on the component's Options screen.
 
+## Power tools are opt-in
+
+`shell_exec`, `http_request`, `file_write` and `file_edit` are no longer offered by default; only
+`file_read`, `code_search` and `project_info` are. To add one back, a plugin handling the
+`onPhpClawExtraTools` event adds its class name to the event's `tools` argument. `ShellTool` added
+that way gets the configured shell allowlist, and `FileWriteTool` and `FileEditTool` get the
+configured workspace root. Only the interactive `phpclaw` CLI command lets `file_write` create `.php`
+files; the `phpclaw:mcp-server` command never does.
+
 ## Rolling back
 
 Back up the database first, because uninstalling drops all phpClaw data. Uninstall via
