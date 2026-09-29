@@ -17,8 +17,9 @@ stay in `core_config_data`.
 
 - The console is a command-line run only: PHP's CLI in an area other than `adminhtml`,
   `webapi_rest`, `webapi_soap`, `graphql`, `frontend` and `crontab`. Cron, SOAP, GraphQL and
-  storefront runs no longer skip the tool ACL check, and `file_write` refuses `.php` files there. An
-  agent run from a cron job has no admin user, so its tools refuse.
+  storefront runs no longer skip the Magento tools' ACL check. An agent run from a cron job has no
+  admin user, so the Magento tools (orders, products, `db_query`, logs and the rest) refuse there;
+  the core utility tools are not ACL-checked.
 - `/V1/phpclaw/send` and `/V1/phpclaw/chat/stream` answer `403` to any caller that is not an admin
   user, such as an integration token. Use an admin bearer token.
 - `Model\Api\Send` and `Model\Api\Stream` take `IdentityResolver` as a new constructor

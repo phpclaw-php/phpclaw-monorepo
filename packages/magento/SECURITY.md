@@ -23,7 +23,7 @@ We will acknowledge your report within **48 hours** and aim to release a fix wit
 In scope:
 - SQL injection, XSS, CSRF vulnerabilities in module code
 - Prompt injection bypasses that reach the AI provider
-- ACL bypass on `PhpClaw_Magento::phpclaw_*` resources: admin routes (`/admin/phpclaw/*`) or REST API routes (`/V1/phpclaw/*`) that circumvent the `ADMIN_RESOURCE` check declared on each controller
+- ACL bypass on `PhpClaw_Magento::phpclaw_*` resources: admin routes (`/admin/phpclaw/*`) that circumvent the `ADMIN_RESOURCE` check declared on each controller, or REST API routes (`/V1/phpclaw/*`) that circumvent the `webapi.xml` ACL resource or the admin-only caller check
 - Sensitive data leakage via REST endpoints (`/V1/phpclaw/*`) or adminhtml controllers
 - SSRF via the `base_url` setting (used for custom provider or Ollama host) or any other URL input accepted by the module
 - `db_query` tool SELECT-only enforcement bypass, guarded by `SqlReadOnlyGuard` and a restricted-identifier blocklist; any bypass that permits writes or reads sensitive columns (e.g. `api_key`, `password`, `secret`) is in scope
