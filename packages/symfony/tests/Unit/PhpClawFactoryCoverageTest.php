@@ -266,9 +266,11 @@ final class PhpClawFactoryCoverageTest extends TestCase
         $method = $ref->getMethod('resolveTools');
         $names = array_map(static fn ($t) => $t->name(), $method->invoke($factory, false));
 
-        self::assertContains('shell_exec', $names);
+        self::assertContains('code_search', $names);
         self::assertContains('file_read', $names);
-        self::assertContains('http_request', $names);
+        self::assertContains('project_info', $names);
+        self::assertNotContains('shell_exec', $names);
+        self::assertNotContains('http_request', $names);
     }
 
     public function test_store_messages_false_wraps_in_privacy_aware_memory(): void

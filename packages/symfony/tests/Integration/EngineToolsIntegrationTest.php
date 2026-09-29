@@ -20,10 +20,11 @@ final class EngineToolsIntegrationTest extends IntegrationTestCase
         $toolNames = array_map(fn ($t) => $t->name(), $phpClaw->config()->tools);
 
         $this->assertNotEmpty($toolNames, 'Engine must have at least one tool registered.');
-        $this->assertContains('http_request', $toolNames, 'http_request is a core default tool.');
-        $this->assertContains('shell_exec', $toolNames, 'shell_exec is a core default tool.');
         $this->assertContains('file_read', $toolNames, 'file_read is a core default tool.');
-        $this->assertContains('file_write', $toolNames, 'file_write is a core default tool.');
+        $this->assertContains('code_search', $toolNames, 'code_search is a core default tool.');
+        $this->assertNotContains('shell_exec', $toolNames, 'shell_exec is opt-in, not a core default.');
+        $this->assertNotContains('http_request', $toolNames, 'http_request is opt-in, not a core default.');
+        $this->assertNotContains('file_write', $toolNames, 'file_write is opt-in, not a core default.');
     }
 
     public function test_tool_deny_removes_denied_tool_from_engine(): void

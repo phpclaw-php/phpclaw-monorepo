@@ -76,7 +76,7 @@ final class ExtensionToolConstructorTest extends TestCase
         $names = $this->toolNames($this->engineWithTools([NeedsConstructorArgumentTool::class]));
 
         self::assertNotContains('needs_constructor_argument', $names);
-        self::assertContains('shell_exec', $names);
+        self::assertContains('code_search', $names);
         self::assertContains('file_read', $names);
     }
 
