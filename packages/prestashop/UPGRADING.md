@@ -14,6 +14,13 @@ Settings live in PrestaShop `Configuration` (the `ps_configuration` table), so t
 overwrite. The Settings page also checks the update server and shows a notice when a newer version
 is available; the check fails silently when the server is unreachable.
 
+## Power tools are opt-in
+
+`shell_exec`, `http_request`, `file_write` and `file_edit` are no longer offered by default; only
+`file_read`, `code_search` and `project_info` are. To add one back, a module hooked on
+`actionPhpclawExtraTools` returns its class name. `ShellTool` added that way gets the configured
+shell allowlist, and `FileWriteTool` and `FileEditTool` get the configured workspace root.
+
 ## The MCP server runs tools as non-interactive
 
 `php modules/phpclaw/cli/phpclaw.php mcp-server` builds its tools as non-interactive, the same way the
