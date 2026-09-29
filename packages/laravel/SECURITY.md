@@ -21,7 +21,7 @@ We will acknowledge your report within **48 hours** and aim to release a fix wit
 ## Scope
 
 In scope:
-- Authentication bypass on REST endpoints (`/phpclaw/send`, `/phpclaw/chat/stream`), for example a timing or token-comparison flaw in `AuthenticatePhpClawApi`
+- Authentication bypass on REST endpoints (`/phpclaw/send`, `/phpclaw/chat/stream`), for example `AuthenticatePhpClawApi` letting through a request with no authenticated user
 - `CliApprovalGate` bypass: any path that allows a mutating tool call to execute over HTTP without an interactive STDIN (the gate calls `stream_isatty(STDIN)` and throws `HumanDeniedException` when no tty is present; a bypass is in scope)
 - SQL injection, XSS, or CSRF vulnerabilities in package code (controllers, memory drivers, queue jobs)
 - Prompt injection bypasses that reach the AI provider

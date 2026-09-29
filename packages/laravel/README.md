@@ -77,7 +77,9 @@ Both require an authenticated user: every conversation is stored against `auth()
 caller only ever reaches their own conversations. Point `phpclaw.api.middleware` at the guard your
 app authenticates API callers with. Two things grant cross-user access, and both are off by
 default: the `phpclaw.manage-all` Gate ability, which denies unless your app defines it, and the
-`PHPCLAW_ADMIN_IDS` env list, whose user IDs bypass the Gate entirely.
+`PHPCLAW_ADMIN_IDS` env list, whose user IDs bypass the Gate entirely. The API also needs a memory
+driver that keeps conversations per user (`database`, the default); with any other driver both
+routes answer `503`.
 
 ## Installation
 
@@ -99,7 +101,7 @@ Full setup, configuration, and provider options are documented at [phpclaw.ai/do
 
 ✅ **Database-backed memory**: conversation + key-value drivers via the query builder, plus a cache-store driver
 
-✅ **6 Laravel-native tools**: database (read-only SELECT), log tail, route list, config read, cache inspect, queue status
+✅ **6 Laravel-native tools**: database (read-only SELECT), log tail, route list, config read, cache inspect, queue status. Opt-in: list their classes in `config('phpclaw.tools')`, the same way as shell, HTTP, file write and file edit
 
 ✅ **Telescope integration**: every agent run, tool call, and guard block recorded for local debugging (auto-detected, off if Telescope isn't installed)
 
