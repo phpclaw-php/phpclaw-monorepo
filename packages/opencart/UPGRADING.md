@@ -17,6 +17,14 @@ with `CREATE TABLE IF NOT EXISTS`, so both survive a ZIP overwrite.
 When you open Settings, the module checks the update server and shows a banner if a newer version is
 available. The check fails silently when the server is unreachable.
 
+## Power tools are opt-in
+
+`shell_exec`, `http_request`, `file_write` and `file_edit` are no longer offered by default; only
+`file_read`, `code_search` and `project_info` are. To add one back, an extension listening on the
+`phpclaw/extra/tools` event adds its class name to the event's list. `ShellTool` added that way gets
+the configured shell allowlist, and `FileWriteTool` and `FileEditTool` get the configured workspace
+root.
+
 ## The MCP server runs tools as non-interactive
 
 The CLI script's `mcp-server` command builds its tools as non-interactive, the same way the Guide

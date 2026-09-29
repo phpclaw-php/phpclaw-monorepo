@@ -26,9 +26,9 @@ In scope:
 - Authentication / authorisation bypasses on admin controllers (both OC3 and OC4 code paths)
 - Sensitive data leakage via admin AJAX endpoints (`/send`, `/stream`, `/load_conversation`, `/test_connection`, `/check_update`)
 - Bypasses of the `db_query` tool's SELECT-only guard or its credential-column block list (`password`, `salt`, `secret`, `api_key`, etc.)
-- SSRF via any server-side fetch surface: the Custom provider's Base URL, the Remote Skill URLs fetched when the engine is built, and the `http_request` core tool, which the agent can point at an arbitrary URL from a prompt
-- Bypasses of the `shell_exec` tool's command allowlist or its hard-blocked command list
-- Escapes from the file tools' workspace sandbox (`file_read`, `file_write`, `file_edit`, `code_search`)
+- SSRF via any server-side fetch surface: the Custom provider's Base URL, the Remote Skill URLs fetched when the engine is built, and the `http_request` core tool when enabled through `phpclaw/extra/tools`, which the agent can point at an arbitrary URL from a prompt
+- Bypasses of the `shell_exec` tool's command allowlist or its hard-blocked command list, when it is enabled through `phpclaw/extra/tools`
+- Escapes from the file tools' workspace sandbox (`file_read`, `code_search`, and `file_write` / `file_edit` when enabled through `phpclaw/extra/tools`)
 - Anything that lets a web request define the `PHPCLAW_OC_CONSOLE` marker, which grants tool access without a module grant
 
 Out of scope:
