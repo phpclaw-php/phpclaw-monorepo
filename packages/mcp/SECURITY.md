@@ -21,8 +21,8 @@ We will acknowledge your report within **48 hours** and aim to release a fix wit
 ## Scope
 
 In scope:
-- Localhost origin enforcement bypass: both HTTP transports (`HttpTransport`, `StreamableHttpTransport`) reject any `REMOTE_ADDR` that is not `127.0.0.1` or `::1`; anything that allows a non-loopback address through
-- Cross-origin browser request bypass: both HTTP transports reject any request carrying an `Origin` header; bypasses of this check
+- Localhost origin enforcement bypass: the HTTP transport (`StreamableHttpTransport`) rejects any `REMOTE_ADDR` that is not `127.0.0.1` or `::1`; anything that allows a non-loopback address through
+- Cross-origin browser request bypass: the HTTP transport rejects any request carrying an `Origin` header; bypasses of this check
 - Bearer-token auth bypass: `PHPCLAW_MCP_TOKEN` is required on **every** call (including `initialize`); the transports fail-closed when the token is empty; bypasses of `McpSecurity::validateToken()` (timing-safe `hash_equals`)
 - Rate-limit bypass: `McpSecurity::rateLimit()` enforces 60 requests/minute per token hash via APCu (or in-process fallback); exploitation of the in-process fallback to exceed the shared limit
 - Tool policy bypass: `McpSecurity::isToolAllowed()` enforces the `PHPCLAW_TOOL_ALLOW` / `PHPCLAW_TOOL_DENY` lists; ways to invoke a denied or non-allowed tool

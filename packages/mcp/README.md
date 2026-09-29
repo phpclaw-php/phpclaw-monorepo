@@ -62,7 +62,7 @@ Run `php mcp-server.php`, or add it to your client's MCP config (Claude Code, Cu
 
 ✅ **2 transports**: `stdio` (Claude Code, Cursor, Windsurf, Zed) and `StreamableHttpTransport` (the current MCP HTTP spec)
 
-✅ **Full guard chain applies**: every call runs through the same default guard chain as any other phpClaw agent (prompt-injection, Unicode, homoglyph, role-switch, code-injection, destructive-SQL, PII and length checks), via `GuardRegistry::registerDefaults()`
+✅ **Guards scan every call**: each tool call's string arguments are scanned by the default guards registered via `GuardRegistry::registerDefaults()` (prompt-injection, Unicode, homoglyph, role-switch, destructive-SQL); the prompt-only code-injection, PII and length guards apply to chat messages, not tool arguments
 
 ✅ **ShellTool allowlist and FileReadTool / FileWriteTool sandbox**: unchanged from core, enforced on every MCP call exactly as they would be on a direct call
 
