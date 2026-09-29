@@ -23,7 +23,7 @@ Every rule below that can be checked automatically is enforced by the **Static C
 - `declare(strict_types=1)` in every file, no exceptions
 - Code style enforced by Laravel Pint (`composer lint`)
 - `final class` by default. Open for extension only via interfaces
-- No static state except the six registries (ToolRegistry, GuardRegistry, HookRegistry, MemoryRegistry, ProviderRegistry, SkillRegistry)
+- No static state except the five static registries (GuardRegistry, HookRegistry, MemoryRegistry, ProviderRegistry, SkillRegistry)
 - Return types always explicit, no implicit `mixed`
 
 ### Architecture
@@ -35,7 +35,7 @@ Every rule below that can be checked automatically is enforced by the **Static C
 - ShellTool commands: allowlist only. Never add to HARD_BLOCKED without a PR discussion
 - InjectionGuard: any new injection pattern must have a test in `InjectionGuardTest`
 - FileReadTool / FileWriteTool: workspace sandbox must never be weakened
-- `store_messages = true` default in every new adapter (matches core + CMS adapter behaviour). The opt-out path (`->storeMessages(false)` on `Claw::builder()`) must always work and must drop message content from persistence + cloud forwarding
+- `store_messages = true` default in every new adapter (matches core + CMS adapter behaviour). The opt-out path (`->storeMessages(false)` on `Claw::builder()`) must always work and must drop message content from persistence. Cloud forwarding is controlled separately by `hide_inputs` / `hide_outputs` in `->cloudDisable([...])`
 
 ---
 

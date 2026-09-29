@@ -50,7 +50,7 @@ use PhpClaw\Tools\CodeSearchTool;
 
 $agent = Claw::builder()
     ->tools([
-        new ShellTool(allowlist: ['df', 'ps', 'tail']),
+        new ShellTool(allowlist: ['ls', 'df', 'tail']),
         new HttpTool(),
         new FileReadTool(),
         new DatabaseQueryTool($pdo),
@@ -87,7 +87,7 @@ Every "AI in PHP" tutorial ends the same way: an HTTP client bolted onto a provi
 
 ## What phpClaw provides
 
-**Agent runtime.** A ReAct loop with a hard iteration cap (`max_iterations`, default 20), pluggable tools, pluggable memory, and keyword-matched skills, all running inside a single reasoning cycle.
+**Agent runtime.** A ReAct loop with a hard iteration cap (`max_iterations`, default 20), pluggable tools, pluggable memory, and skills the model loads on demand through the `load_skill` tool, all running inside a single reasoning cycle.
 
 **Provider flexibility.** 7 providers auto-detected from environment variables: Anthropic, OpenAI, Groq, Gemini, Mistral, DeepSeek, Ollama. A custom OpenAI-compatible endpoint is also supported, opt-in via `PHPCLAW_PROVIDER=custom`. Switch providers with `->provider()` and `->model()`, no code changes elsewhere.
 
@@ -129,7 +129,7 @@ Full per-adapter reference (tools, REST routes, CLI commands, settings, memory d
 
 ## MCP Server
 
-`phpclaw/phpclaw-mcp` exposes your existing `ToolRegistry` over the Model Context Protocol, so [Claude Desktop](https://claude.ai/download), [Claude Code](https://claude.com/claude-code), Cursor, or any MCP-compatible client can call your tools directly, with the same guard chain protecting every call. No changes to the tools themselves.
+`phpclaw/phpclaw-mcp` exposes your existing `ToolRegistry` over the Model Context Protocol, so [Claude Desktop](https://claude.ai/download), [Claude Code](https://claude.com/claude-code), Cursor, or any MCP-compatible client can call your tools directly, with the default guards scanning every tool call's arguments (the prompt-only code-injection, PII and length guards apply to chat messages, not tool arguments). No changes to the tools themselves.
 
 ```bash
 composer require phpclaw/phpclaw-mcp
@@ -139,7 +139,7 @@ Full quick start, transport, and security details: [phpclaw.ai/docs/mcp](https:/
 
 ## Security
 
-Every message runs through the default guard chain before it reaches the provider. `ShellTool` accepts only a caller-supplied allowlist; a fixed, non-overridable blocklist of dangerous commands is checked first regardless of what's allowlisted. `HttpTool` blocks requests by hostname prefix, then re-validates every resolved IP address, catching CGNAT and DNS-rebinding attempts that hostname checks alone would miss. `FileReadTool` and `FileWriteTool` are sandboxed to a configured workspace root and refuse credentials, keys, and framework-internal directories unconditionally.
+Every message runs through the default guard chain before it reaches the provider. `ShellTool` runs only commands on its allowlist (default `ls`, `pwd`, `df`, `wc`, `date`, `uptime`, `hostname`, `whoami`), matched exactly and case-sensitively; a fixed, non-overridable blocklist of dangerous commands is checked first regardless of what's allowlisted. `HttpTool` blocks requests by hostname prefix, then re-validates every resolved IP address, catching CGNAT and DNS-rebinding attempts that hostname checks alone would miss. `FileReadTool` and `FileWriteTool` are sandboxed to a configured workspace root and refuse credentials, keys and security directories (`.git`, `.ssh`, `wp-admin`, ...) unconditionally, and `vendor/` and `node_modules/` by default.
 
 Full guard reference, the exact `ShellTool` blocklist, and the SSRF/sandbox implementation details: [phpclaw.ai/docs/security](https://phpclaw.ai/docs/security). Found a vulnerability? See [SECURITY.md](.github/SECURITY.md), do not open a public issue.
 
@@ -153,11 +153,11 @@ Message
   → AgentResponse  (text, tokens, tool calls, timing)
 ```
 
-Providers, tools, memory, guards, and skills are all pluggable via static registries; every adapter wires them from its own config or environment. Full architecture diagram and design rules: [phpclaw.ai/docs/architecture](https://phpclaw.ai/docs/architecture).
+Providers, tools, memory, guards, and skills are all pluggable through registries; every adapter wires them from its own config or environment. Full architecture diagram and design rules: [phpclaw.ai/docs/architecture](https://phpclaw.ai/docs/architecture).
 
 ## Extensibility
 
-Six pluggable static registries: `ToolRegistry`, `GuardRegistry`, `HookRegistry`, `MemoryRegistry`, `ProviderRegistry`, `SkillRegistry`. Drop a class in `packages/core/src/<Subsystem>/` with the matching attribute (`#[Tool]`, `#[Provider]`, `#[Memory]`, `#[Skill]`, `#[Hook]`, `#[Guard]`), run `composer dump-autoload`, it's live. Or register from code with `->register()` on the relevant registry.
+Five static registries (`GuardRegistry`, `HookRegistry`, `MemoryRegistry`, `ProviderRegistry`, `SkillRegistry`) plus the per-agent `ToolRegistry` instance. Drop a class in `packages/core/src/<Subsystem>/` with the matching attribute (`#[Tool]`, `#[Provider]`, `#[Memory]`, `#[Skill]`, `#[Hook]`, `#[Guard]`), run `composer dump-autoload`, it's live. Or register from code: `GuardRegistry::register()`, `HookRegistry::on()`, `$toolRegistry->register([...])`.
 
 Full extension recipes with working code for every subsystem: [phpclaw.ai/docs](https://phpclaw.ai/docs).
 
