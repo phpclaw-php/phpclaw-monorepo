@@ -113,7 +113,7 @@ print_r($response->toolsCalled);
 
 ✅ **40 lifecycle hooks**: observe or react to every step of the agent loop, `agent.before` through `skill.not_matched`, without touching core code.
 
-✅ **Streaming, prompt caching, extended thinking**: token-by-token output, 90% cost reduction on cached tokens (Anthropic), Claude's reasoning chain exposed on `$response->thinking`.
+✅ **Streaming, prompt caching, extended thinking**: token-by-token output, cached input tokens billed at Anthropic's discounted cache-read rate (see [Anthropic's pricing](https://www.anthropic.com/pricing)), Claude's reasoning chain exposed on `$response->thinking`.
 
 ✅ **MCP-ready**: wrap the same `ToolRegistry` and expose it to Claude Desktop, Claude Code, Cursor, or Windsurf via `phpclaw/phpclaw-mcp`, zero changes to your tools.
 
