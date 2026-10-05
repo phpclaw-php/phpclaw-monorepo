@@ -4,6 +4,17 @@ An AI agent inside your OpenCart admin. Ask it in plain English about products,
 categories, orders, customers, coupons, manufacturers, reviews and shipping, and
 it answers from your own store data. Works on OpenCart 3.x and 4.x.
 
+## 0.1.3 (2026-10-05)
+
+### Added
+- Add agent primitives: prompt templates, structured output, fallback, rate limit, response cache, token budget (#52)
+- Send payloads for the 4 new agent primitive events (#54)
+- Fallback, rate limit, response cache and token budget settings (#68)
+- Memory search and configurable memory recall (#80)
+
+### Fixed
+- OpenAI tool format for deepseek and custom, stable provider order (#62)
+
 ## 0.1.2 (2026-09-29)
 
 ### Added
