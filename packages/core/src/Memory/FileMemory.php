@@ -7,13 +7,13 @@ namespace PhpClaw\Memory;
 use PhpClaw\AutoDiscovery\Attributes\Memory;
 use PhpClaw\Exceptions\MemoryException;
 use PhpClaw\Hooks\HookDispatcher;
-use PhpClaw\Memory\Contracts\MemoryInterface;
+use PhpClaw\Memory\Contracts\SearchableMemoryInterface;
 
 /**
  * File-backed memory driver using one JSON file per namespace, with atomic writes and shared locking.
  */
 #[Memory(driver: 'file', label: 'JSON File', since: '1.0.0')]
-final class FileMemory implements MemoryInterface
+final class FileMemory implements SearchableMemoryInterface
 {
     public const DEFAULT_STORAGE_SUBPATH = 'storage/phpclaw/memory';
 
@@ -175,6 +175,19 @@ final class FileMemory implements MemoryInterface
         }
 
         return $result;
+    }
+
+    /**
+     * Rank the namespace's entries by shared keywords with the query (TokenOverlapScorer); reads the whole namespace file, O(n).
+     *
+     * @param  string  $query  Free text to match against stored values.
+     * @param  int  $limit  Maximum hits to return.
+     * @param  string  $namespace  Memory namespace to search.
+     * @return list<MemoryHit> Hits in descending score order, at most $limit.
+     */
+    public function search(string $query, int $limit = 5, string $namespace = self::DEFAULT_NAMESPACE): array
+    {
+        return TokenOverlapScorer::rank($this->all($namespace), $query, $limit, $namespace);
     }
 
     /**

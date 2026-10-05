@@ -5,11 +5,12 @@ declare(strict_types=1);
 namespace PhpClaw\Memory;
 
 use PhpClaw\Memory\Contracts\MemoryInterface;
+use PhpClaw\Memory\Contracts\SearchableMemoryInterface;
 
 /**
  * Namespace-routed memory wrapper: routes every operation to a per-namespace driver, falling back to a default driver for unmapped namespaces.
  */
-final class RouterMemory implements MemoryInterface
+final class RouterMemory implements SearchableMemoryInterface
 {
     private const DEFAULT_NAMESPACE = 'default';
 
@@ -113,6 +114,19 @@ final class RouterMemory implements MemoryInterface
     public function all(string $namespace = self::DEFAULT_NAMESPACE): array
     {
         return $this->driverFor($namespace)->all($namespace);
+    }
+
+    /**
+     * Search the driver routed for the namespace: its own search() when it is searchable, otherwise its entries ranked by shared keywords.
+     *
+     * @param  string  $query  Free text to match against stored values.
+     * @param  int  $limit  Maximum hits to return.
+     * @param  string  $namespace  Memory namespace to search.
+     * @return list<MemoryHit> Hits in descending score order, at most $limit.
+     */
+    public function search(string $query, int $limit = 5, string $namespace = self::DEFAULT_NAMESPACE): array
+    {
+        return TokenOverlapScorer::search($this->driverFor($namespace), $query, $limit, $namespace);
     }
 
     /**

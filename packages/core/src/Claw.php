@@ -86,7 +86,12 @@ final class Claw implements ClawInterface
 
         [$this->provider, $this->agent] = $this->buildProviderAndAgent();
         $this->pipeline = new InvocationPipeline(
-            new MessageAugmenter($this->memory, $this->config->skillMatchLimit, ToolProfileResolver::skillContextChars($this->profile())),
+            new MessageAugmenter(
+                $this->memory,
+                $this->config->skillMatchLimit,
+                ToolProfileResolver::skillContextChars($this->profile()),
+                $this->config->longTermMemoryTopK,
+            ),
             $this->memory,
         );
 

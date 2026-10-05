@@ -92,6 +92,8 @@ final class ClawConfig
 
     public readonly ?MemoryInterface $memory;
 
+    public readonly int $longTermMemoryTopK;
+
     public readonly string $cloudKey;
 
     public readonly array $cloudDisable;
@@ -198,6 +200,7 @@ final class ClawConfig
         $this->sanitiseOutput = $flags->sanitiseOutput;
         $this->compactHistory = $flags->compactHistory;
         $this->memory = $flags->memory;
+        $this->longTermMemoryTopK = $flags->longTermMemoryTopK;
     }
 
     /**

@@ -113,6 +113,72 @@ final class MemoryEventDispatcher
     }
 
     /**
+     * Fires after a recall lookup with how it ran and how many hits it found; never the query text.
+     *
+     * @param  string  $namespace  Namespace searched.
+     * @param  string  $mode  "search" when the driver answered through search(), "scan" when its all() was ranked.
+     * @param  int  $limit  Maximum hits asked for.
+     * @param  int  $hitCount  Hits found.
+     * @param  string  $runId  Active run ID, if any.
+     * @param  string  $parentRunId  Parent run ID, if any.
+     * @return void
+     */
+    public static function search(
+        string $namespace,
+        string $mode,
+        int $limit,
+        int $hitCount,
+        string $runId = '',
+        string $parentRunId = '',
+    ): void {
+        [$resolvedRunId, $resolvedParentRunId] = self::resolveRunContext($runId, $parentRunId);
+
+        EventPayload::fire(
+            LifecycleEvent::MemorySearch->value,
+            [
+                'namespace' => $namespace,
+                'mode' => $mode,
+                'limit' => $limit,
+                'hit_count' => $hitCount,
+            ],
+            runId: $resolvedRunId,
+            parentRunId: $resolvedParentRunId,
+        );
+    }
+
+    /**
+     * Fires when recalled entries are injected into a message, with their keys and the block size; never the values.
+     *
+     * @param  list<string>  $keys  Keys of the injected entries.
+     * @param  string  $namespace  Namespace they came from.
+     * @param  int  $bytes  Size of the injected block in bytes.
+     * @param  string  $runId  Active run ID, if any.
+     * @param  string  $parentRunId  Parent run ID, if any.
+     * @return void
+     */
+    public static function recalled(
+        array $keys,
+        string $namespace,
+        int $bytes,
+        string $runId = '',
+        string $parentRunId = '',
+    ): void {
+        [$resolvedRunId, $resolvedParentRunId] = self::resolveRunContext($runId, $parentRunId);
+
+        EventPayload::fire(
+            LifecycleEvent::MemoryRecalled->value,
+            [
+                'keys' => $keys,
+                'namespace' => $namespace,
+                'injected_count' => count($keys),
+                'bytes' => $bytes,
+            ],
+            runId: $resolvedRunId,
+            parentRunId: $resolvedParentRunId,
+        );
+    }
+
+    /**
      * Resolve run and parent-run IDs from explicit arguments or the active hook context.
      *
      * @param  string  $runId  Caller-supplied run ID, or '' to read from context.

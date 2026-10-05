@@ -6,6 +6,8 @@ namespace PhpClaw\Tests\Unit\Memory;
 
 use PhpClaw\Memory\ArrayMemory;
 use PhpClaw\Memory\Contracts\MemoryInterface;
+use PhpClaw\Memory\Contracts\SearchableMemoryInterface;
+use PhpClaw\Memory\MemoryHit;
 use PhpClaw\Memory\PrivacyAwareMemory;
 use PHPUnit\Framework\TestCase;
 
@@ -162,5 +164,26 @@ final class PrivacyAwareMemoryTest extends TestCase
         $wrapper->set('msg1', $payload);
 
         $this->assertSame($payload, $wrapper->get('msg1'));
+    }
+
+    public function test_privacy_aware_memory_delegates_search_to_a_searchable_inner_driver(): void
+    {
+        $hit = new MemoryHit('k', 'v', 'notes', 2.0);
+        $inner = $this->createMock(SearchableMemoryInterface::class);
+        $inner->expects($this->once())->method('search')->with('shipping address', 2, 'notes')->willReturn([$hit]);
+        $inner->expects($this->never())->method('all');
+
+        $this->assertSame([$hit], (new PrivacyAwareMemory($inner, storeMessages: false))->search('shipping address', 2, 'notes'));
+    }
+
+    public function test_privacy_aware_memory_ranks_a_non_searchable_inner_driver_by_scanning_it(): void
+    {
+        $inner = $this->createMock(MemoryInterface::class);
+        $inner->expects($this->once())->method('all')->with('default')->willReturn(['addr' => 'shipping address is Toronto']);
+
+        $hits = (new PrivacyAwareMemory($inner, storeMessages: false))->search('shipping address');
+
+        $this->assertSame('addr', $hits[0]->key);
+        $this->assertSame(2.0, $hits[0]->score);
     }
 }

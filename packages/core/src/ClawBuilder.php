@@ -6,6 +6,7 @@ namespace PhpClaw;
 
 use PhpClaw\Agent\CliApprovalGate;
 use PhpClaw\Agent\Contracts\ApprovalGateInterface;
+use PhpClaw\Agent\MessageAugmenter;
 use PhpClaw\Config\CloudSettings;
 use PhpClaw\Config\LoopConfig;
 use PhpClaw\Config\ProviderConfig;
@@ -41,6 +42,8 @@ final class ClawBuilder
     private bool $compactHistory = true;
 
     private ?MemoryInterface $memory = null;
+
+    private int $longTermMemoryTopK = MessageAugmenter::DEFAULT_MEMORY_TOP_K;
 
     private int $maxIterations = LoopConfig::DEFAULT_MAX_ITERATIONS;
 
@@ -204,6 +207,19 @@ final class ClawBuilder
     public function memory(MemoryInterface $memory): static
     {
         $this->memory = $memory;
+
+        return $this;
+    }
+
+    /**
+     * How many memory entries are recalled into each message. Default 3; 0 turns recall off, a negative value is 0.
+     *
+     * @param  int  $topK  Maximum recalled entries per message.
+     * @return static Builder instance for fluent chaining.
+     */
+    public function longTermMemory(int $topK): static
+    {
+        $this->longTermMemoryTopK = max(0, $topK);
 
         return $this;
     }
@@ -693,6 +709,7 @@ final class ClawBuilder
                 sanitiseOutput: $this->sanitiseOutput,
                 compactHistory: $this->compactHistory,
                 memory: $this->memory,
+                longTermMemoryTopK: $this->longTermMemoryTopK,
             ),
         );
 

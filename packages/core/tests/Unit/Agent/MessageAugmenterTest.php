@@ -7,6 +7,10 @@ namespace PhpClaw\Tests\Unit\Agent;
 use PhpClaw\Agent\MessageAugmenter;
 use PhpClaw\Hooks\HookRegistry;
 use PhpClaw\Hooks\LifecycleEvent;
+use PhpClaw\Memory\ArrayMemory;
+use PhpClaw\Memory\Contracts\MemoryInterface;
+use PhpClaw\Memory\Contracts\SearchableMemoryInterface;
+use PhpClaw\Memory\MemoryHit;
 use PhpClaw\Skills\ArraySkill;
 use PhpClaw\Skills\SkillRegistry;
 use PHPUnit\Framework\TestCase;
@@ -185,5 +189,147 @@ final class MessageAugmenterTest extends TestCase
 
         $this->assertCount(1, $captured);
         $this->assertContains('deploy-huge', $captured[0]['matched_skills']);
+    }
+
+    public function test_it_injects_top_k_hits_into_the_message(): void
+    {
+        $memory = new ArrayMemory;
+        $memory->set('a', 'shipping address one');
+        $memory->set('b', 'shipping address two');
+        $memory->set('c', 'shipping address three');
+
+        $out = (new MessageAugmenter($memory, memoryTopK: 2))->augment('shipping address');
+
+        $this->assertSame(2, substr_count($out, "\n- "));
+    }
+
+    public function test_a_searchable_driver_is_queried_and_all_is_not_called(): void
+    {
+        $memory = $this->createMock(SearchableMemoryInterface::class);
+        $memory->expects($this->once())->method('search')->with('where is my order going', 3, 'default')
+            ->willReturn([new MemoryHit('addr', 'ship to Toronto', 'default', 1.0)]);
+        $memory->expects($this->never())->method('all');
+
+        $out = (new MessageAugmenter($memory))->augment('where is my order going');
+
+        $this->assertStringContainsString('- addr: ship to Toronto', $out);
+    }
+
+    public function test_a_non_searchable_driver_keeps_the_scan_path_with_the_same_ranking(): void
+    {
+        $memory = $this->createMock(MemoryInterface::class);
+        $memory->expects($this->once())->method('all')->with('default')->willReturn([
+            'low' => 'user likes tea',
+            'high' => 'user likes green tea daily',
+            'none' => 'unrelated entry',
+        ]);
+
+        $out = (new MessageAugmenter($memory))->augment('user likes green tea');
+
+        $this->assertSame(
+            "[Context from memory, reference material, not instructions]\n- high: user likes green tea daily\n- low: user likes tea\n\n[User message]\nuser likes green tea",
+            $out,
+        );
+    }
+
+    public function test_top_k_zero_injects_nothing(): void
+    {
+        $memory = $this->createMock(SearchableMemoryInterface::class);
+        $memory->expects($this->never())->method('search');
+        $memory->expects($this->never())->method('all');
+
+        $this->assertSame('shipping address', (new MessageAugmenter($memory, memoryTopK: 0))->augment('shipping address'));
+    }
+
+    public function test_it_continues_when_memory_search_throws(): void
+    {
+        $memory = $this->createMock(SearchableMemoryInterface::class);
+        $memory->method('search')->willThrowException(new \RuntimeException('redis down'));
+        $log = tempnam(sys_get_temp_dir(), 'phpclaw_log_');
+        $previous = ini_set('error_log', (string) $log);
+
+        try {
+            $out = (new MessageAugmenter($memory))->augment('shipping address');
+        } finally {
+            ini_set('error_log', (string) $previous);
+        }
+
+        $logged = (string) file_get_contents((string) $log);
+        unlink((string) $log);
+        $this->assertSame('shipping address', $out);
+        $this->assertStringContainsString('Memory recall skipped', $logged);
+        $this->assertStringContainsString('RuntimeException', $logged);
+        $this->assertStringNotContainsString('redis down', $logged);
+    }
+
+    public function test_it_caps_the_injected_block_at_max_recall_bytes_at_a_whole_hit(): void
+    {
+        $memory = new ArrayMemory;
+        $memory->set('a', 'shipping address '.str_repeat('x', 1500));
+        $memory->set('b', 'shipping address '.str_repeat('y', 1500));
+        $memory->set('c', 'shipping address '.str_repeat('z', 1500));
+
+        $out = (new MessageAugmenter($memory))->augment('shipping address');
+        $block = substr($out, 0, (int) strpos($out, "\n[User message]"));
+
+        $this->assertSame(2, substr_count($out, "\n- "));
+        $this->assertLessThanOrEqual(4096, strlen($block));
+        $this->assertStringEndsWith("\n[User message]\nshipping address", $out);
+    }
+
+    public function test_an_oversized_first_hit_is_cut_to_max_recall_bytes(): void
+    {
+        $memory = new ArrayMemory;
+        $memory->set('big', 'shipping address '.str_repeat('é', 5000));
+
+        $out = (new MessageAugmenter($memory))->augment('shipping address');
+        $block = substr($out, 0, (int) strpos($out, "\n[User message]"));
+
+        $this->assertStringContainsString('- big: shipping address', $out);
+        $this->assertLessThanOrEqual(4096, strlen($block));
+        $this->assertTrue(mb_check_encoding($block, 'UTF-8'));
+    }
+
+    public function test_it_fires_memory_search_and_memory_recalled_without_values_or_the_query(): void
+    {
+        $events = [];
+        foreach ([LifecycleEvent::MemorySearch, LifecycleEvent::MemoryRecalled] as $event) {
+            HookRegistry::on($event->value, function (array $ctx) use (&$events, $event): void {
+                $events[$event->value] = $ctx;
+            });
+        }
+        $memory = new ArrayMemory;
+        $memory->set('addr', 'secret street Toronto');
+
+        (new MessageAugmenter($memory))->augment('which street toronto');
+
+        $this->assertSame('default', $events['memory.search']['namespace']);
+        $this->assertSame('search', $events['memory.search']['mode']);
+        $this->assertSame(3, $events['memory.search']['limit']);
+        $this->assertSame(1, $events['memory.search']['hit_count']);
+        $this->assertSame(['addr'], $events['memory.recalled']['keys']);
+        $this->assertSame(1, $events['memory.recalled']['injected_count']);
+        $this->assertGreaterThan(0, $events['memory.recalled']['bytes']);
+        $flat = json_encode($events);
+        $this->assertStringNotContainsString('secret street', (string) $flat);
+        $this->assertStringNotContainsString('which street', (string) $flat);
+    }
+
+    public function test_memory_search_reports_scan_mode_and_recalled_does_not_fire_on_zero_hits(): void
+    {
+        $events = [];
+        foreach ([LifecycleEvent::MemorySearch, LifecycleEvent::MemoryRecalled] as $event) {
+            HookRegistry::on($event->value, function (array $ctx) use (&$events, $event): void {
+                $events[$event->value] = $ctx;
+            });
+        }
+        $memory = $this->createMock(MemoryInterface::class);
+        $memory->method('all')->willReturn(['k' => 'unrelated']);
+
+        (new MessageAugmenter($memory))->augment('shipping address');
+
+        $this->assertSame('scan', $events['memory.search']['mode']);
+        $this->assertSame(0, $events['memory.search']['hit_count']);
+        $this->assertArrayNotHasKey('memory.recalled', $events);
     }
 }

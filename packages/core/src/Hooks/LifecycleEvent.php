@@ -56,6 +56,8 @@ enum LifecycleEvent: string
     case MemoryRead = 'memory.read';
     case MemoryWrite = 'memory.write';
     case MemoryForget = 'memory.forget';
+    case MemorySearch = 'memory.search';
+    case MemoryRecalled = 'memory.recalled';
 
     case JobStarted = 'job.started';
     case JobCompleted = 'job.completed';

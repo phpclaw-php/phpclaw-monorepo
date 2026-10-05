@@ -160,4 +160,27 @@ final class RouterMemoryTest extends TestCase
 
         $this->assertSame('soon', $hot->get('expiring', 'cache'));
     }
+
+    public function test_router_memory_searches_only_the_driver_routed_for_the_namespace(): void
+    {
+        $default = new ArrayMemory;
+        $default->set('k', 'shipping address default', 'notes');
+        $notes = new ArrayMemory;
+        $notes->set('k', 'shipping address routed', 'notes');
+        $router = new RouterMemory($default, ['notes' => $notes]);
+
+        $hits = $router->search('shipping address', 5, 'notes');
+
+        $this->assertCount(1, $hits);
+        $this->assertSame('shipping address routed', $hits[0]->value);
+    }
+
+    public function test_router_memory_ranks_a_non_searchable_routed_driver_by_scanning_it(): void
+    {
+        $plain = $this->createMock(MemoryInterface::class);
+        $plain->expects($this->once())->method('all')->with('notes')->willReturn(['addr' => 'shipping address']);
+        $router = new RouterMemory(new ArrayMemory, ['notes' => $plain]);
+
+        $this->assertSame('addr', $router->search('shipping address', 5, 'notes')[0]->key);
+    }
 }

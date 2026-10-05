@@ -7,14 +7,14 @@ namespace PhpClaw\Memory;
 use PhpClaw\AutoDiscovery\Attributes\Memory;
 use PhpClaw\Exceptions\MemoryException;
 use PhpClaw\Hooks\HookDispatcher;
-use PhpClaw\Memory\Contracts\MemoryInterface;
+use PhpClaw\Memory\Contracts\SearchableMemoryInterface;
 use PhpClaw\Support\Log;
 
 /**
  * phpClaw memory driver backed by Redis (requires ext-redis).
  */
 #[Memory(driver: 'redis', label: 'Redis', since: '1.0.0')]
-final class RedisMemory implements MemoryInterface
+final class RedisMemory implements SearchableMemoryInterface
 {
     private const DRIVER_NAME = 'redis';
 
@@ -209,6 +209,19 @@ final class RedisMemory implements MemoryInterface
         }
 
         return $result;
+    }
+
+    /**
+     * Rank the namespace's entries by shared keywords with the query (TokenOverlapScorer) over the same KEYS set all() reads, O(n).
+     *
+     * @param  string  $query  Free text to match against stored values.
+     * @param  int  $limit  Maximum hits to return.
+     * @param  string  $namespace  Memory namespace to search.
+     * @return list<MemoryHit> Hits in descending score order, at most $limit.
+     */
+    public function search(string $query, int $limit = 5, string $namespace = self::DEFAULT_NAMESPACE): array
+    {
+        return TokenOverlapScorer::rank($this->all($namespace), $query, $limit, $namespace);
     }
 
     /**

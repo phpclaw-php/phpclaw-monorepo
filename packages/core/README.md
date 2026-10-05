@@ -109,9 +109,11 @@ print_r($response->toolsCalled);
 
 ✅ **ReAct loop**: tools, pluggable memory, security guards, and skills all run inside a single reasoning cycle, with a hard iteration cap so nothing runs away.
 
+✅ **Memory recall**: each message carries up to 3 stored memory entries that share words with it, labelled as reference material. `longTermMemory($topK)` changes the count and `0` turns recall off. A driver implementing `SearchableMemoryInterface` answers through its own `search()` instead of being scanned.
+
 ✅ **8 default guards + 1 opt-in**: prompt-injection, Unicode/homoglyph, role-switch, PII, code-injection, destructive-SQL and length checks scan every message before it reaches the provider, on by default, zero config.
 
-✅ **44 lifecycle hooks**: observe or react to every step of the agent loop, `agent.before` through `skill.not_matched`, without touching core code.
+✅ **46 lifecycle hooks**: observe or react to every step of the agent loop, `agent.before` through `skill.not_matched`, without touching core code.
 
 ✅ **Streaming, prompt caching, extended thinking**: token-by-token output, cached input tokens billed at Anthropic's discounted cache-read rate (see [Anthropic's pricing](https://www.anthropic.com/pricing)), Claude's reasoning chain exposed on `$response->thinking`.
 
@@ -172,7 +174,7 @@ $claw = Claw::builder()
 
 ## Trust signals
 
-2,417 tests, zero real network calls or API keys required to run the suite, every provider and tool call is mocked. 80% line coverage enforced in CI as one whole-package figure (covered statements over total statements), not per class. One public API (`Claw::send`/`stream`/`conversation`) that doesn't break without a major version bump.
+2,461 tests, zero real network calls or API keys required to run the suite, every provider and tool call is mocked. 80% line coverage enforced in CI as one whole-package figure (covered statements over total statements), not per class. One public API (`Claw::send`/`stream`/`conversation`) that doesn't break without a major version bump.
 
 ## Documentation
 

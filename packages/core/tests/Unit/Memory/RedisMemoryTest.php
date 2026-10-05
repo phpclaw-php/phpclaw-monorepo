@@ -6,6 +6,7 @@ namespace PhpClaw\Tests\Unit\Memory;
 
 use PhpClaw\Exceptions\MemoryException;
 use PhpClaw\Memory\Contracts\MemoryInterface;
+use PhpClaw\Memory\MemoryHit;
 use PhpClaw\Memory\RedisMemory;
 use PHPUnit\Framework\TestCase;
 
@@ -494,5 +495,23 @@ final class RedisMemoryTest extends TestCase
         fclose($probe);
 
         return (int) substr($name, (int) strrpos($name, ':') + 1);
+    }
+
+    public function test_search_ranks_the_namespace_keys_by_token_overlap(): void
+    {
+        $this->mockRedis->method('keys')
+            ->with('phpclaw:default:*')
+            ->willReturn(['phpclaw:default:addr', 'phpclaw:default:pet']);
+        $this->mockRedis->method('get')
+            ->willReturnCallback(static fn (string $key): string|false => match ($key) {
+                'phpclaw:default:addr' => json_encode('shipping address Toronto'),
+                'phpclaw:default:pet' => json_encode('user has a dog'),
+                default => false,
+            });
+
+        $hits = $this->memory->search('what is my shipping address', 5);
+
+        $this->assertSame(['addr'], array_map(static fn (MemoryHit $hit): string => $hit->key, $hits));
+        $this->assertSame(2.0, $hits[0]->score);
     }
 }

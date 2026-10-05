@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace PhpClaw\Config;
 
+use PhpClaw\Agent\MessageAugmenter;
 use PhpClaw\Memory\Contracts\MemoryInterface;
 
 /**
@@ -19,6 +20,7 @@ final class RuntimeConfig
      * @param  bool  $sanitiseOutput  Whether to sanitise LLM output.
      * @param  bool  $compactHistory  Whether history compaction runs (false disables the summary LLM call).
      * @param  MemoryInterface|null  $memory  Memory driver for conversation persistence; null = stateless.
+     * @param  int  $longTermMemoryTopK  Maximum memory entries recalled into each message; 0 = recall off.
      * @return void
      */
     public function __construct(
@@ -27,5 +29,6 @@ final class RuntimeConfig
         public readonly bool $sanitiseOutput = true,
         public readonly bool $compactHistory = true,
         public readonly ?MemoryInterface $memory = null,
+        public readonly int $longTermMemoryTopK = MessageAugmenter::DEFAULT_MEMORY_TOP_K,
     ) {}
 }
