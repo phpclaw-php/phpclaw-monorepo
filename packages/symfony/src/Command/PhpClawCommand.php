@@ -8,6 +8,7 @@ use PhpClaw\Contracts\ClawInterface as PhpClawInterface;
 use PhpClaw\Exceptions\GuardException;
 use PhpClaw\Exceptions\MaxIterationsException;
 use PhpClaw\Exceptions\ProviderException;
+use PhpClaw\Exceptions\TokenBudgetExceededException;
 use PhpClaw\Exceptions\ToolException;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
@@ -107,8 +108,14 @@ final class PhpClawCommand extends Command
             $io->error('Tool error: a tool call failed during the agent run.');
 
             return Command::FAILURE;
-        } catch (ProviderException) {
-            $io->error('Provider error: the LLM provider returned an error.');
+        } catch (ProviderException $e) {
+            $io->error($e->statusCode === 429
+                ? 'Rate limit reached, try again shortly.'
+                : 'Provider error: the LLM provider returned an error.');
+
+            return Command::FAILURE;
+        } catch (TokenBudgetExceededException) {
+            $io->error('Token budget reached for this run.');
 
             return Command::FAILURE;
         } catch (MaxIterationsException) {

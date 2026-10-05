@@ -28,7 +28,9 @@
         "symfony/framework-bundle": "^6.4|^7.0|^8.0",
         "symfony/console": "^6.4|^7.0|^8.0",
         "symfony/dependency-injection": "^6.4|^7.0|^8.0",
-        "symfony/config": "^6.4|^7.0|^8.0"
+        "symfony/config": "^6.4|^7.0|^8.0",
+        "symfony/cache": "^6.4|^7.0|^8.0",
+        "psr/simple-cache": "^1.0|^2.0|^3.0"
     },
     "support": {
         "issues": "https://github.com/phpclaw-php/phpclaw-monorepo/issues",

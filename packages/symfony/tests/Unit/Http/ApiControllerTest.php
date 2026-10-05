@@ -9,6 +9,8 @@ use PhpClaw\Agent\Conversation;
 use PhpClaw\Agent\ConversationTurn;
 use PhpClaw\Contracts\ClawInterface as PhpClawInterface;
 use PhpClaw\Exceptions\GuardException;
+use PhpClaw\Exceptions\ProviderException;
+use PhpClaw\Exceptions\TokenBudgetExceededException;
 use PhpClaw\Hooks\LifecycleEvent;
 use PhpClaw\Symfony\Http\ApiController;
 use PhpClaw\Symfony\Http\StreamEventBridge;
@@ -83,6 +85,42 @@ final class ApiControllerTest extends TestCase
         self::assertSame(422, $jsonResponse->getStatusCode());
         $data = json_decode($jsonResponse->getContent(), true);
         self::assertArrayHasKey('error', $data);
+    }
+
+    public function test_send_returns_422_on_token_budget_exceeded(): void
+    {
+        $this->agent->method('conversation')->willReturnCallback(fn () => $this->createConversationMock());
+        $this->agent->method('sendInConversation')->willThrowException(new TokenBudgetExceededException(500, 400));
+
+        $jsonResponse = $this->controller->send($this->jsonRequest(['message' => 'do a lot of work']));
+
+        self::assertSame(422, $jsonResponse->getStatusCode());
+        $data = json_decode($jsonResponse->getContent(), true);
+        self::assertSame('Token budget reached for this run.', $data['error']);
+    }
+
+    public function test_send_returns_429_on_rate_limited_provider_exception(): void
+    {
+        $this->agent->method('conversation')->willReturnCallback(fn () => $this->createConversationMock());
+        $this->agent->method('sendInConversation')->willThrowException(new ProviderException('Too Many Requests', 429));
+
+        $jsonResponse = $this->controller->send($this->jsonRequest(['message' => 'test']));
+
+        self::assertSame(429, $jsonResponse->getStatusCode());
+        $data = json_decode($jsonResponse->getContent(), true);
+        self::assertSame('Rate limit reached, try again shortly.', $data['error']);
+    }
+
+    public function test_send_returns_500_on_non_rate_limited_provider_exception(): void
+    {
+        $this->agent->method('conversation')->willReturnCallback(fn () => $this->createConversationMock());
+        $this->agent->method('sendInConversation')->willThrowException(new ProviderException('upstream failure', 502));
+
+        $jsonResponse = $this->controller->send($this->jsonRequest(['message' => 'test']));
+
+        self::assertSame(500, $jsonResponse->getStatusCode());
+        $content = $jsonResponse->getContent();
+        self::assertStringNotContainsString('upstream failure', $content);
     }
 
     public function test_send_returns_500_on_generic_exception_without_leaking_message(): void

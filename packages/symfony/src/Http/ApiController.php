@@ -6,6 +6,8 @@ namespace PhpClaw\Symfony\Http;
 
 use PhpClaw\Contracts\ClawInterface as PhpClawInterface;
 use PhpClaw\Exceptions\GuardException;
+use PhpClaw\Exceptions\ProviderException;
+use PhpClaw\Exceptions\TokenBudgetExceededException;
 use PhpClaw\Symfony\Exceptions\ConversationAccessDeniedException;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
@@ -65,6 +67,14 @@ final class ApiController
             return new JsonResponse(['error' => 'You do not have permission to access this conversation.'], 403);
         } catch (GuardException) {
             return new JsonResponse(['error' => 'Request blocked by security guard.'], 422);
+        } catch (TokenBudgetExceededException) {
+            return new JsonResponse(['error' => 'Token budget reached for this run.'], 422);
+        } catch (ProviderException $e) {
+            if ($e->statusCode === 429) {
+                return new JsonResponse(['error' => 'Rate limit reached, try again shortly.'], 429);
+            }
+
+            return new JsonResponse(['error' => 'An internal error occurred. Please try again.'], 500);
         } catch (\Throwable) {
             return new JsonResponse(['error' => 'An internal error occurred. Please try again.'], 500);
         } finally {
@@ -129,6 +139,12 @@ final class ApiController
                 $emit('error', ['message' => 'You do not have permission to access this conversation.']);
             } catch (GuardException) {
                 $emit('error', ['message' => 'Request blocked by security guard.']);
+            } catch (TokenBudgetExceededException) {
+                $emit('error', ['message' => 'Token budget reached for this run.']);
+            } catch (ProviderException $e) {
+                $emit('error', ['message' => $e->statusCode === 429
+                    ? 'Rate limit reached, try again shortly.'
+                    : 'An internal error occurred. Please try again.']);
             } catch (\Throwable) {
                 $emit('error', ['message' => 'An internal error occurred. Please try again.']);
             } finally {

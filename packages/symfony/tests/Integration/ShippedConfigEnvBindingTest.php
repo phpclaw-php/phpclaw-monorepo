@@ -23,6 +23,13 @@ final class ShippedConfigEnvBindingTest extends TestCase
         'PHPCLAW_REMOTE_SKILL_URLS' => ['remote_skill_urls', 'https://a.example/s.md', ''],
         'PHPCLAW_CLOUD_KEY' => ['cloud_key', 'probe-key', ''],
         'PHPCLAW_CLOUD_SIGNING_SECRET' => ['cloud_signing_secret', 'probe-secret', ''],
+        'PHPCLAW_FALLBACK_PROVIDER' => ['fallback_provider', 'deepseek', ''],
+        'PHPCLAW_FALLBACK_MODEL' => ['fallback_model', 'probe-fallback-model', ''],
+        'PHPCLAW_FALLBACK_API_KEY' => ['fallback_api_key', 'probe-fallback-key', ''],
+        'PHPCLAW_RATE_LIMIT_RPM' => ['rate_limit_rpm', '30', 0],
+        'PHPCLAW_RESPONSE_CACHE' => ['response_cache', 'true', false],
+        'PHPCLAW_RESPONSE_CACHE_TTL' => ['response_cache_ttl', '120', 3600],
+        'PHPCLAW_MAX_TOKEN_BUDGET' => ['max_token_budget', '5000', 0],
     ];
 
     private const EXPECTED_WHEN_SET = [
@@ -38,6 +45,13 @@ final class ShippedConfigEnvBindingTest extends TestCase
         'remote_skill_urls' => 'https://a.example/s.md',
         'cloud_key' => 'probe-key',
         'cloud_signing_secret' => 'probe-secret',
+        'fallback_provider' => 'deepseek',
+        'fallback_model' => 'probe-fallback-model',
+        'fallback_api_key' => 'probe-fallback-key',
+        'rate_limit_rpm' => 30,
+        'response_cache' => true,
+        'response_cache_ttl' => 120,
+        'max_token_budget' => 5000,
     ];
 
     #[RunInSeparateProcess]

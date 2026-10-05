@@ -113,6 +113,25 @@ final class GuideCommandTest extends TestCase
         self::assertStringContainsString('FAKE_CONFIG_PROV_API_KEY', $tester->getDisplay());
     }
 
+    public function test_section_config_lists_the_agent_primitive_env_keys(): void
+    {
+        $tester = $this->tester();
+        $tester->execute(['--section' => 'config']);
+
+        $display = $tester->getDisplay();
+        foreach ([
+            'PHPCLAW_FALLBACK_PROVIDER',
+            'PHPCLAW_FALLBACK_MODEL',
+            'PHPCLAW_FALLBACK_API_KEY',
+            'PHPCLAW_RATE_LIMIT_RPM',
+            'PHPCLAW_RESPONSE_CACHE',
+            'PHPCLAW_RESPONSE_CACHE_TTL',
+            'PHPCLAW_MAX_TOKEN_BUDGET',
+        ] as $key) {
+            self::assertStringContainsString($key, $display);
+        }
+    }
+
     public function test_unknown_section_returns_failure(): void
     {
         $tester = $this->tester();

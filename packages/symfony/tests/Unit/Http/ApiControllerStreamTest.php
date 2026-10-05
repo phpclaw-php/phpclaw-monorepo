@@ -9,6 +9,8 @@ use PhpClaw\Agent\Conversation;
 use PhpClaw\Agent\ConversationTurn;
 use PhpClaw\Contracts\ClawInterface as PhpClawInterface;
 use PhpClaw\Exceptions\GuardException;
+use PhpClaw\Exceptions\ProviderException;
+use PhpClaw\Exceptions\TokenBudgetExceededException;
 use PhpClaw\Symfony\Http\ApiController;
 use PhpClaw\Symfony\Http\StreamEventBridge;
 use PHPUnit\Framework\MockObject\MockObject;
@@ -136,6 +138,58 @@ final class ApiControllerStreamTest extends TestCase
 
         self::assertStringContainsString('event: error', $output);
         self::assertStringNotContainsString('secret provider error', $output);
+    }
+
+    public function test_stream_emits_budget_exceeded_error_event(): void
+    {
+        $this->agent->method('conversation')->willReturn(
+            new Conversation('01H2345678901234567890ABCD', [], new \DateTimeImmutable),
+        );
+        $this->agent->method('streamInConversation')->willThrowException(
+            new TokenBudgetExceededException(500, 400),
+        );
+
+        $output = $this->captureStream(
+            $this->controller->stream($this->jsonRequest(['message' => 'do a lot of work'])),
+        );
+
+        self::assertStringContainsString('event: error', $output);
+        self::assertStringContainsString('Token budget reached for this run.', $output);
+    }
+
+    public function test_stream_emits_rate_limited_error_event(): void
+    {
+        $this->agent->method('conversation')->willReturn(
+            new Conversation('01H2345678901234567890ABCD', [], new \DateTimeImmutable),
+        );
+        $this->agent->method('streamInConversation')->willThrowException(
+            new ProviderException('Too Many Requests', 429),
+        );
+
+        $output = $this->captureStream(
+            $this->controller->stream($this->jsonRequest(['message' => 'test'])),
+        );
+
+        self::assertStringContainsString('event: error', $output);
+        self::assertStringContainsString('Rate limit reached, try again shortly.', $output);
+    }
+
+    public function test_stream_emits_generic_error_event_on_non_rate_limited_provider_exception(): void
+    {
+        $this->agent->method('conversation')->willReturn(
+            new Conversation('01H2345678901234567890ABCD', [], new \DateTimeImmutable),
+        );
+        $this->agent->method('streamInConversation')->willThrowException(
+            new ProviderException('upstream failure', 502),
+        );
+
+        $output = $this->captureStream(
+            $this->controller->stream($this->jsonRequest(['message' => 'test'])),
+        );
+
+        self::assertStringContainsString('event: error', $output);
+        self::assertStringContainsString('An internal error occurred', $output);
+        self::assertStringNotContainsString('upstream failure', $output);
     }
 
     public function test_stream_names_a_guard_block_rather_than_an_internal_error(): void

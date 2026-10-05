@@ -7,6 +7,8 @@ namespace PhpClaw\Symfony;
 use Doctrine\DBAL\Connection;
 use PhpClaw\Agent\CliApprovalGate;
 use PhpClaw\Claw as PhpClaw;
+use PhpClaw\ClawBuilder;
+use PhpClaw\ClawConfig;
 use PhpClaw\Contracts\ClawInterface as PhpClawInterface;
 use PhpClaw\Memory\Contracts\MemoryInterface;
 use PhpClaw\Memory\PrivacyAwareMemory;
@@ -27,6 +29,8 @@ use PhpClaw\Tools\ShellTool;
 use PhpClaw\Tools\ToolCatalogue;
 use PhpClaw\Tools\ToolProfileResolver;
 use PhpClaw\Tools\ToolRegistry;
+use Psr\Cache\CacheItemPoolInterface;
+use Symfony\Component\Cache\Psr16Cache;
 
 /**
  * Factory that builds a fully-wired PhpClaw engine from Symfony DI parameters.
@@ -64,6 +68,14 @@ final class PhpClawFactory
      * @param  SymfonyIdentityResolver|null  $identity  Names the acting user for the tool capability guard.
      * @param  bool  $requireChatRole  True when the host app requires ROLE_PHPCLAW_CHAT rather than any authenticated user.
      * @param  string  $projectRoot  Absolute Symfony kernel project directory, independent of process CWD (MCP/console spawns may not set one).
+     * @param  string  $fallbackProvider  Fallback provider slug tried when the primary fails; empty disables it.
+     * @param  string  $fallbackModel  Fallback provider model override.
+     * @param  string  $fallbackApiKey  Fallback provider API key.
+     * @param  int  $rateLimitRpm  Outbound requests per minute, clamped 0-600; 0 disables the limit.
+     * @param  bool  $responseCache  Whether to cache provider responses on the shared cache pool.
+     * @param  int  $responseCacheTtl  Response cache lifetime in seconds, clamped 60-86400.
+     * @param  int  $maxTokenBudget  Total token spend ceiling per run; 0 disables the budget.
+     * @param  CacheItemPoolInterface|null  $cachePool  Shared PSR-6 cache pool backing the rate limit and response cache; null disables both.
      */
     public function __construct(
         private readonly string $apiKey,
@@ -90,6 +102,14 @@ final class PhpClawFactory
         private readonly ?SymfonyIdentityResolver $identity = null,
         private readonly bool $requireChatRole = false,
         private readonly string $projectRoot = '',
+        private readonly string $fallbackProvider = '',
+        private readonly string $fallbackModel = '',
+        private readonly string $fallbackApiKey = '',
+        private readonly int $rateLimitRpm = 0,
+        private readonly bool $responseCache = false,
+        private readonly int $responseCacheTtl = 3600,
+        private readonly int $maxTokenBudget = 0,
+        private readonly ?CacheItemPoolInterface $cachePool = null,
     ) {}
 
     /**
@@ -131,7 +151,46 @@ final class PhpClawFactory
 
         $builder->approvalGate(new CliApprovalGate);
 
+        $this->applyAgentPrimitives($builder);
+
         return $builder->build();
+    }
+
+    /**
+     * Apply the fallback provider, outbound rate limit, response cache, and token budget primitives; each stays off unless the site owner set it.
+     *
+     * @param  ClawBuilder  $builder
+     * @return void
+     */
+    private function applyAgentPrimitives(ClawBuilder $builder): void
+    {
+        $resolvedPrimary = $this->provider !== '' ? $this->provider : (new ClawConfig)->providerName;
+        $fallbackCompatible = $this->fallbackProvider !== ''
+            && $this->fallbackProvider !== 'custom'
+            && ToolRegistry::toolFormat($this->fallbackProvider) === ToolRegistry::toolFormat($resolvedPrimary);
+
+        if ($fallbackCompatible) {
+            $builder->withFallback($this->fallbackProvider, $this->fallbackModel, $this->fallbackApiKey);
+        }
+
+        $rateLimit = max(0, min(600, $this->rateLimitRpm));
+        $needsCache = $rateLimit > 0 || $this->responseCache;
+        $cache = $needsCache && $this->cachePool !== null ? new Psr16Cache($this->cachePool) : null;
+
+        if ($rateLimit > 0 && $cache !== null) {
+            $builder->rateLimit($rateLimit, store: $cache);
+        }
+
+        if ($this->responseCache && $cache !== null) {
+            $ttl = max(60, min(86_400, $this->responseCacheTtl));
+            $builder->responseCache($cache, $ttl);
+        }
+
+        $tokenBudget = max(0, $this->maxTokenBudget);
+
+        if ($tokenBudget > 0) {
+            $builder->maxTokenBudget($tokenBudget);
+        }
     }
 
     /**

@@ -42,6 +42,14 @@ services:
             $identity:          '@PhpClaw\Symfony\SymfonyIdentityResolver'
             $requireChatRole:   '%phpclaw.require_chat_role%'
             $projectRoot:       '%kernel.project_dir%'
+            $fallbackProvider:  '%phpclaw.fallback_provider%'
+            $fallbackModel:     '%phpclaw.fallback_model%'
+            $fallbackApiKey:    '%phpclaw.fallback_api_key%'
+            $rateLimitRpm:      '%phpclaw.rate_limit_rpm%'
+            $responseCache:     '%phpclaw.response_cache%'
+            $responseCacheTtl:  '%phpclaw.response_cache_ttl%'
+            $maxTokenBudget:    '%phpclaw.max_token_budget%'
+            $cachePool:         '@?cache.app'
 
     # Stream bridge: the controller and the boot-time hook registration must share one instance,
     # so the per-stream emitter set by the controller is the one the hook listener reads.

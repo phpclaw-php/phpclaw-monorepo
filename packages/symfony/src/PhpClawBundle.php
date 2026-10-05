@@ -108,6 +108,13 @@ final class PhpClawBundle extends AbstractBundle
             ->integerNode('max_tokens')->defaultValue(0)->end()
             ->booleanNode('prompt_cache')->defaultFalse()->end()
             ->integerNode('thinking_budget')->defaultValue(0)->end()
+            ->scalarNode('fallback_provider')->defaultValue('')->end()
+            ->scalarNode('fallback_model')->defaultValue('')->end()
+            ->scalarNode('fallback_api_key')->defaultValue('')->end()
+            ->integerNode('rate_limit_rpm')->defaultValue(0)->end()
+            ->booleanNode('response_cache')->defaultFalse()->end()
+            ->integerNode('response_cache_ttl')->defaultValue(3600)->end()
+            ->integerNode('max_token_budget')->defaultValue(0)->end()
             ->booleanNode('event_bridge')->defaultTrue()->end()
             ->scalarNode('cloud_key')->defaultValue('')->end()
             ->scalarNode('cloud_signing_secret')->defaultValue('')->end()
@@ -176,6 +183,13 @@ final class PhpClawBundle extends AbstractBundle
         $container->setParameter('phpclaw.max_tokens', $config['max_tokens']);
         $container->setParameter('phpclaw.prompt_cache', $config['prompt_cache']);
         $container->setParameter('phpclaw.thinking_budget', $config['thinking_budget']);
+        $container->setParameter('phpclaw.fallback_provider', $config['fallback_provider']);
+        $container->setParameter('phpclaw.fallback_model', $config['fallback_model']);
+        $container->setParameter('phpclaw.fallback_api_key', $config['fallback_api_key']);
+        $container->setParameter('phpclaw.rate_limit_rpm', $config['rate_limit_rpm']);
+        $container->setParameter('phpclaw.response_cache', $config['response_cache']);
+        $container->setParameter('phpclaw.response_cache_ttl', $config['response_cache_ttl']);
+        $container->setParameter('phpclaw.max_token_budget', $config['max_token_budget']);
         $container->setParameter('phpclaw.event_bridge', $config['event_bridge']);
         $container->setParameter('phpclaw.cloud_key', $config['cloud_key']);
         $container->setParameter('phpclaw.cloud_signing_secret', $config['cloud_signing_secret']);

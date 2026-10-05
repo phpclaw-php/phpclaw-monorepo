@@ -436,6 +436,13 @@ final class GuideCommand extends Command
         $io->writeln('  PHPCLAW_CLOUD_SIGNING_SECRET : verify signed cloud scan responses (empty = skip)');
         $io->writeln('  PHPCLAW_API_ENABLED     : false disables every REST route');
         $io->writeln('  PHPCLAW_REMOTE_SKILL_URLS : comma-separated HTTPS skill URLs (always-on, keyword-matched)');
+        $io->writeln('  PHPCLAW_FALLBACK_PROVIDER : fallback provider slug tried when the primary fails (default: off)');
+        $io->writeln('  PHPCLAW_FALLBACK_MODEL    : fallback provider model override');
+        $io->writeln('  PHPCLAW_FALLBACK_API_KEY  : fallback provider API key');
+        $io->writeln('  PHPCLAW_RATE_LIMIT_RPM    : outbound requests per minute, 0 disables (default: 0, max: 600)');
+        $io->writeln('  PHPCLAW_RESPONSE_CACHE    : cache provider responses on the cache.app pool (default: false)');
+        $io->writeln('  PHPCLAW_RESPONSE_CACHE_TTL: response cache lifetime in seconds (default: 3600)');
+        $io->writeln('  PHPCLAW_MAX_TOKEN_BUDGET  : total token spend ceiling per run, 0 disables (default: 0)');
         $io->newLine();
         $io->writeln('tool_deny has no env var: Symfony cannot feed one into a list. Set it in phpclaw.yaml.');
     }

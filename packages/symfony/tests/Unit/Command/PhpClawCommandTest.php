@@ -11,6 +11,7 @@ use PhpClaw\Contracts\ClawInterface as PhpClawInterface;
 use PhpClaw\Exceptions\GuardException;
 use PhpClaw\Exceptions\MaxIterationsException;
 use PhpClaw\Exceptions\ProviderException;
+use PhpClaw\Exceptions\TokenBudgetExceededException;
 use PhpClaw\Symfony\Command\PhpClawCommand;
 use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
@@ -122,6 +123,33 @@ final class PhpClawCommandTest extends TestCase
         $this->assertSame(1, $exitCode);
         $this->assertStringContainsString('Provider error', $this->tester->getDisplay());
         $this->assertStringNotContainsString('API rate limit exceeded', $this->tester->getDisplay());
+    }
+
+    public function test_it_returns_failure_on_rate_limited_provider_exception(): void
+    {
+        $this->phpClaw
+            ->expects($this->once())
+            ->method('sendInConversation')
+            ->willThrowException(new ProviderException('Too Many Requests', 429));
+
+        $exitCode = $this->tester->execute(['message' => 'check status']);
+
+        $this->assertSame(1, $exitCode);
+        $this->assertStringContainsString('Rate limit reached, try again shortly.', $this->tester->getDisplay());
+        $this->assertStringNotContainsString('Too Many Requests', $this->tester->getDisplay());
+    }
+
+    public function test_it_returns_failure_on_token_budget_exceeded_exception(): void
+    {
+        $this->phpClaw
+            ->expects($this->once())
+            ->method('sendInConversation')
+            ->willThrowException(new TokenBudgetExceededException(500, 400));
+
+        $exitCode = $this->tester->execute(['message' => 'do a lot of work']);
+
+        $this->assertSame(1, $exitCode);
+        $this->assertStringContainsString('Token budget reached for this run.', $this->tester->getDisplay());
     }
 
     public function test_it_returns_failure_on_max_iterations_exception(): void
