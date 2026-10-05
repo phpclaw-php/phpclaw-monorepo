@@ -45,7 +45,7 @@ final class EngineFactoryAgentPrimitivesTest extends TestCase
     public function test_compatible_fallback_provider_is_applied(): void
     {
         config([
-            'phpclaw.provider' => 'anthropic',
+            'phpclaw.provider' => 'openai',
             'phpclaw.fallback_provider' => 'deepseek',
             'phpclaw.fallback_model' => 'deepseek-chat',
             'phpclaw.fallback_api_key' => 'fb-key',

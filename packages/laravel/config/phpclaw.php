@@ -42,15 +42,22 @@ return [
 
     'thinking_budget' => (int) env('PHPCLAW_THINKING_BUDGET', 0),
 
+    // Tried only when the main provider fails (connection error, 429 or 5xx). Must use the main provider's tool format, never custom.
     'fallback_provider' => env('PHPCLAW_FALLBACK_PROVIDER', ''),
+    // Blank uses the fallback provider's default model.
     'fallback_model' => env('PHPCLAW_FALLBACK_MODEL', ''),
+    // Used only when fallback_provider is set and is not ollama.
     'fallback_api_key' => env('PHPCLAW_FALLBACK_API_KEY', ''),
 
+    // Most provider calls per minute, shared by every request. 0 turns it off, maximum 600.
     'rate_limit_rpm' => (int) env('PHPCLAW_RATE_LIMIT_RPM', 0),
 
+    // Answers an identical request from the cache instead of calling the provider again.
     'response_cache' => (bool) env('PHPCLAW_RESPONSE_CACHE', false),
+    // Seconds a cached answer is kept, 60 to 86400. Used only when response_cache is true.
     'response_cache_ttl' => (int) env('PHPCLAW_RESPONSE_CACHE_TTL', 3600),
 
+    // Stops a run before a provider call would take its token spend over this number. 0 turns it off.
     'max_token_budget' => (int) env('PHPCLAW_MAX_TOKEN_BUDGET', 0),
 
     'tool_deny' => array_values(array_filter(array_map(
