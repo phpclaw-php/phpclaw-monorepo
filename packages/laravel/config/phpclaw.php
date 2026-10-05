@@ -42,6 +42,17 @@ return [
 
     'thinking_budget' => (int) env('PHPCLAW_THINKING_BUDGET', 0),
 
+    'fallback_provider' => env('PHPCLAW_FALLBACK_PROVIDER', ''),
+    'fallback_model' => env('PHPCLAW_FALLBACK_MODEL', ''),
+    'fallback_api_key' => env('PHPCLAW_FALLBACK_API_KEY', ''),
+
+    'rate_limit_rpm' => (int) env('PHPCLAW_RATE_LIMIT_RPM', 0),
+
+    'response_cache' => (bool) env('PHPCLAW_RESPONSE_CACHE', false),
+    'response_cache_ttl' => (int) env('PHPCLAW_RESPONSE_CACHE_TTL', 3600),
+
+    'max_token_budget' => (int) env('PHPCLAW_MAX_TOKEN_BUDGET', 0),
+
     'tool_deny' => array_values(array_filter(array_map(
         'trim',
         explode(',', (string) env('PHPCLAW_TOOL_DENY', ''))

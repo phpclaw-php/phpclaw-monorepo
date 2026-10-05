@@ -430,5 +430,12 @@ final class GuideCommand extends Command
         $this->line('  PHPCLAW_TELESCOPE     : enable Telescope watcher (default: true)');
         $this->line('  PHPCLAW_REMOTE_SKILL_URLS, comma-separated HTTPS skill URLs (always-on, keyword-matched)');
         $this->line('  PHPCLAW_API_THROTTLE  : REST rate limit maxAttempts,decayMinutes (default: 60,1)');
+        $this->line('  PHPCLAW_FALLBACK_PROVIDER, fallback provider slug tried when the primary fails (default: off)');
+        $this->line('  PHPCLAW_FALLBACK_MODEL, fallback provider model override');
+        $this->line('  PHPCLAW_FALLBACK_API_KEY, fallback provider API key');
+        $this->line('  PHPCLAW_RATE_LIMIT_RPM, outbound requests per minute, 0 disables (default: 0, max: 600)');
+        $this->line('  PHPCLAW_RESPONSE_CACHE, cache provider responses on the app cache store (default: false)');
+        $this->line('  PHPCLAW_RESPONSE_CACHE_TTL, response cache lifetime in seconds (default: 3600)');
+        $this->line('  PHPCLAW_MAX_TOKEN_BUDGET, total token spend ceiling per run, 0 disables (default: 0)');
     }
 }

@@ -5,8 +5,10 @@ declare(strict_types=1);
 namespace PhpClaw\Laravel\Engine;
 
 use Illuminate\Contracts\Foundation\Application;
+use Illuminate\Support\Facades\Log;
 use PhpClaw\Agent\CliApprovalGate;
 use PhpClaw\Claw as PhpClaw;
+use PhpClaw\ClawBuilder;
 use PhpClaw\ClawConfig;
 use PhpClaw\Contracts\ClawInterface as PhpClawInterface;
 use PhpClaw\Laravel\Extension\PhpClawExtensions;
@@ -24,6 +26,7 @@ use PhpClaw\Tools\FileWriteTool;
 use PhpClaw\Tools\ShellTool;
 use PhpClaw\Tools\ToolCatalogue;
 use PhpClaw\Tools\ToolProfileResolver;
+use PhpClaw\Tools\ToolRegistry;
 
 /**
  * Builds a fully-wired phpClaw engine instance from Laravel config.
@@ -88,7 +91,61 @@ final class EngineFactory
 
         $builder->approvalGate(new CliApprovalGate);
 
+        self::applyAgentPrimitives($builder, $app, $providerSlug);
+
         return $builder->build();
+    }
+
+    /**
+     * Apply the fallback provider, outbound rate limit, response cache, and token budget
+     * primitives from config; each stays off unless the site owner set it.
+     *
+     * @param  ClawBuilder  $builder
+     * @param  Application  $app
+     * @param  string  $primaryProvider  Primary provider slug; empty means core auto-detects it from the environment.
+     * @return void
+     */
+    private static function applyAgentPrimitives(ClawBuilder $builder, Application $app, string $primaryProvider): void
+    {
+        $resolvedPrimary = $primaryProvider !== '' ? $primaryProvider : (new ClawConfig)->providerName;
+        $fallbackProvider = (string) config('phpclaw.fallback_provider', '');
+        $fallbackCompatible = $fallbackProvider !== ''
+            && $fallbackProvider !== 'custom'
+            && ToolRegistry::toolFormat($fallbackProvider) === ToolRegistry::toolFormat($resolvedPrimary);
+
+        if ($fallbackCompatible) {
+            $builder->withFallback(
+                $fallbackProvider,
+                (string) config('phpclaw.fallback_model', ''),
+                (string) config('phpclaw.fallback_api_key', ''),
+            );
+        } elseif ($fallbackProvider !== '') {
+            Log::warning('phpClaw: fallback_provider is unsupported or incompatible with the primary provider, skipping fallback.', [
+                'fallback_provider' => $fallbackProvider,
+            ]);
+        }
+
+        $rateLimit = max(0, min(600, (int) config('phpclaw.rate_limit_rpm', 0)));
+        $cacheOn = (bool) config('phpclaw.response_cache', false);
+
+        if ($rateLimit > 0 || $cacheOn) {
+            $store = $app->make('cache')->store();
+
+            if ($rateLimit > 0) {
+                $builder->rateLimit($rateLimit, store: $store);
+            }
+
+            if ($cacheOn) {
+                $ttl = max(60, min(86_400, (int) config('phpclaw.response_cache_ttl', 3600)));
+                $builder->responseCache($store, $ttl);
+            }
+        }
+
+        $tokenBudget = max(0, (int) config('phpclaw.max_token_budget', 0));
+
+        if ($tokenBudget > 0) {
+            $builder->maxTokenBudget($tokenBudget);
+        }
     }
 
     /**

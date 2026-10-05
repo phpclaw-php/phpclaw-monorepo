@@ -9,6 +9,7 @@ use PhpClaw\Contracts\ClawInterface as PhpClawInterface;
 use PhpClaw\Exceptions\GuardException;
 use PhpClaw\Exceptions\MaxIterationsException;
 use PhpClaw\Exceptions\ProviderException;
+use PhpClaw\Exceptions\TokenBudgetExceededException;
 use PhpClaw\Exceptions\ToolException;
 
 /**
@@ -81,7 +82,14 @@ final class PhpClawCommand extends Command
             return self::FAILURE;
         } catch (ProviderException $e) {
             report($e);
-            $this->error('Provider error: the LLM provider returned an error.');
+            $this->error($e->statusCode === 429
+                ? 'Rate limit reached, try again shortly.'
+                : 'Provider error: the LLM provider returned an error.');
+
+            return self::FAILURE;
+        } catch (TokenBudgetExceededException $e) {
+            report($e);
+            $this->error('Token budget reached for this run.');
 
             return self::FAILURE;
         } catch (MaxIterationsException $e) {

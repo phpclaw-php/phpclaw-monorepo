@@ -13,6 +13,7 @@ use PhpClaw\Contracts\ClawInterface as PhpClawInterface;
 use PhpClaw\Exceptions\GuardException;
 use PhpClaw\Exceptions\MaxIterationsException;
 use PhpClaw\Exceptions\ProviderException;
+use PhpClaw\Exceptions\TokenBudgetExceededException;
 use PhpClaw\Laravel\PhpClawServiceProvider;
 use PHPUnit\Framework\MockObject\MockObject;
 
@@ -123,6 +124,45 @@ final class PhpClawCommandTest extends TestCase
 
         $this->artisan('phpclaw', ['message' => 'test'])
             ->assertExitCode(1);
+    }
+
+    public function test_command_shows_rate_limit_message_on_429_provider_exception(): void
+    {
+        $mock = $this->mockAgent();
+        $mock->method('sendInConversation')
+            ->willThrowException(new ProviderException('Too many requests', 429));
+
+        $this->app->instance(PhpClawInterface::class, $mock);
+
+        $this->artisan('phpclaw', ['message' => 'test'])
+            ->assertExitCode(1)
+            ->expectsOutputToContain('Rate limit reached, try again shortly.');
+    }
+
+    public function test_command_shows_generic_message_on_non_429_provider_exception(): void
+    {
+        $mock = $this->mockAgent();
+        $mock->method('sendInConversation')
+            ->willThrowException(new ProviderException('Server error', 500));
+
+        $this->app->instance(PhpClawInterface::class, $mock);
+
+        $this->artisan('phpclaw', ['message' => 'test'])
+            ->assertExitCode(1)
+            ->expectsOutputToContain('Provider error: the LLM provider returned an error.');
+    }
+
+    public function test_command_shows_budget_message_on_token_budget_exceeded(): void
+    {
+        $mock = $this->mockAgent();
+        $mock->method('sendInConversation')
+            ->willThrowException(new TokenBudgetExceededException(100, 50));
+
+        $this->app->instance(PhpClawInterface::class, $mock);
+
+        $this->artisan('phpclaw', ['message' => 'test'])
+            ->assertExitCode(1)
+            ->expectsOutputToContain('Token budget reached for this run.');
     }
 
     public function test_command_exits_1_on_max_iterations_exception(): void

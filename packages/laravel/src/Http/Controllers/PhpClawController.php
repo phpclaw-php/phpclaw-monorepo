@@ -9,6 +9,8 @@ use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
 use PhpClaw\Contracts\ClawInterface as PhpClawInterface;
 use PhpClaw\Exceptions\GuardException;
+use PhpClaw\Exceptions\ProviderException;
+use PhpClaw\Exceptions\TokenBudgetExceededException;
 use PhpClaw\Laravel\Exceptions\ConversationAccessDeniedException;
 use PhpClaw\Laravel\Http\StreamEventBridge;
 use Symfony\Component\HttpFoundation\StreamedResponse;
@@ -23,6 +25,10 @@ final class PhpClawController extends Controller
     private const FORBIDDEN = 'You do not have permission to access this conversation.';
 
     private const GUARD_BLOCKED = 'Request blocked by security guard.';
+
+    private const BUDGET_EXCEEDED = 'Token budget reached for this run.';
+
+    private const RATE_LIMITED = 'Rate limit reached, try again shortly.';
 
     /**
      * Bind the resolved phpClaw engine this controller sends and streams through.
@@ -82,6 +88,18 @@ final class PhpClawController extends Controller
             report($e);
 
             return response()->json(['error' => self::GUARD_BLOCKED], 422);
+        } catch (TokenBudgetExceededException $e) {
+            report($e);
+
+            return response()->json(['error' => self::BUDGET_EXCEEDED], 422);
+        } catch (ProviderException $e) {
+            report($e);
+
+            if ($e->statusCode === 429) {
+                return response()->json(['error' => self::RATE_LIMITED], 429);
+            }
+
+            return response()->json(['error' => self::INTERNAL_ERROR], 500);
         } catch (\Throwable $e) {
             report($e);
 
@@ -184,6 +202,12 @@ final class PhpClawController extends Controller
             } catch (GuardException $e) {
                 report($e);
                 $emit('error', ['message' => self::GUARD_BLOCKED]);
+            } catch (TokenBudgetExceededException $e) {
+                report($e);
+                $emit('error', ['message' => self::BUDGET_EXCEEDED]);
+            } catch (ProviderException $e) {
+                report($e);
+                $emit('error', ['message' => $e->statusCode === 429 ? self::RATE_LIMITED : self::INTERNAL_ERROR]);
             } catch (\Throwable $e) {
                 report($e);
                 $emit('error', ['message' => self::INTERNAL_ERROR]);

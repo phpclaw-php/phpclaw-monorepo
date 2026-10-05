@@ -14,6 +14,8 @@ use PhpClaw\Agent\AgentResponse;
 use PhpClaw\Agent\Conversation;
 use PhpClaw\Agent\ConversationTurn;
 use PhpClaw\Contracts\ClawInterface as PhpClawInterface;
+use PhpClaw\Exceptions\ProviderException;
+use PhpClaw\Exceptions\TokenBudgetExceededException;
 use PhpClaw\Laravel\Exceptions\ConversationAccessDeniedException;
 use PhpClaw\Laravel\PhpClawServiceProvider;
 use PhpClaw\Memory\Contracts\MemoryInterface;
@@ -332,6 +334,39 @@ final class PhpClawApiTest extends TestCase
         $this->assertStringNotContainsString('boom', (string) $json['error'], 'Raw exception message must not leak.');
     }
 
+    public function test_send_returns_422_when_token_budget_exceeded(): void
+    {
+        $this->withThrowingAgent(new TokenBudgetExceededException(100, 50));
+        $this->app['config']->set('phpclaw.api_key', 'set');
+
+        $response = $this->asUser()->postJson('/phpclaw/send', ['message' => 'hello']);
+
+        $response->assertStatus(422);
+        $response->assertJsonFragment(['error' => 'Token budget reached for this run.']);
+    }
+
+    public function test_send_returns_429_when_provider_rate_limited(): void
+    {
+        $this->withThrowingAgent(new ProviderException('Too many requests', 429));
+        $this->app['config']->set('phpclaw.api_key', 'set');
+
+        $response = $this->asUser()->postJson('/phpclaw/send', ['message' => 'hello']);
+
+        $response->assertStatus(429);
+        $response->assertJsonFragment(['error' => 'Rate limit reached, try again shortly.']);
+    }
+
+    public function test_send_returns_500_on_non_429_provider_exception(): void
+    {
+        $this->withThrowingAgent(new ProviderException('Server error', 500));
+        $this->app['config']->set('phpclaw.api_key', 'set');
+
+        $response = $this->asUser()->postJson('/phpclaw/send', ['message' => 'hello']);
+
+        $response->assertStatus(500);
+        $response->assertJsonFragment(['error' => 'An internal error occurred. Please try again.']);
+    }
+
     public function test_send_returns_403_not_500_when_the_conversation_belongs_to_another_user(): void
     {
         $this->withThrowingAgent(new ConversationAccessDeniedException);
@@ -406,6 +441,45 @@ final class PhpClawApiTest extends TestCase
         $this->assertStringContainsString('event: error', $body);
         $this->assertStringContainsString('permission', $body);
         $this->assertStringNotContainsString('An internal error occurred', $body);
+    }
+
+    public function test_stream_emits_budget_error_when_token_budget_exceeded(): void
+    {
+        $this->withThrowingAgent(new TokenBudgetExceededException(100, 50));
+        $this->app['config']->set('phpclaw.api_key', 'set');
+
+        $response = $this->asUser()->postJson('/phpclaw/chat/stream', ['message' => 'hello']);
+
+        $body = $response->streamedContent();
+
+        $this->assertStringContainsString('event: error', $body);
+        $this->assertStringContainsString('Token budget reached for this run.', $body);
+    }
+
+    public function test_stream_emits_rate_limit_error_when_provider_rate_limited(): void
+    {
+        $this->withThrowingAgent(new ProviderException('Too many requests', 429));
+        $this->app['config']->set('phpclaw.api_key', 'set');
+
+        $response = $this->asUser()->postJson('/phpclaw/chat/stream', ['message' => 'hello']);
+
+        $body = $response->streamedContent();
+
+        $this->assertStringContainsString('event: error', $body);
+        $this->assertStringContainsString('Rate limit reached, try again shortly.', $body);
+    }
+
+    public function test_stream_emits_generic_error_on_non_429_provider_exception(): void
+    {
+        $this->withThrowingAgent(new ProviderException('Server error', 500));
+        $this->app['config']->set('phpclaw.api_key', 'set');
+
+        $response = $this->asUser()->postJson('/phpclaw/chat/stream', ['message' => 'hello']);
+
+        $body = $response->streamedContent();
+
+        $this->assertStringContainsString('event: error', $body);
+        $this->assertStringContainsString('An internal error occurred. Please try again.', $body);
     }
 
     public function test_stream_returns_401_when_unauthenticated(): void

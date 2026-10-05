@@ -142,6 +142,19 @@ final class GuideCommandTest extends TestCase
             ->expectsOutputToContain('PHPCLAW_TOOL_DENY');
     }
 
+    public function test_section_config_outputs_agent_primitive_env_keys(): void
+    {
+        $this->artisan('phpclaw:guide', ['--section' => 'config'])
+            ->assertSuccessful()
+            ->expectsOutputToContain('PHPCLAW_FALLBACK_PROVIDER')
+            ->expectsOutputToContain('PHPCLAW_FALLBACK_MODEL')
+            ->expectsOutputToContain('PHPCLAW_FALLBACK_API_KEY')
+            ->expectsOutputToContain('PHPCLAW_RATE_LIMIT_RPM')
+            ->expectsOutputToContain('PHPCLAW_RESPONSE_CACHE_TTL')
+            ->expectsOutputToContain('PHPCLAW_RESPONSE_CACHE,')
+            ->expectsOutputToContain('PHPCLAW_MAX_TOKEN_BUDGET');
+    }
+
     public function test_section_cli_lists_all_commands(): void
     {
         Artisan::call('phpclaw:guide', ['--section' => 'cli']);
