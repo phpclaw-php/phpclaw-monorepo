@@ -182,7 +182,7 @@ final class SettingsPage
                 'phpclaw_api_key',
                 $name,
                 (string) $value,
-                esc_html__('Your API key for the selected provider. Leave blank for Ollama (local models), or blank to keep the saved key.', 'phpclaw'),
+                esc_html__('Your API key for the selected provider. Leave blank for Ollama (local models).', 'phpclaw'),
             ),
             'provider' => self::renderSelect($name, (string) $value, self::providerOptions(), 'phpclaw_provider'),
             'base_url' => printf(
@@ -206,7 +206,7 @@ final class SettingsPage
                 esc_attr($name),
                 checked(! empty($value), true, false),
                 esc_html__('Enable chat history (recommended)', 'phpclaw'),
-                esc_html__('When enabled: prompt and response text is persisted via your configured memory driver, required for multi-turn chat to remember previous messages. When disabled: no message content is ever saved. Each prompt is processed independently with no memory of previous turns. Cloud tracing and the cloud security scan also stop while this is off. Your saved cloud settings are kept and reappear when you turn it back on.', 'phpclaw'),
+                esc_html__('When enabled: prompt and response text is saved, so a conversation remembers previous messages. When disabled: no message content is ever saved; each prompt is processed independently.', 'phpclaw'),
             ),
             'max_iterations' => printf(
                 '<input type="number" id="phpclaw_max_iterations" name="%s" value="%s" min="1" max="50" class="small-text" />'
@@ -219,22 +219,21 @@ final class SettingsPage
                 'phpclaw_cloud_key',
                 $name,
                 (string) $value,
-                esc_html__('phpClaw Cloud API key. Enables cloud guards and webhook features. Leave blank to keep the saved key.', 'phpclaw'),
+                esc_html__('phpClaw Cloud API key. Enables cloud guards and webhook features. Optional.', 'phpclaw'),
             ),
             'cloud_signing_secret' => self::renderSecretField(
                 'phpclaw_cloud_signing_secret',
                 $name,
                 (string) $value,
-                esc_html__('Shared secret used to verify signed cloud scan responses. Copy it from your phpClaw Cloud dashboard when you create the API key. Leave blank to keep the saved secret.', 'phpclaw'),
+                esc_html__('Shared secret used to verify signed cloud scan responses. Copy it from your phpClaw Cloud dashboard when you create the API key. Leave empty to skip signature verification.', 'phpclaw'),
             ),
             'cloud_disable' => printf(
                 '<input type="text" id="phpclaw_cloud_disable" name="%s" value="%s" class="regular-text" placeholder="%s" />'
-                .'<p class="description">%s <em>%s</em></p>',
+                .'<p class="description">%s</p>',
                 esc_attr($name),
                 esc_attr(is_array($value) ? implode(', ', $value) : (string) $value),
                 esc_attr__('e.g. guards, webhooks', 'phpclaw'),
-                esc_html__('Comma-separated cloud feature names to disable. Leave empty to enable all features from your plan.', 'phpclaw'),
-                esc_html__('Only applies when a Cloud Key is set above and Store Messages is on.', 'phpclaw'),
+                esc_html__('Comma-separated cloud feature names to turn off, or hide_inputs, hide_outputs and hide_metadata to keep that content on your server while tracing stays on. Leave empty to use every feature in your plan. Only applies when a Cloud Key is set above.', 'phpclaw'),
             ),
             'remote_skill_urls' => printf(
                 '<textarea id="phpclaw_remote_skill_urls" name="%s" rows="3" class="large-text code" placeholder="%s">%s</textarea>'
@@ -246,42 +245,46 @@ final class SettingsPage
             ),
             'fallback_provider' => self::renderFallbackProviderSelect($name, (string) $value, (string) ($settings['provider'] ?? '')),
             'fallback_model' => printf(
-                '<input type="text" id="phpclaw_fallback_model" name="%s" value="%s" class="regular-text" placeholder="%s" />'
+                '<input type="text" id="phpclaw_fallback_model" name="%s" value="%s" class="regular-text" />'
                 .'<p class="description">%s</p>',
                 esc_attr($name),
                 esc_attr((string) $value),
-                esc_attr__('e.g. llama3.1:8b, gpt-4o-mini', 'phpclaw'),
-                esc_html__('Model for the fallback provider. Leave blank to use its default.', 'phpclaw'),
+                esc_html__('Leave blank to use the fallback provider\'s default model.', 'phpclaw'),
             ),
-            'fallback_api_key' => self::renderFallbackApiKeyField($name, (string) $value),
+            'fallback_api_key' => self::renderSecretField(
+                'phpclaw_fallback_api_key',
+                $name,
+                (string) $value,
+                esc_html__('API key for the fallback provider.', 'phpclaw'),
+            ),
             'rate_limit_rpm' => printf(
                 '<input type="number" id="phpclaw_rate_limit_rpm" name="%s" value="%s" min="0" max="600" class="small-text" />'
                 .'<p class="description">%s</p>',
                 esc_attr($name),
                 esc_attr($value !== '' ? (string) $value : '0'),
-                esc_html__('Maximum outbound requests per minute to the provider. 0 = off (unlimited).', 'phpclaw'),
+                esc_html__('Most calls to the AI provider per minute, shared by every request. 0 turns it off. Maximum 600.', 'phpclaw'),
             ),
             'response_cache' => printf(
                 '<label><input type="checkbox" id="phpclaw_response_cache" name="%s" value="1"%s /> %s</label>'
                 .'<p class="description">%s</p>',
                 esc_attr($name),
                 checked(! empty($value), true, false),
-                esc_html__('Cache identical replies', 'phpclaw'),
-                esc_html__('When enabled, an identical request within the cache TTL is answered from a local cache instead of calling the provider again.', 'phpclaw'),
+                esc_html__('Reuse the answer for an identical request', 'phpclaw'),
+                esc_html__('An identical request within the TTL is answered from the cache instead of calling the provider again.', 'phpclaw'),
             ),
             'response_cache_ttl' => printf(
                 '<input type="number" id="phpclaw_response_cache_ttl" name="%s" value="%s" min="60" max="86400" class="small-text" />'
                 .'<p class="description">%s</p>',
                 esc_attr($name),
                 esc_attr($value !== '' ? (string) $value : '3600'),
-                esc_html__('Seconds a cached response stays valid. Default: 3600.', 'phpclaw'),
+                esc_html__('How long a cached answer is kept, in seconds: 60 to 86400. Default 3600.', 'phpclaw'),
             ),
             'max_token_budget' => printf(
                 '<input type="number" id="phpclaw_max_token_budget" name="%s" value="%s" min="0" max="10000000" class="small-text" />'
                 .'<p class="description">%s</p>',
                 esc_attr($name),
                 esc_attr($value !== '' ? (string) $value : '0'),
-                esc_html__('Maximum estimated tokens spent per run. 0 = off (unlimited).', 'phpclaw'),
+                esc_html__('Stops a run before a provider call would take its token spend over this number. 0 turns it off. Maximum 10000000.', 'phpclaw'),
             ),
             default => self::renderDynamicField($field, $name, (string) $value),
         };
@@ -395,11 +398,7 @@ final class SettingsPage
             $clean['fallback_model'] = sanitize_text_field((string) $input['fallback_model']);
         }
 
-        $clearFallbackKey = isset($input['fallback_api_key_clear']) && (string) $input['fallback_api_key_clear'] === '1';
-
-        if ($clearFallbackKey) {
-            $clean['fallback_api_key'] = '';
-        } elseif (isset($input['fallback_api_key'])) {
+        if (isset($input['fallback_api_key'])) {
             $clean['fallback_api_key'] = self::preserveSecret('fallback_api_key', $input['fallback_api_key']);
         }
 
@@ -564,29 +563,6 @@ final class SettingsPage
     }
 
     /**
-     * Render the fallback API key secret field plus a checkbox to remove the saved key.
-     *
-     * @param  string  $name  Fully-qualified option field name attribute for the secret input.
-     * @param  string  $stored  Currently stored fallback API key (used only to indicate saved state).
-     * @return void
-     */
-    private static function renderFallbackApiKeyField(string $name, string $stored): void
-    {
-        self::renderSecretField(
-            'phpclaw_fallback_api_key',
-            $name,
-            $stored,
-            esc_html__('API key for the fallback provider. Leave blank to keep the saved key.', 'phpclaw'),
-        );
-
-        printf(
-            '<label><input type="checkbox" name="%s" value="1" /> %s</label>',
-            esc_attr(self::OPTION.'[fallback_api_key_clear]'),
-            esc_html__('Remove the saved fallback key', 'phpclaw'),
-        );
-    }
-
-    /**
      * Sanitise a secret field, preserving the stored value when the submission is blank.
      *
      * @param  string  $field  Option key of the secret (e.g. api_key).
@@ -639,7 +615,7 @@ final class SettingsPage
         self::renderSelect($name, $current, self::fallbackProviderOptions($primaryProvider), 'phpclaw_fallback_provider');
         printf(
             '<p class="description">%s</p>',
-            esc_html__('Optional. Tried when the primary provider fails. Must use the same tool format as the primary provider. Leave unselected to turn fallback off.', 'phpclaw'),
+            esc_html__('Optional. Used only when the main provider fails with a connection error, a 429 or a 5xx. Lists only providers with the same tool format as the main provider. Off turns fallback off.', 'phpclaw'),
         );
     }
 
@@ -667,6 +643,36 @@ final class SettingsPage
         }
 
         return $options;
+    }
+
+    /**
+     * Data the settings page script needs to rebuild the fallback dropdown when the primary provider changes: every
+     * provider except Custom, every provider's tool format, and the format of the auto-detected primary.
+     *
+     * @return array{offLabel: string, providers: array<string, string>, formats: array<string, string>, autoFormat: string}
+     */
+    public static function fallbackScriptData(): array
+    {
+        $providers = [];
+        $formats = [];
+
+        foreach (ProviderCatalogue::all() as $slug => $entry) {
+            $key = (string) $slug;
+            if ($key === '') {
+                continue;
+            }
+            $formats[$key] = ToolRegistry::toolFormat($key);
+            if ($key !== 'custom') {
+                $providers[$key] = (string) $entry['label'];
+            }
+        }
+
+        return [
+            'offLabel' => __('Off', 'phpclaw'),
+            'providers' => $providers,
+            'formats' => $formats,
+            'autoFormat' => self::primaryToolFormat(''),
+        ];
     }
 
     /**

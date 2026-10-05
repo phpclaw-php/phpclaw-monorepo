@@ -251,6 +251,7 @@ class Plugin
                 'ajaxUrl' => admin_url('admin-ajax.php'),
                 'testNonce' => wp_create_nonce('phpclaw_nonce'),
                 'settingsUrl' => admin_url('admin.php?page=phpclaw'),
+                'fallback' => SettingsPage::fallbackScriptData(),
             ]);
         }
 

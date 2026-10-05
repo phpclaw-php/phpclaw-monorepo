@@ -14,6 +14,7 @@ use PhpClaw\WordPress\Admin\SettingsPage;
 use PhpClaw\WordPress\Plugin;
 use PhpClaw\WordPress\Tests\Stubs\FieldedToolStub;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
 #[CoversClass(SettingsPage::class)]
@@ -942,6 +943,61 @@ final class SettingsPageTest extends TestCase
         self::assertSame('0', SettingsPage::sanitize([])['response_cache']);
     }
 
+    public static function checkboxFields(): array
+    {
+        return [
+            'store_messages' => ['store_messages'],
+            'response_cache' => ['response_cache'],
+        ];
+    }
+
+    #[DataProvider('checkboxFields')]
+    public function test_sanitize_a_checkbox_is_on_only_for_1_or_true(string $field): void
+    {
+        Functions\expect('get_option')->atLeast()->once()->andReturn([]);
+
+        self::assertSame('1', SettingsPage::sanitize([$field => 1])[$field]);
+        self::assertSame('1', SettingsPage::sanitize([$field => true])[$field]);
+        self::assertSame('0', SettingsPage::sanitize([$field => 'on'])[$field]);
+        self::assertSame('0', SettingsPage::sanitize([$field => '0 response_cache=1'])[$field]);
+        self::assertSame('0', SettingsPage::sanitize([$field => ''])[$field]);
+    }
+
+    public static function checkboxCombinations(): array
+    {
+        return [
+            'both on' => [['store_messages' => '1', 'response_cache' => '1'], '1', '1'],
+            'store off, cache on' => [['response_cache' => '1'], '0', '1'],
+            'store on, cache off' => [['store_messages' => '1'], '1', '0'],
+            'both off' => [[], '0', '0'],
+        ];
+    }
+
+    #[DataProvider('checkboxCombinations')]
+    public function test_sanitize_saves_each_checkbox_independently(array $input, string $storeMessages, string $responseCache): void
+    {
+        Functions\expect('get_option')->atLeast()->once()->andReturn(['store_messages' => '1', 'response_cache' => '1']);
+
+        $clean = SettingsPage::sanitize($input);
+
+        self::assertSame($storeMessages, $clean['store_messages']);
+        self::assertSame($responseCache, $clean['response_cache']);
+    }
+
+    #[DataProvider('checkboxFields')]
+    public function test_render_field_a_checkbox_is_unticked_when_off(string $field): void
+    {
+        Functions\expect('get_option')->once()->andReturn([$field => '0']);
+
+        ob_start();
+        SettingsPage::renderField(['field' => $field]);
+        $html = (string) ob_get_clean();
+
+        self::assertStringContainsString('id="phpclaw_'.$field.'"', $html);
+        self::assertStringContainsString('type="checkbox"', $html);
+        self::assertStringNotContainsString('checked', $html);
+    }
+
     public function test_sanitize_response_cache_ttl_clamps_and_defaults(): void
     {
         Functions\expect('get_option')->atLeast()->once()->andReturn([]);
@@ -999,7 +1055,6 @@ final class SettingsPageTest extends TestCase
 
         self::assertStringContainsString('id="phpclaw_fallback_model"', $html);
         self::assertStringContainsString('gpt-4o-mini', $html);
-        self::assertStringContainsString('Model for the fallback provider', $html);
     }
 
     public function test_render_field_fallback_api_key_hides_the_saved_value(): void
@@ -1103,44 +1158,50 @@ final class SettingsPageTest extends TestCase
         self::assertStringNotContainsString('anthropic', $html);
     }
 
-    public function test_render_field_fallback_api_key_includes_a_clear_checkbox(): void
+    public function test_fallback_script_data_lists_every_provider_except_custom_with_its_tool_format(): void
     {
-        Functions\expect('get_option')->once()->andReturn(['fallback_api_key' => 'gk-real']);
+        $data = SettingsPage::fallbackScriptData();
+
+        self::assertSame('Off', $data['offLabel']);
+        self::assertArrayNotHasKey('custom', $data['providers']);
+        self::assertSame(array_values(array_diff(array_keys(ProviderCatalogue::all()), ['custom'])), array_keys($data['providers']));
+        self::assertSame('openai', $data['formats']['ollama']);
+        self::assertSame('openai', $data['formats']['groq']);
+        self::assertSame('anthropic', $data['formats']['anthropic']);
+        self::assertSame('openai', $data['formats']['deepseek']);
+        self::assertSame('openai', $data['formats']['custom']);
+    }
+
+    public function test_fallback_script_data_auto_format_follows_the_auto_detected_provider(): void
+    {
+        $openai = $this->withOnlyEnv(['OPENAI_API_KEY' => 'sk-openai'], static fn (): array => SettingsPage::fallbackScriptData());
+        $anthropic = $this->withOnlyEnv(['ANTHROPIC_API_KEY' => 'sk-ant'], static fn (): array => SettingsPage::fallbackScriptData());
+
+        self::assertSame('openai', $openai['autoFormat']);
+        self::assertSame('anthropic', $anthropic['autoFormat']);
+    }
+
+    public function test_render_field_fallback_api_key_is_a_password_input_that_never_prints_the_saved_key(): void
+    {
+        Functions\expect('get_option')->once()->andReturn(['fallback_api_key' => 'gk-real-secret']);
 
         ob_start();
         SettingsPage::renderField(['field' => 'fallback_api_key']);
         $html = (string) ob_get_clean();
 
-        self::assertStringContainsString('name="phpclaw_settings[fallback_api_key_clear]"', $html);
-        self::assertStringContainsString('type="checkbox"', $html);
-        self::assertStringContainsString('Remove the saved fallback key', $html);
+        self::assertStringContainsString('id="phpclaw_fallback_api_key"', $html);
+        self::assertStringContainsString('type="password"', $html);
+        self::assertStringNotContainsString('gk-real-secret', $html);
+        self::assertStringNotContainsString('type="checkbox"', $html);
     }
 
-    public function test_sanitize_fallback_api_key_clear_checkbox_empties_the_stored_key(): void
-    {
-        Functions\expect('get_option')->atLeast()->once()->andReturn(['fallback_api_key' => 'gk-stored']);
-
-        $r = SettingsPage::sanitize(['fallback_api_key' => '', 'fallback_api_key_clear' => '1']);
-
-        self::assertSame('', $r['fallback_api_key']);
-    }
-
-    public function test_sanitize_fallback_api_key_clear_checkbox_absent_keeps_the_stored_key(): void
+    public function test_sanitize_a_blank_fallback_api_key_keeps_the_stored_key(): void
     {
         Functions\expect('get_option')->atLeast()->once()->andReturn(['fallback_api_key' => 'gk-stored']);
 
         $r = SettingsPage::sanitize(['fallback_api_key' => '']);
 
         self::assertSame('gk-stored', $r['fallback_api_key']);
-    }
-
-    public function test_sanitize_never_persists_the_fallback_api_key_clear_flag(): void
-    {
-        Functions\expect('get_option')->atLeast()->once()->andReturn(['fallback_api_key' => 'gk-stored']);
-
-        $r = SettingsPage::sanitize(['fallback_api_key' => '', 'fallback_api_key_clear' => '1']);
-
-        self::assertArrayNotHasKey('fallback_api_key_clear', $r);
     }
 
     private function withOnlyEnv(array $values, callable $callback): mixed

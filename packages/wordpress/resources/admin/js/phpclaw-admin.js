@@ -16,6 +16,50 @@
     var ajaxUrl     = data.ajaxUrl     || '';
     var testNonce   = data.testNonce   || '';
 
+    var fallbackSel  = document.querySelector('select[name="phpclaw_settings[fallback_provider]"]');
+    var fallbackData = data.fallback || null;
+
+    function toggleFallbackKey() {
+        var fallbackKeyRow = document.querySelector('#phpclaw_fallback_api_key') &&
+                             document.querySelector('#phpclaw_fallback_api_key').closest('tr');
+        if (fallbackSel && fallbackKeyRow) {
+            fallbackKeyRow.style.display = fallbackSel.value === '' || fallbackSel.value === 'ollama' ? 'none' : '';
+        }
+    }
+
+    function rebuildFallbackOptions(primary) {
+        if (!fallbackSel || !fallbackData) { return; }
+        var format  = primary === '' ? fallbackData.autoFormat : fallbackData.formats[primary];
+        var current = fallbackSel.value;
+        var keep    = false;
+        fallbackSel.options.length = 0;
+        fallbackSel.add(new Option(fallbackData.offLabel, ''));
+        Object.keys(fallbackData.providers).forEach(function (slug) {
+            if (fallbackData.formats[slug] === format) {
+                fallbackSel.add(new Option(fallbackData.providers[slug], slug));
+                keep = keep || slug === current;
+            }
+        });
+        fallbackSel.value = keep ? current : '';
+        toggleFallbackKey();
+    }
+
+    if (fallbackSel) {
+        fallbackSel.addEventListener('change', toggleFallbackKey);
+        toggleFallbackKey();
+    }
+
+    var cacheBox = document.getElementById('phpclaw_response_cache');
+    if (cacheBox) {
+        function toggleCacheTtl() {
+            var ttlRow = document.querySelector('#phpclaw_response_cache_ttl') &&
+                         document.querySelector('#phpclaw_response_cache_ttl').closest('tr');
+            if (ttlRow) { ttlRow.style.display = cacheBox.checked ? '' : 'none'; }
+        }
+        cacheBox.addEventListener('change', toggleCacheTtl);
+        toggleCacheTtl();
+    }
+
     var provSel = document.querySelector('select[name="phpclaw_settings[provider]"]');
     if (provSel) {
         function toggleProvider() {
@@ -27,6 +71,7 @@
             if (baseRow)   { baseRow.style.display   = provSel.value === 'custom' ? '' : 'none'; }
         }
         provSel.addEventListener('change', toggleProvider);
+        provSel.addEventListener('change', function () { rebuildFallbackOptions(provSel.value); });
         toggleProvider();
     }
 

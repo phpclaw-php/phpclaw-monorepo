@@ -214,6 +214,9 @@ final class PhpClawAdminController
                 'message' => __('You do not have permission to access this resource.', 'phpclaw'),
             ]);
         } catch (TokenBudgetExceededException $e) {
+            if (! headers_sent()) {
+                status_header(422);
+            }
             $emit('error', [
                 'message' => __('Token budget reached for this run.', 'phpclaw'),
             ]);

@@ -327,10 +327,12 @@ final class PhpClawAdminControllerTest extends TestCase
         self::assertSame($conv->id, $last['data']['conversation_id']);
     }
 
-    public function test_stream_chat_emits_budget_message_on_token_budget_exceeded_in_process(): void
+    public function test_stream_chat_sends_http_422_when_the_token_budget_is_spent(): void
     {
         Functions\when('wp_json_encode')->alias(static fn (array $d) => json_encode($d));
         Functions\when('__')->returnArg();
+        Functions\when('headers_sent')->justReturn(false);
+        Functions\expect('status_header')->once()->with(422);
 
         $engine = \Mockery::mock(PhpClawInterface::class);
         $engine->expects('conversation')->once()->andThrow(new TokenBudgetExceededException(500, 400));
@@ -340,11 +342,8 @@ final class PhpClawAdminControllerTest extends TestCase
             $captured[] = ['event' => $event, 'data' => $data];
         };
 
-        $controller = new PhpClawAdminController($engine, []);
         $ref = new \ReflectionMethod(PhpClawAdminController::class, 'streamChat');
-        $ref->setAccessible(true);
-
-        $ref->invoke($controller, 'hi', '', $emit);
+        $ref->invoke(new PhpClawAdminController($engine, []), 'hi', '', $emit);
 
         self::assertCount(1, $captured);
         self::assertSame('error', $captured[0]['event']);
