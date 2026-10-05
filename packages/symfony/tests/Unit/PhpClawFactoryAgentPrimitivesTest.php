@@ -21,6 +21,7 @@ final class PhpClawFactoryAgentPrimitivesTest extends TestCase
     public function test_compatible_fallback_provider_is_applied(): void
     {
         $engine = $this->makeFactory(
+            provider: 'openai',
             fallbackProvider: 'deepseek',
             fallbackModel: 'deepseek-chat',
             fallbackApiKey: 'fb-key',

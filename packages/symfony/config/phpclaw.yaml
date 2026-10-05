@@ -55,10 +55,10 @@ phpclaw:
     cloud_key: '%env(PHPCLAW_CLOUD_KEY)%'
     cloud_signing_secret: '%env(PHPCLAW_CLOUD_SIGNING_SECRET)%' # verify signed cloud scan responses; copy from your phpClaw Cloud dashboard (empty = skip verification)
     cloud_disable: []
-    fallback_provider: '%env(PHPCLAW_FALLBACK_PROVIDER)%'         # fallback provider slug tried when the primary fails, must share the primary's tool format
-    fallback_model: '%env(PHPCLAW_FALLBACK_MODEL)%'                # fallback provider model override
-    fallback_api_key: '%env(PHPCLAW_FALLBACK_API_KEY)%'            # fallback provider API key
-    rate_limit_rpm: '%env(int:PHPCLAW_RATE_LIMIT_RPM)%'            # outbound requests per minute, 0 disables, clamped to 600
-    response_cache: '%env(bool:PHPCLAW_RESPONSE_CACHE)%'           # cache provider responses on the cache.app pool
-    response_cache_ttl: '%env(int:PHPCLAW_RESPONSE_CACHE_TTL)%'    # response cache lifetime in seconds, clamped 60-86400
-    max_token_budget: '%env(int:PHPCLAW_MAX_TOKEN_BUDGET)%'        # total token spend ceiling per run, 0 disables
+    fallback_provider: '%env(PHPCLAW_FALLBACK_PROVIDER)%'         # tried only when the main provider fails (connection error, 429 or 5xx), must use the main provider's tool format, never custom
+    fallback_model: '%env(PHPCLAW_FALLBACK_MODEL)%'                # blank uses the fallback provider's default model
+    fallback_api_key: '%env(PHPCLAW_FALLBACK_API_KEY)%'            # used only when fallback_provider is set and is not ollama
+    rate_limit_rpm: '%env(int:PHPCLAW_RATE_LIMIT_RPM)%'            # most provider calls per minute, shared by every request, 0 turns it off, maximum 600
+    response_cache: '%env(bool:PHPCLAW_RESPONSE_CACHE)%'           # answers an identical request from the cache.app pool instead of calling the provider again
+    response_cache_ttl: '%env(int:PHPCLAW_RESPONSE_CACHE_TTL)%'    # seconds a cached answer is kept, 60 to 86400, used only when response_cache is true
+    max_token_budget: '%env(int:PHPCLAW_MAX_TOKEN_BUDGET)%'        # stops a run before a provider call would take its token spend over this number, 0 turns it off
