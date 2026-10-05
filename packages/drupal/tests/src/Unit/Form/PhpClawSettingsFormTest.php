@@ -718,4 +718,152 @@ final class PhpClawSettingsFormTest extends TestCase
             $this->assertArrayNotHasKey('#access', $built[$field], $field.' must be hidden by #states, not stripped by #access.');
         }
     }
+
+    public function test_build_form_adds_the_seven_agent_primitive_fields_with_their_defaults(): void
+    {
+        $built = $this->createForm(['provider' => 'ollama'])->buildForm([], $this->createFormState());
+
+        self::assertSame('select', $built['fallback_provider']['#type']);
+        self::assertSame('', $built['fallback_provider']['#default_value']);
+        self::assertSame('textfield', $built['fallback_model']['#type']);
+        self::assertSame('password', $built['fallback_api_key']['#type']);
+        self::assertSame('number', $built['rate_limit_rpm']['#type']);
+        self::assertSame(0, $built['rate_limit_rpm']['#default_value']);
+        self::assertSame('checkbox', $built['response_cache']['#type']);
+        self::assertFalse($built['response_cache']['#default_value']);
+        self::assertSame('number', $built['response_cache_ttl']['#type']);
+        self::assertSame(3600, $built['response_cache_ttl']['#default_value']);
+        self::assertSame('number', $built['max_token_budget']['#type']);
+        self::assertSame(0, $built['max_token_budget']['#default_value']);
+    }
+
+    public function test_build_form_uses_the_shared_descriptions(): void
+    {
+        $built = $this->createForm(['provider' => 'ollama'])->buildForm([], $this->createFormState());
+
+        self::assertSame('Optional. Used only when the main provider fails with a connection error, a 429 or a 5xx. Lists only providers with the same tool format as the main provider. Off turns fallback off.', (string) $built['fallback_provider']['#description']);
+        self::assertSame("Leave blank to use the fallback provider's default model.", (string) $built['fallback_model']['#description']);
+        self::assertSame('API key for the fallback provider.', (string) $built['fallback_api_key']['#description']);
+        self::assertSame('Most calls to the AI provider per minute, shared by every request. 0 turns it off. Maximum 600.', (string) $built['rate_limit_rpm']['#description']);
+        self::assertSame('Reuse the answer for an identical request', (string) $built['response_cache']['#title']);
+        self::assertSame('An identical request within the TTL is answered from the cache instead of calling the provider again.', (string) $built['response_cache']['#description']);
+        self::assertSame('How long a cached answer is kept, in seconds: 60 to 86400. Default 3600.', (string) $built['response_cache_ttl']['#description']);
+        self::assertSame('Stops a run before a provider call would take its token spend over this number. 0 turns it off. Maximum 10000000.', (string) $built['max_token_budget']['#description']);
+    }
+
+    public function test_build_form_hides_the_fallback_key_for_off_and_ollama_and_the_ttl_without_the_cache(): void
+    {
+        $built = $this->createForm(['provider' => 'ollama'])->buildForm([], $this->createFormState());
+
+        self::assertSame([
+            [':input[name="fallback_provider"]' => ['value' => '']],
+            'or',
+            [':input[name="fallback_provider"]' => ['value' => 'ollama']],
+        ], $built['fallback_api_key']['#states']['invisible']);
+        self::assertSame([':input[name="response_cache"]' => ['checked' => true]], $built['response_cache_ttl']['#states']['visible']);
+        self::assertArrayNotHasKey('#states', $built['fallback_model']);
+    }
+
+    public function test_build_form_lists_only_fallbacks_with_the_saved_main_tool_format(): void
+    {
+        $openAi = $this->createForm(['provider' => 'ollama'])->buildForm([], $this->createFormState());
+        $anthropic = $this->createForm(['provider' => 'anthropic'])->buildForm([], $this->createFormState());
+
+        self::assertSame(['', 'gemini', 'openai', 'groq', 'deepseek', 'mistral', 'ollama'], array_keys($openAi['fallback_provider']['#options']));
+        self::assertSame('Off', (string) $openAi['fallback_provider']['#options']['']);
+        self::assertSame(['', 'anthropic'], array_keys($anthropic['fallback_provider']['#options']));
+    }
+
+    public function test_build_form_attaches_the_data_the_page_needs_to_rebuild_the_fallback_list(): void
+    {
+        $built = $this->createForm(['provider' => 'ollama'])->buildForm([], $this->createFormState());
+        $data = $built['#attached']['drupalSettings']['phpclaw_settings']['fallback'];
+
+        self::assertSame('Off', $data['offLabel']);
+        self::assertArrayNotHasKey('custom', $data['providers']);
+        self::assertSame('openai', $data['formats']['custom']);
+        self::assertSame('anthropic', $data['formats']['anthropic']);
+        self::assertArrayHasKey('autoFormat', $data);
+    }
+
+    public function test_validate_rejects_a_fallback_with_another_tool_format(): void
+    {
+        $this->assertFallbackRejected('ollama', 'anthropic');
+    }
+
+    public function test_validate_rejects_a_custom_fallback(): void
+    {
+        $this->assertFallbackRejected('openai', 'custom');
+    }
+
+    private function assertFallbackRejected(string $main, string $fallback): void
+    {
+        $state = $this->createMock(FormStateInterface::class);
+        $state->method('getValue')->willReturnCallback(static fn (string $k): mixed => match ($k) {
+            'max_iterations' => 10,
+            'provider' => $main,
+            'fallback_provider' => $fallback,
+            default => null,
+        });
+        $state->expects($this->once())->method('setErrorByName')->with('fallback_provider', $this->anything());
+
+        $formArray = [];
+        $this->createForm()->validateForm($formArray, $state);
+    }
+
+    public function test_validate_accepts_a_fallback_with_the_main_tool_format(): void
+    {
+        $state = $this->createMock(FormStateInterface::class);
+        $state->method('getValue')->willReturnCallback(static fn (string $k): mixed => match ($k) {
+            'max_iterations' => 10,
+            'provider' => 'custom',
+            'fallback_provider' => 'groq',
+            default => null,
+        });
+        $state->expects($this->never())->method('setErrorByName');
+
+        $formArray = [];
+        $this->createForm()->validateForm($formArray, $state);
+    }
+
+    public function test_submit_clamps_the_numbers_and_saves_the_seven_fields(): void
+    {
+        $saved = $this->submit(['fallback_provider' => 'groq', 'fallback_model' => ' llama-3.1-8b-instant ', 'fallback_api_key' => 'gsk-new', 'rate_limit_rpm' => '1000', 'response_cache' => 1, 'response_cache_ttl' => '30', 'max_token_budget' => '-1']);
+
+        self::assertSame('groq', $saved['fallback_provider']);
+        self::assertSame('llama-3.1-8b-instant', $saved['fallback_model']);
+        self::assertSame('gsk-new', $saved['fallback_api_key']);
+        self::assertSame(600, $saved['rate_limit_rpm']);
+        self::assertTrue($saved['response_cache']);
+        self::assertSame(60, $saved['response_cache_ttl']);
+        self::assertSame(0, $saved['max_token_budget']);
+    }
+
+    public function test_submit_reads_an_empty_ttl_as_one_hour_and_keeps_a_blank_fallback_key(): void
+    {
+        $saved = $this->submit(['fallback_api_key' => '', 'response_cache_ttl' => '', 'rate_limit_rpm' => '-5', 'max_token_budget' => '20000000', 'response_cache' => 0]);
+
+        self::assertArrayNotHasKey('fallback_api_key', $saved);
+        self::assertSame(3600, $saved['response_cache_ttl']);
+        self::assertSame(0, $saved['rate_limit_rpm']);
+        self::assertSame(10000000, $saved['max_token_budget']);
+        self::assertFalse($saved['response_cache']);
+    }
+
+    private function submit(array $values): array
+    {
+        $saved = [];
+        $config = $this->createMock(Config::class);
+        $config->method('get')->willReturn(null);
+        $config->method('set')->willReturnCallback(function (string $k, mixed $v) use ($config, &$saved) {
+            $saved[$k] = $v;
+
+            return $config;
+        });
+
+        $formArray = [];
+        $this->createForm([], $config)->submitForm($formArray, $this->createFormState($values + ['provider' => 'ollama', 'max_iterations' => 10]));
+
+        return $saved;
+    }
 }

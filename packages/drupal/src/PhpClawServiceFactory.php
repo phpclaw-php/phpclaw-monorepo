@@ -7,8 +7,10 @@ namespace PhpClaw\Drupal;
 use Drupal\Core\Config\ImmutableConfig;
 use PhpClaw\Agent\CliApprovalGate;
 use PhpClaw\Claw;
+use PhpClaw\ClawBuilder;
 use PhpClaw\ClawConfig;
 use PhpClaw\Config\ToolConfig;
+use PhpClaw\Drupal\Cache\DrupalCache;
 use PhpClaw\Drupal\Service\DrupalAgentContext;
 use PhpClaw\Drupal\Support\CloudDisableParser;
 use PhpClaw\Drupal\Support\Defaults;
@@ -44,6 +46,10 @@ use PhpClaw\Tools\ToolRegistry;
  */
 final class PhpClawServiceFactory
 {
+    private const PROVIDER_CUSTOM = 'custom';
+
+    private const CACHE_BIN = 'cache.phpclaw';
+
     /**
      * Full agent with all tools, or null if the current settings can't build one.
      *
@@ -233,7 +239,50 @@ final class PhpClawServiceFactory
 
         $builder->approvalGate(new CliApprovalGate);
 
+        self::applyAgentPrimitives($builder, $config, $provider);
+
         return $builder->build();
+    }
+
+    /**
+     * Apply the fallback provider, outbound rate limit, response cache and token budget; each stays off unless set.
+     *
+     * @param  ClawBuilder  $builder  Builder for the agent being assembled.
+     * @param  ImmutableConfig  $config  The phpclaw.settings config, already clamped by the settings form.
+     * @param  string  $provider  The saved main provider slug, or '' when it is auto-detected.
+     * @return void
+     */
+    private static function applyAgentPrimitives(ClawBuilder $builder, ImmutableConfig $config, string $provider): void
+    {
+        $main = $provider !== '' ? $provider : (new ClawConfig)->providerName;
+        $fallback = (string) ($config->get('fallback_provider') ?? '');
+        $fallbackCompatible = $fallback !== ''
+            && $fallback !== self::PROVIDER_CUSTOM
+            && ToolRegistry::toolFormat($fallback) === ToolRegistry::toolFormat($main);
+
+        if ($fallbackCompatible) {
+            $builder->withFallback($fallback, (string) ($config->get('fallback_model') ?? ''), (string) ($config->get('fallback_api_key') ?? ''));
+        } elseif ($fallback !== '') {
+            error_log('phpClaw: fallback provider "'.$fallback.'" is custom or uses another tool format than the main provider, skipping fallback.');
+        }
+
+        $rpm = (int) ($config->get('rate_limit_rpm') ?? 0);
+        $cacheOn = (bool) ($config->get('response_cache') ?? false);
+        $store = $rpm > 0 || $cacheOn ? new DrupalCache(\Drupal::service(self::CACHE_BIN), \Drupal::time()) : null;
+
+        if ($store !== null && $rpm > 0) {
+            $builder->rateLimit($rpm, store: $store);
+        }
+
+        if ($store !== null && $cacheOn) {
+            $builder->responseCache($store, (int) ($config->get('response_cache_ttl') ?? 0));
+        }
+
+        $budget = (int) ($config->get('max_token_budget') ?? 0);
+
+        if ($budget > 0) {
+            $builder->maxTokenBudget($budget);
+        }
     }
 
     /**

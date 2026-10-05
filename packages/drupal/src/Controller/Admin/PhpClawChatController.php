@@ -10,8 +10,10 @@ use Drupal\Core\Controller\ControllerBase;
 use PhpClaw\Contracts\ClawInterface;
 use PhpClaw\Drupal\Exceptions\ConversationAccessDeniedException;
 use PhpClaw\Drupal\Service\ToolCall;
+use PhpClaw\Drupal\Support\LimitResponse;
 use PhpClaw\Exceptions\GuardException;
 use PhpClaw\Exceptions\ProviderException;
+use PhpClaw\Exceptions\TokenBudgetExceededException;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -200,7 +202,11 @@ final class PhpClawChatController extends ControllerBase
             return new JsonResponse(['ok' => false, 'error' => 'You do not have permission to access this conversation.'], 403);
         } catch (GuardException $e) {
             return new JsonResponse(['ok' => false, 'error' => 'Blocked request.'], 422);
-        } catch (ProviderException $e) {
+        } catch (ProviderException|TokenBudgetExceededException $e) {
+            $limitStatus = LimitResponse::status($e);
+            if ($limitStatus !== null) {
+                return new JsonResponse(['ok' => false, 'error' => LimitResponse::message($e)], $limitStatus);
+            }
             $this->logger?->error('@message', ['@message' => $e->getMessage()]);
 
             return new JsonResponse(['ok' => false, 'error' => 'AI provider error. Check your API key and try again.'], 502);

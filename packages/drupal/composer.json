@@ -48,7 +48,8 @@
         "phpclaw/phpclaw": "^0.1",
         "phpclaw/phpclaw-cloud": "^0.1",
         "phpclaw/phpclaw-mcp": "^0.1",
-        "drupal/core": "^10.0|^11.0"
+        "drupal/core": "^10.0|^11.0",
+        "psr/simple-cache": "^3.0"
     },
     "support": {
         "issues": "https://github.com/phpclaw-php/phpclaw-monorepo/issues",

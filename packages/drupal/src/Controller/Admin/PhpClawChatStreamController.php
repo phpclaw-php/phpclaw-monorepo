@@ -9,8 +9,10 @@ use Drupal\Core\Controller\ControllerBase;
 use PhpClaw\Contracts\ClawInterface;
 use PhpClaw\Drupal\Exceptions\ConversationAccessDeniedException;
 use PhpClaw\Drupal\Service\ToolCall;
+use PhpClaw\Drupal\Support\LimitResponse;
 use PhpClaw\Exceptions\GuardException;
 use PhpClaw\Exceptions\ProviderException;
+use PhpClaw\Exceptions\TokenBudgetExceededException;
 use PhpClaw\Hooks\HookRegistry;
 use PhpClaw\Hooks\LifecycleEvent;
 use Psr\Log\LoggerInterface;
@@ -122,7 +124,7 @@ final class PhpClawChatStreamController extends ControllerBase
             return $response;
         }
 
-        $response->setCallback(function () use ($agent, $message, $conversation, $logger): void {
+        $response->setCallback(function () use ($agent, $message, $conversation, $logger, $response): void {
             self::sendSseHeaders();
 
             $emit = static function (string $event, array $data): void {
@@ -180,7 +182,16 @@ final class PhpClawChatStreamController extends ControllerBase
                 self::emitSseError('You do not have permission to access this conversation.');
             } catch (GuardException $e) {
                 self::emitSseError('Blocked request.');
-            } catch (ProviderException $e) {
+            } catch (ProviderException|TokenBudgetExceededException $e) {
+                $limitStatus = LimitResponse::status($e);
+                if ($limitStatus !== null) {
+                    if (! headers_sent()) {
+                        header(sprintf('HTTP/%s %d %s', $response->getProtocolVersion(), $limitStatus, Response::$statusTexts[$limitStatus]), true, $limitStatus);
+                    }
+                    self::emitSseError((string) LimitResponse::message($e));
+
+                    return;
+                }
                 $logger?->error('@message', ['@message' => $e->getMessage()]);
                 self::emitSseError('AI provider error. Check your API key and try again.');
             } catch (\Throwable $e) {

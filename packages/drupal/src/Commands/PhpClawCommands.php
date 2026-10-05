@@ -8,9 +8,11 @@ use Drush\Attributes as CLI;
 use PhpClaw\Drupal\Commands\Base\PhpClawDrushCommands;
 use PhpClaw\Drupal\PhpClawServiceFactory;
 use PhpClaw\Drupal\Service\DrupalAgentContext;
+use PhpClaw\Drupal\Support\LimitResponse;
 use PhpClaw\Exceptions\GuardException;
 use PhpClaw\Exceptions\MaxIterationsException;
 use PhpClaw\Exceptions\ProviderException;
+use PhpClaw\Exceptions\TokenBudgetExceededException;
 
 /**
  * Drush commands for the PhpClaw AI agent.
@@ -72,8 +74,8 @@ final class PhpClawCommands extends PhpClawDrushCommands
             $this->logger()?->error('Your message was blocked by a security guard: '.$e->getMessage());
 
             return 1;
-        } catch (ProviderException $e) {
-            $this->logger()?->error('AI provider error: '.$e::class);
+        } catch (ProviderException|TokenBudgetExceededException $e) {
+            $this->logger()?->error(LimitResponse::message($e) ?? 'AI provider error: '.$e::class);
 
             return 1;
         } catch (MaxIterationsException $e) {

@@ -15,6 +15,7 @@ use PhpClaw\Drupal\Support\CloudDisableParser;
 use PhpClaw\Drupal\Support\Defaults;
 use PhpClaw\Drupal\Support\RemoteSkillUrlFilter;
 use PhpClaw\Providers\ProviderCatalogue;
+use PhpClaw\Tools\ToolRegistry;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 
 /**
@@ -22,6 +23,18 @@ use Symfony\Component\DependencyInjection\ContainerInterface;
  */
 final class PhpClawSettingsForm extends ConfigFormBase
 {
+    private const PROVIDER_CUSTOM = 'custom';
+
+    private const MAX_RATE_LIMIT_RPM = 600;
+
+    private const MIN_CACHE_TTL = 60;
+
+    private const MAX_CACHE_TTL = 86400;
+
+    private const DEFAULT_CACHE_TTL = 3600;
+
+    private const MAX_TOKEN_BUDGET = 10000000;
+
     private ?CsrfTokenGenerator $csrfTokenGenerator = null;
 
     /**
@@ -129,7 +142,7 @@ HTML;
         $form['base_url'] = [
             '#type' => 'url',
             '#title' => $this->t('Base URL'),
-            '#description' => $this->t('OpenAI-compatible endpoint (https://…/v1/chat/completions). Required when provider is Custom. Use for OpenRouter, Together AI, remote Ollama, or any self-hosted gateway.'),
+            '#description' => $this->t('For the Custom provider only. The full OpenAI-compatible /chat/completions endpoint URL. Enter your API key above if the endpoint requires one.'),
             '#default_value' => $baseUrl,
             '#placeholder' => 'https://openrouter.ai/api/v1/chat/completions',
             '#attributes' => array_merge(['id' => 'phpclaw-base-url'], $fieldStyle),
@@ -148,7 +161,7 @@ HTML;
         $form['store_messages'] = [
             '#type' => 'checkbox',
             '#title' => $this->t('Store Messages'),
-            '#description' => $this->t('When enabled: prompt and response text is persisted, required for multi-turn chat. When disabled: no message content is saved; each prompt is processed independently.'),
+            '#description' => $this->t('When enabled: prompt and response text is saved, so a conversation remembers previous messages. When disabled: no message content is ever saved; each prompt is processed independently.'),
             '#default_value' => (bool) ($config->get('store_messages') ?? Defaults::STORE_MESSAGES),
         ];
 
@@ -159,6 +172,89 @@ HTML;
             '#default_value' => (int) ($config->get('max_iterations') ?? ClawConfig::DEFAULT_MAX_ITERATIONS),
             '#min' => 1,
             '#max' => 50,
+            '#attributes' => $fieldStyle,
+        ];
+
+        $fallbackData = self::fallbackScriptData();
+        $mainFormat = $provider !== '' ? ToolRegistry::toolFormat($provider) : $fallbackData['autoFormat'];
+        $fallbackOptions = ['' => $this->t('Off')];
+        foreach ($fallbackData['providers'] as $slug => $label) {
+            if ($fallbackData['formats'][$slug] === $mainFormat) {
+                $fallbackOptions[$slug] = $label;
+            }
+        }
+        $fallbackKey = (string) ($config->get('fallback_api_key') ?? '');
+
+        $form['fallback_provider'] = [
+            '#type' => 'select',
+            '#title' => $this->t('Fallback Provider'),
+            '#description' => $this->t('Optional. Used only when the main provider fails with a connection error, a 429 or a 5xx. Lists only providers with the same tool format as the main provider. Off turns fallback off.'),
+            '#options' => $fallbackOptions,
+            '#default_value' => (string) ($config->get('fallback_provider') ?? ''),
+            '#attributes' => array_merge(['id' => 'phpclaw-fallback-provider'], $fieldStyle),
+        ];
+
+        $form['fallback_model'] = [
+            '#type' => 'textfield',
+            '#title' => $this->t('Fallback Model'),
+            '#description' => $this->t("Leave blank to use the fallback provider's default model."),
+            '#default_value' => (string) ($config->get('fallback_model') ?? ''),
+            '#attributes' => $fieldStyle,
+        ];
+
+        $form['fallback_api_key'] = [
+            '#type' => 'password',
+            '#title' => $this->t('Fallback API Key'),
+            '#description' => $this->t('API key for the fallback provider.'),
+            '#default_value' => '',
+            '#placeholder' => $fallbackKey !== '' ? $this->t('Saved. Leave blank to keep current value') : '',
+            '#attributes' => array_merge(['autocomplete' => 'new-password'], $fieldStyle),
+            '#states' => [
+                'invisible' => [
+                    [':input[name="fallback_provider"]' => ['value' => '']],
+                    'or',
+                    [':input[name="fallback_provider"]' => ['value' => 'ollama']],
+                ],
+            ],
+        ];
+
+        $form['rate_limit_rpm'] = [
+            '#type' => 'number',
+            '#title' => $this->t('Rate Limit (requests/min)'),
+            '#description' => $this->t('Most calls to the AI provider per minute, shared by every request. 0 turns it off. Maximum 600.'),
+            '#default_value' => (int) ($config->get('rate_limit_rpm') ?? 0),
+            '#min' => 0,
+            '#max' => self::MAX_RATE_LIMIT_RPM,
+            '#attributes' => $fieldStyle,
+        ];
+
+        $form['response_cache'] = [
+            '#type' => 'checkbox',
+            '#title' => $this->t('Reuse the answer for an identical request'),
+            '#description' => $this->t('An identical request within the TTL is answered from the cache instead of calling the provider again.'),
+            '#default_value' => (bool) ($config->get('response_cache') ?? false),
+        ];
+
+        $form['response_cache_ttl'] = [
+            '#type' => 'number',
+            '#title' => $this->t('Response Cache TTL (seconds)'),
+            '#description' => $this->t('How long a cached answer is kept, in seconds: 60 to 86400. Default 3600.'),
+            '#default_value' => (int) ($config->get('response_cache_ttl') ?? self::DEFAULT_CACHE_TTL),
+            '#min' => self::MIN_CACHE_TTL,
+            '#max' => self::MAX_CACHE_TTL,
+            '#attributes' => $fieldStyle,
+            '#states' => [
+                'visible' => [':input[name="response_cache"]' => ['checked' => true]],
+            ],
+        ];
+
+        $form['max_token_budget'] = [
+            '#type' => 'number',
+            '#title' => $this->t('Max Token Budget'),
+            '#description' => $this->t('Stops a run before a provider call would take its token spend over this number. 0 turns it off. Maximum 10000000.'),
+            '#default_value' => (int) ($config->get('max_token_budget') ?? 0),
+            '#min' => 0,
+            '#max' => self::MAX_TOKEN_BUDGET,
             '#attributes' => $fieldStyle,
         ];
 
@@ -185,7 +281,7 @@ HTML;
             $form['cloud_key'] = [
                 '#type' => 'password',
                 '#title' => $this->t('Cloud Key'),
-                '#description' => $this->t('phpClaw Cloud API key. Enables cloud guards and webhook features. Optional. Requires a phpClaw Cloud account at phpclaw.ai.'),
+                '#description' => $this->t('phpClaw Cloud API key. Enables cloud guards and webhook features. Optional.'),
                 '#default_value' => '',
                 '#placeholder' => (string) ($config->get('cloud_key') ?? '') !== '' ? $this->t('Saved. Leave blank to keep current value') : '',
                 '#attributes' => array_merge(['autocomplete' => 'new-password'], $fieldStyle),
@@ -208,7 +304,7 @@ HTML;
             $form['cloud_disable'] = [
                 '#type' => 'textfield',
                 '#title' => $this->t('Disable Cloud Features'),
-                '#description' => $this->t('Comma-separated cloud feature names to disable. Leave empty to enable all. Only applies when a Cloud Key is set above.'),
+                '#description' => $this->t('Comma-separated cloud feature names to turn off, or hide_inputs, hide_outputs and hide_metadata to keep that content on your server while tracing stays on. Leave empty to use every feature in your plan. Only applies when a Cloud Key is set above.'),
                 '#default_value' => $disableStr,
                 '#placeholder' => 'e.g. guards, webhooks',
                 '#attributes' => $fieldStyle,
@@ -228,6 +324,7 @@ HTML;
 
         $form['#attached']['library'][] = 'phpclaw/admin.settings';
         $form['#attached']['drupalSettings']['phpclaw_settings']['csrf_token'] = $this->csrfTokenGenerator?->get('phpclaw-chat') ?? '';
+        $form['#attached']['drupalSettings']['phpclaw_settings']['fallback'] = $fallbackData;
 
         $form['test_connection'] = [
             '#markup' => Markup::create(
@@ -290,6 +387,11 @@ HTML;
         if ($baseUrl !== '' && (filter_var($baseUrl, FILTER_VALIDATE_URL) === false || ! preg_match('~^https?://~i', $baseUrl))) {
             $form_state->setErrorByName('base_url', $this->t('Base URL must be a full http(s) OpenAI-compatible endpoint URL.'));
         }
+
+        $fallback = (string) ($form_state->getValue('fallback_provider') ?? '');
+        if ($fallback !== '' && ! self::fallbackMatchesMain($fallback, $provider)) {
+            $form_state->setErrorByName('fallback_provider', $this->t('Fallback provider must use the same tool format as the primary provider, and cannot be Custom.'));
+        }
     }
 
     /**
@@ -318,7 +420,18 @@ HTML;
             ->set('store_messages', $storeMessages)
             ->set('system_prompt', (string) $form_state->getValue('system_prompt'))
             ->set('cloud_disable', $cloudDisable)
-            ->set('remote_skill_urls', RemoteSkillUrlFilter::filter((string) ($form_state->getValue('remote_skill_urls') ?? '')));
+            ->set('remote_skill_urls', RemoteSkillUrlFilter::filter((string) ($form_state->getValue('remote_skill_urls') ?? '')))
+            ->set('fallback_provider', (string) ($form_state->getValue('fallback_provider') ?? ''))
+            ->set('fallback_model', trim((string) ($form_state->getValue('fallback_model') ?? '')))
+            ->set('rate_limit_rpm', self::clamp($form_state->getValue('rate_limit_rpm'), 0, self::MAX_RATE_LIMIT_RPM))
+            ->set('response_cache', (bool) $form_state->getValue('response_cache'))
+            ->set('response_cache_ttl', trim((string) ($form_state->getValue('response_cache_ttl') ?? '')) === '' ? self::DEFAULT_CACHE_TTL : self::clamp($form_state->getValue('response_cache_ttl'), self::MIN_CACHE_TTL, self::MAX_CACHE_TTL))
+            ->set('max_token_budget', self::clamp($form_state->getValue('max_token_budget'), 0, self::MAX_TOKEN_BUDGET));
+
+        $newFallbackKey = (string) ($form_state->getValue('fallback_api_key') ?? '');
+        if ($newFallbackKey !== '') {
+            $config->set('fallback_api_key', $newFallbackKey);
+        }
 
         if ($newApiKey !== '') {
             $config->set('api_key', $newApiKey);
@@ -334,6 +447,65 @@ HTML;
 
         $config->save();
         parent::submitForm($form, $form_state);
+    }
+
+    /**
+     * Data the settings page script needs to rebuild the fallback dropdown when the main provider changes: every
+     * provider except Custom, every provider's tool format, and the format of the auto-detected main provider.
+     *
+     * @return array{offLabel: string, providers: array<string, string>, formats: array<string, string>, autoFormat: string}
+     */
+    private static function fallbackScriptData(): array
+    {
+        $providers = [];
+        $formats = [];
+
+        foreach (ProviderCatalogue::all() as $slug => $entry) {
+            $key = (string) $slug;
+            if ($key === '') {
+                continue;
+            }
+            $formats[$key] = ToolRegistry::toolFormat($key);
+            if ($key !== self::PROVIDER_CUSTOM) {
+                $providers[$key] = (string) ($entry['label'] ?? $key);
+            }
+        }
+
+        return [
+            'offLabel' => 'Off',
+            'providers' => $providers,
+            'formats' => $formats,
+            'autoFormat' => ToolRegistry::toolFormat((new ClawConfig)->providerName),
+        ];
+    }
+
+    /**
+     * Whether a fallback provider can back up the main provider: not Custom, and the same tool format.
+     *
+     * @param  string  $fallback  The submitted fallback provider slug.
+     * @param  string  $main  The submitted main provider slug, or '' when it is auto-detected.
+     * @return bool
+     */
+    private static function fallbackMatchesMain(string $fallback, string $main): bool
+    {
+        $mainFormat = ToolRegistry::toolFormat($main !== '' ? $main : (new ClawConfig)->providerName);
+
+        return $fallback !== self::PROVIDER_CUSTOM
+            && array_key_exists($fallback, ProviderCatalogue::all())
+            && ToolRegistry::toolFormat($fallback) === $mainFormat;
+    }
+
+    /**
+     * Read a submitted number as an integer held inside the given bounds.
+     *
+     * @param  mixed  $raw  Raw submitted value.
+     * @param  int  $min  Lowest allowed value.
+     * @param  int  $max  Highest allowed value.
+     * @return int
+     */
+    private static function clamp(mixed $raw, int $min, int $max): int
+    {
+        return max($min, min($max, (int) $raw));
     }
 
     /**

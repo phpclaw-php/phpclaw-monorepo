@@ -30,6 +30,26 @@
       phpclawToggle();
     }
 
+    var fallbackSel  = document.getElementById('phpclaw-fallback-provider');
+    var fallbackData = (window.drupalSettings && drupalSettings.phpclaw_settings && drupalSettings.phpclaw_settings.fallback) || null;
+    if (sel && fallbackSel && fallbackData) {
+      sel.addEventListener('change', function () {
+        var format  = sel.value === '' ? fallbackData.autoFormat : fallbackData.formats[sel.value];
+        var current = fallbackSel.value;
+        var keep    = false;
+        fallbackSel.options.length = 0;
+        fallbackSel.add(new Option(fallbackData.offLabel, ''));
+        Object.keys(fallbackData.providers).forEach(function (slug) {
+          if (fallbackData.formats[slug] === format) {
+            fallbackSel.add(new Option(fallbackData.providers[slug], slug));
+            keep = keep || slug === current;
+          }
+        });
+        fallbackSel.value = keep ? current : '';
+        fallbackSel.dispatchEvent(new Event('change', { bubbles: true }));
+      });
+    }
+
     var testBtn    = document.getElementById('phpclaw-test-conn');
     var testResult = document.getElementById('phpclaw-test-result');
     if (testBtn && testResult) {

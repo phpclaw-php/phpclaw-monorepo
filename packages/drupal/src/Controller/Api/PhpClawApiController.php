@@ -10,8 +10,10 @@ use PhpClaw\Drupal\Controller\Admin\ConversationHistoryTrait;
 use PhpClaw\Drupal\Controller\Admin\ResolveAgentTrait;
 use PhpClaw\Drupal\Exceptions\ConversationAccessDeniedException;
 use PhpClaw\Drupal\Service\ToolCall;
+use PhpClaw\Drupal\Support\LimitResponse;
 use PhpClaw\Exceptions\GuardException;
 use PhpClaw\Exceptions\ProviderException;
+use PhpClaw\Exceptions\TokenBudgetExceededException;
 use PhpClaw\Hooks\HookRegistry;
 use PhpClaw\Hooks\LifecycleEvent;
 use Psr\Log\LoggerInterface;
@@ -112,7 +114,11 @@ final class PhpClawApiController extends ControllerBase
             return self::error(self::CONVERSATION_DENIED, Response::HTTP_FORBIDDEN);
         } catch (GuardException) {
             return self::error(self::BLOCKED, Response::HTTP_UNPROCESSABLE_ENTITY);
-        } catch (ProviderException $e) {
+        } catch (ProviderException|TokenBudgetExceededException $e) {
+            $limitStatus = LimitResponse::status($e);
+            if ($limitStatus !== null) {
+                return self::error((string) LimitResponse::message($e), $limitStatus);
+            }
             $this->logger?->error('@message', ['@message' => $e->getMessage()]);
 
             return self::error(self::PROVIDER_ERROR, Response::HTTP_BAD_GATEWAY);
@@ -156,7 +162,7 @@ final class PhpClawApiController extends ControllerBase
             return self::streamError($response, self::CONVERSATION_DENIED, Response::HTTP_FORBIDDEN);
         }
 
-        $response->setCallback(static function () use ($agent, $logger, $message, $conversation): void {
+        $response->setCallback(static function () use ($agent, $logger, $message, $conversation, $response): void {
             self::drainOutputBuffers();
 
             $emit = static function (string $event, array $data): void {
@@ -206,7 +212,16 @@ final class PhpClawApiController extends ControllerBase
                 $emit('error', ['message' => self::CONVERSATION_DENIED]);
             } catch (GuardException) {
                 $emit('error', ['message' => self::BLOCKED]);
-            } catch (ProviderException $e) {
+            } catch (ProviderException|TokenBudgetExceededException $e) {
+                $limitStatus = LimitResponse::status($e);
+                if ($limitStatus !== null) {
+                    if (! headers_sent()) {
+                        header(sprintf('HTTP/%s %d %s', $response->getProtocolVersion(), $limitStatus, Response::$statusTexts[$limitStatus]), true, $limitStatus);
+                    }
+                    $emit('error', ['message' => LimitResponse::message($e)]);
+
+                    return;
+                }
                 $logger?->error('@message', ['@message' => $e->getMessage()]);
                 $emit('error', ['message' => self::PROVIDER_ERROR]);
             } catch (\Throwable $e) {

@@ -4,6 +4,13 @@ services:
     parent: logger.channel_base
     arguments: ['phpclaw']
 
+  cache.phpclaw:
+    class: Drupal\Core\Cache\CacheBackendInterface
+    tags:
+      - { name: cache.bin }
+    factory: ['@cache_factory', 'get']
+    arguments: [phpclaw]
+
   phpclaw.registrar:
     class: PhpClaw\Drupal\PhpClawRegistrar
     arguments:

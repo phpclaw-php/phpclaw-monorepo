@@ -73,3 +73,24 @@ phpclaw.settings:
       sequence:
         type: string
         label: 'Tool name or group reference'
+    fallback_provider:
+      type: string
+      label: 'Fallback provider used when the main provider fails'
+    fallback_model:
+      type: string
+      label: 'Fallback model'
+    fallback_api_key:
+      type: string
+      label: 'API key for the fallback provider'
+    rate_limit_rpm:
+      type: integer
+      label: 'Most calls to the AI provider per minute'
+    response_cache:
+      type: boolean
+      label: 'Reuse the answer for an identical request'
+    response_cache_ttl:
+      type: integer
+      label: 'How long a cached answer is kept, in seconds'
+    max_token_budget:
+      type: integer
+      label: 'Token budget per run'

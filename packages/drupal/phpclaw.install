@@ -321,3 +321,34 @@ function phpclaw_update_8004(): string
 
     return 'Added phpclaw_conversations.user_id (default 0) and the user_namespace_updated index.';
 }
+
+/**
+ * Adds the fallback provider, rate limit, response cache and token budget settings, keeping any value already set.
+ *
+ * @return string
+ */
+function phpclaw_update_8005(): string
+{
+    $config = \Drupal::configFactory()->getEditable('phpclaw.settings');
+    $defaults = [
+        'fallback_provider' => '',
+        'fallback_model' => '',
+        'fallback_api_key' => '',
+        'rate_limit_rpm' => 0,
+        'response_cache' => false,
+        'response_cache_ttl' => 3600,
+        'max_token_budget' => 0,
+    ];
+    $added = [];
+
+    foreach ($defaults as $key => $value) {
+        if ($config->get($key) === null) {
+            $config->set($key, $value);
+            $added[] = $key;
+        }
+    }
+
+    $config->save(true);
+
+    return $added === [] ? 'All agent primitive settings are already present, nothing to do.' : 'Added phpclaw.settings: '.implode(', ', $added).'.';
+}

@@ -18,6 +18,7 @@ use PhpClaw\Drupal\Controller\Admin\ConversationHistoryTrait;
 use PhpClaw\Drupal\Controller\Admin\PhpClawChatController;
 use PhpClaw\Exceptions\GuardException;
 use PhpClaw\Exceptions\ProviderException;
+use PhpClaw\Exceptions\TokenBudgetExceededException;
 use PhpClaw\Guards\GuardRegistry;
 use PhpClaw\Hooks\HookRegistry;
 use PhpClaw\Memory\Contracts\MemoryInterface;
@@ -240,6 +241,34 @@ final class PhpClawChatControllerTest extends TestCase
         $response = $controller->send($request);
 
         $this->assertSame(502, $response->getStatusCode());
+    }
+
+    public function test_send_returns_422_with_the_budget_message_when_the_token_budget_is_spent(): void
+    {
+        $this->assertSendFailsWith(new TokenBudgetExceededException(1200, 1000), 422, 'Token budget reached for this run.');
+    }
+
+    public function test_send_returns_429_with_the_rate_limit_message_on_a_provider_rate_limit(): void
+    {
+        $this->assertSendFailsWith(new ProviderException('rate limit wait exceeded', statusCode: 429), 429, 'Rate limit reached, try again shortly.');
+    }
+
+    private function assertSendFailsWith(\Throwable $failure, int $status, string $message): void
+    {
+        if (! class_exists(ControllerBase::class)) {
+            $this->markTestSkipped('Drupal ControllerBase not available.');
+        }
+
+        $this->bootContainer();
+
+        $agent = $this->createMock(ClawInterface::class);
+        $agent->method('conversation')->willReturn($this->makeConversation());
+        $agent->method('streamInConversation')->willThrowException($failure);
+
+        $response = $this->makeController($agent)->send($this->makeRequest(['message' => 'Hello']));
+
+        self::assertSame($status, $response->getStatusCode());
+        self::assertSame(['ok' => false, 'error' => $message], json_decode((string) $response->getContent(), true));
     }
 
     public function test_send_returns_500_on_unexpected_throwable(): void

@@ -8,4 +8,10 @@ tool_deny: []
 api_auth_providers:
   - basic_auth
   - cookie
-
+fallback_provider: ''
+fallback_model: ''
+fallback_api_key: ''
+rate_limit_rpm: 0
+response_cache: false
+response_cache_ttl: 3600
+max_token_budget: 0
