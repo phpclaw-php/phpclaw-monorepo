@@ -189,6 +189,33 @@ final class GuidePage
                 <?php } ?>
             </tbody>
         </table>
+
+        <h3 class="pc-mt-24"><?= esc_html__('Advanced options', 'phpclaw') ?></h3>
+        <p class="pc-text-muted"><?= esc_html__('All optional and off by default. Set them in', 'phpclaw') ?> <?= self::settingsLink() ?>.</p>
+        <table class="widefat striped pc-table-narrow">
+            <thead>
+                <tr>
+                    <th><?= esc_html__('Field', 'phpclaw') ?></th>
+                    <th><?= esc_html__('What it does', 'phpclaw') ?></th>
+                </tr>
+            </thead>
+            <tbody>
+                <?php
+        $advanced = [
+            ['Fallback Provider / Model / API Key', 'When the primary provider fails, retry with this provider instead. Must use the same tool format as the primary provider (OpenAI-compatible providers can fall back to each other; Anthropic cannot fall back to an OpenAI-compatible provider or the reverse).'],
+            ['Rate Limit (requests/min)',           'Caps outbound requests to the provider per minute. 0 = unlimited.'],
+            ['Response Cache',                      'Caches identical replies so a repeated request is answered locally instead of calling the provider again.'],
+            ['Response Cache TTL (seconds)',         'How long a cached response stays valid. Default: 3600 (1 hour).'],
+            ['Max Token Budget',                    'Stops a run once its estimated token spend would exceed this ceiling. 0 = unlimited.'],
+        ];
+        foreach ($advanced as [$field, $desc]) { ?>
+                <tr>
+                    <td><code><?= esc_html($field) ?></code></td>
+                    <td><?= esc_html($desc) ?></td>
+                </tr>
+                <?php } ?>
+            </tbody>
+        </table>
         <?php
     }
 
@@ -980,6 +1007,8 @@ final class GuidePage
                 <tr><td>400</td><td><code>phpclaw_invalid_id</code></td><td><code>conversation_id</code> is not a valid format</td></tr>
                 <tr><td>403</td><td><code>phpclaw_forbidden</code></td><td>Not authenticated, missing capability, or accessing another user's conversation</td></tr>
                 <tr><td>422</td><td><code>phpclaw_guard</code></td><td>Request blocked by security guard</td></tr>
+                <tr><td>422</td><td><code>phpclaw_budget_exceeded</code></td><td>Token budget reached for this run</td></tr>
+                <tr><td>429</td><td><code>phpclaw_rate_limited</code></td><td>Rate limit reached, try again shortly</td></tr>
                 <tr><td>503</td><td><code>phpclaw_not_configured</code></td><td>No API key set</td></tr>
                 <tr><td>500</td><td><code>phpclaw_error</code></td><td>Provider or tool error</td></tr>
             </tbody>

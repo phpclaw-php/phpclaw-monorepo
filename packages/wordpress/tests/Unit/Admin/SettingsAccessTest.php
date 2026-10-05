@@ -133,6 +133,7 @@ final class SettingsAccessTest extends TestCase
         Functions\when('admin_url')->justReturn('http://example.test/wp-admin/');
         Functions\when('settings_fields')->justReturn(null);
         Functions\when('do_settings_sections')->justReturn(null);
+        Functions\when('settings_errors')->justReturn(null);
         Functions\when('submit_button')->justReturn(null);
         Functions\when('wp_create_nonce')->justReturn('nonce');
         Functions\when('selected')->justReturn('');

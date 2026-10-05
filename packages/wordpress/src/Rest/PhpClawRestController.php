@@ -6,6 +6,8 @@ namespace PhpClaw\WordPress\Rest;
 
 use PhpClaw\Contracts\ClawInterface as PhpClawInterface;
 use PhpClaw\Exceptions\GuardException;
+use PhpClaw\Exceptions\ProviderException;
+use PhpClaw\Exceptions\TokenBudgetExceededException;
 use PhpClaw\WordPress\Exceptions\ConversationAccessDeniedException;
 use PhpClaw\WordPress\Support\ToolHistorySplicer;
 
@@ -142,6 +144,28 @@ final class PhpClawRestController
                 'phpclaw_guard',
                 'Request blocked by security guard.',
                 ['status' => 422],
+            );
+        } catch (TokenBudgetExceededException $e) {
+            return new \WP_Error(
+                'phpclaw_budget_exceeded',
+                __('Token budget reached for this run.', 'phpclaw'),
+                ['status' => 422],
+            );
+        } catch (ProviderException $e) {
+            if ($e->statusCode === 429) {
+                return new \WP_Error(
+                    'phpclaw_rate_limited',
+                    __('Rate limit reached, try again shortly.', 'phpclaw'),
+                    ['status' => 429],
+                );
+            }
+
+            error_log('phpClaw REST error: '.$e->getMessage());
+
+            return new \WP_Error(
+                'phpclaw_error',
+                'An internal error occurred. Please try again or contact your administrator.',
+                ['status' => 500],
             );
         } catch (\Throwable $e) {
             error_log('phpClaw REST error: '.$e->getMessage());

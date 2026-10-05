@@ -12,6 +12,8 @@ use PhpClaw\Agent\Conversation;
 use PhpClaw\Agent\ConversationTurn;
 use PhpClaw\Contracts\ClawInterface as PhpClawInterface;
 use PhpClaw\Exceptions\GuardException;
+use PhpClaw\Exceptions\ProviderException;
+use PhpClaw\Exceptions\TokenBudgetExceededException;
 use PhpClaw\WordPress\CLI\PhpClawCommand;
 use PhpClaw\WordPress\Plugin;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -139,6 +141,49 @@ final class PhpClawCommandTest extends TestCase
         self::assertStringNotContainsString('prompt injection', \WP_CLI::$error ?? '');
     }
 
+    public function test_run_sync_token_budget_exceeded_emits_budget_message(): void
+    {
+        $conv = Conversation::start();
+        $engine = \Mockery::mock(PhpClawInterface::class);
+        $engine->expects('conversation')->once()->andReturn($conv);
+        $engine->expects('streamInConversation')->once()->andThrow(new TokenBudgetExceededException(500, 400));
+
+        $this->injectPlugin($engine);
+
+        (new PhpClawCommand)(['hello'], []);
+
+        self::assertStringContainsString('Token budget reached for this run.', \WP_CLI::$error ?? '');
+    }
+
+    public function test_run_sync_provider_exception_429_emits_rate_limited_message(): void
+    {
+        $conv = Conversation::start();
+        $engine = \Mockery::mock(PhpClawInterface::class);
+        $engine->expects('conversation')->once()->andReturn($conv);
+        $engine->expects('streamInConversation')->once()->andThrow(new ProviderException('rate limit wait exceeded', 429));
+
+        $this->injectPlugin($engine);
+
+        (new PhpClawCommand)(['hello'], []);
+
+        self::assertStringContainsString('Rate limit reached, try again shortly.', \WP_CLI::$error ?? '');
+    }
+
+    public function test_run_sync_provider_exception_non_429_emits_generic_error(): void
+    {
+        $conv = Conversation::start();
+        $engine = \Mockery::mock(PhpClawInterface::class);
+        $engine->expects('conversation')->once()->andReturn($conv);
+        $engine->expects('streamInConversation')->once()->andThrow(new ProviderException('upstream failed', 500));
+
+        $this->injectPlugin($engine);
+
+        (new PhpClawCommand)(['hello'], []);
+
+        self::assertStringContainsString('error occurred', \WP_CLI::$error ?? '');
+        self::assertStringNotContainsString('Rate limit reached', \WP_CLI::$error ?? '');
+    }
+
     public function test_run_sync_generic_throwable_emits_generic_error(): void
     {
         $conv = Conversation::start();
@@ -196,6 +241,49 @@ final class PhpClawCommandTest extends TestCase
 
         self::assertStringContainsString('blocked by a security guard', \WP_CLI::$error ?? '');
         self::assertStringNotContainsString('prompt injection', \WP_CLI::$error ?? '');
+    }
+
+    public function test_stream_mode_token_budget_exceeded_emits_budget_message(): void
+    {
+        $conv = Conversation::start();
+        $engine = \Mockery::mock(PhpClawInterface::class);
+        $engine->expects('conversation')->once()->andReturn($conv);
+        $engine->expects('streamInConversation')->once()->andThrow(new TokenBudgetExceededException(500, 400));
+
+        $this->injectPlugin($engine);
+
+        (new PhpClawCommand)(['stream me'], ['stream' => true]);
+
+        self::assertStringContainsString('Token budget reached for this run.', \WP_CLI::$error ?? '');
+    }
+
+    public function test_stream_mode_provider_exception_429_emits_rate_limited_message(): void
+    {
+        $conv = Conversation::start();
+        $engine = \Mockery::mock(PhpClawInterface::class);
+        $engine->expects('conversation')->once()->andReturn($conv);
+        $engine->expects('streamInConversation')->once()->andThrow(new ProviderException('rate limit wait exceeded', 429));
+
+        $this->injectPlugin($engine);
+
+        (new PhpClawCommand)(['stream me'], ['stream' => true]);
+
+        self::assertStringContainsString('Rate limit reached, try again shortly.', \WP_CLI::$error ?? '');
+    }
+
+    public function test_stream_mode_provider_exception_non_429_emits_generic_error(): void
+    {
+        $conv = Conversation::start();
+        $engine = \Mockery::mock(PhpClawInterface::class);
+        $engine->expects('conversation')->once()->andReturn($conv);
+        $engine->expects('streamInConversation')->once()->andThrow(new ProviderException('upstream failed', 503));
+
+        $this->injectPlugin($engine);
+
+        (new PhpClawCommand)(['stream me'], ['stream' => true]);
+
+        self::assertStringContainsString('error occurred', \WP_CLI::$error ?? '');
+        self::assertStringNotContainsString('Rate limit reached', \WP_CLI::$error ?? '');
     }
 
     public function test_stream_mode_generic_throwable_emits_generic_error(): void

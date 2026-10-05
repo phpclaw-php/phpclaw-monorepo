@@ -13,6 +13,8 @@ use PhpClaw\Agent\Conversation;
 use PhpClaw\Agent\ConversationTurn;
 use PhpClaw\Contracts\ClawInterface as PhpClawInterface;
 use PhpClaw\Exceptions\GuardException;
+use PhpClaw\Exceptions\ProviderException;
+use PhpClaw\Exceptions\TokenBudgetExceededException;
 use PhpClaw\Memory\Contracts\MemoryInterface;
 use PhpClaw\WordPress\Plugin;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -328,6 +330,54 @@ final class PluginTest extends TestCase
         $this->invokeAjax(fn () => $plugin->handleAjaxSend());
 
         self::assertSame(422, $this->ajaxResult()['status']);
+    }
+
+    public function test_handle_ajax_send_returns_422_on_token_budget_exceeded(): void
+    {
+        Functions\expect('current_user_can')->once()->andReturnTrue();
+
+        $engine = Mockery::mock(PhpClawInterface::class);
+        $engine->allows('conversation')->andThrow(new TokenBudgetExceededException(500, 400));
+
+        $plugin = $this->makePluginWithoutConstructor($engine);
+        $_POST = ['message' => 'hi', 'conversation_id' => ''];
+
+        $this->invokeAjax(fn () => $plugin->handleAjaxSend());
+
+        self::assertSame(422, $this->ajaxResult()['status']);
+        self::assertSame('Token budget reached for this run.', $this->ajaxResult()['data']['message']);
+    }
+
+    public function test_handle_ajax_send_returns_429_on_rate_limited_provider_exception(): void
+    {
+        Functions\expect('current_user_can')->once()->andReturnTrue();
+
+        $engine = Mockery::mock(PhpClawInterface::class);
+        $engine->allows('conversation')->andThrow(new ProviderException('rate limit wait exceeded', 429));
+
+        $plugin = $this->makePluginWithoutConstructor($engine);
+        $_POST = ['message' => 'hi', 'conversation_id' => ''];
+
+        $this->invokeAjax(fn () => $plugin->handleAjaxSend());
+
+        self::assertSame(429, $this->ajaxResult()['status']);
+        self::assertSame('Rate limit reached, try again shortly.', $this->ajaxResult()['data']['message']);
+    }
+
+    public function test_handle_ajax_send_returns_500_on_a_non_429_provider_exception(): void
+    {
+        Functions\expect('current_user_can')->once()->andReturnTrue();
+
+        $engine = Mockery::mock(PhpClawInterface::class);
+        $engine->allows('conversation')->andThrow(new ProviderException('upstream failed', 500));
+
+        $plugin = $this->makePluginWithoutConstructor($engine);
+        $_POST = ['message' => 'hi', 'conversation_id' => ''];
+
+        $this->invokeAjax(fn () => $plugin->handleAjaxSend());
+
+        self::assertSame(500, $this->ajaxResult()['status']);
+        self::assertNotSame('Rate limit reached, try again shortly.', $this->ajaxResult()['data']['message']);
     }
 
     public function test_handle_ajax_send_returns_500_on_generic_throwable(): void
@@ -665,6 +715,76 @@ final class PluginTest extends TestCase
         $result = $this->runInChild(fn () => $plugin->handleAjaxStream());
 
         self::assertStringContainsString('event: error', $result['output']);
+    }
+
+    public function test_handle_ajax_stream_emits_budget_message_on_token_budget_exceeded(): void
+    {
+        Functions\when('current_user_can')->justReturn(true);
+        Functions\when('headers_sent')->justReturn(false);
+        Functions\when('header')->justReturn(null);
+        Functions\when('ob_get_level')->justReturn(0);
+        Functions\when('status_header')->alias(static function (int $code): void {
+            echo "HTTP-STATUS:{$code}\n";
+        });
+        Functions\when('wp_json_encode')->alias(static fn (array $d) => json_encode($d));
+
+        $engine = Mockery::mock(PhpClawInterface::class);
+        $engine->allows('conversation')->andThrow(new TokenBudgetExceededException(500, 400));
+
+        $plugin = $this->makePluginWithoutConstructor($engine);
+        $_POST = ['message' => 'hi'];
+
+        $result = $this->runInChild(fn () => $plugin->handleAjaxStream());
+
+        self::assertStringContainsString('event: error', $result['output']);
+        self::assertStringContainsString('Token budget reached for this run.', $result['output']);
+        self::assertStringContainsString('HTTP-STATUS:422', $result['output']);
+    }
+
+    public function test_handle_ajax_stream_emits_rate_limited_message_on_429_provider_exception(): void
+    {
+        Functions\when('current_user_can')->justReturn(true);
+        Functions\when('headers_sent')->justReturn(false);
+        Functions\when('header')->justReturn(null);
+        Functions\when('ob_get_level')->justReturn(0);
+        Functions\when('status_header')->alias(static function (int $code): void {
+            echo "HTTP-STATUS:{$code}\n";
+        });
+        Functions\when('wp_json_encode')->alias(static fn (array $d) => json_encode($d));
+
+        $engine = Mockery::mock(PhpClawInterface::class);
+        $engine->allows('conversation')->andThrow(new ProviderException('rate limit wait exceeded', 429));
+
+        $plugin = $this->makePluginWithoutConstructor($engine);
+        $_POST = ['message' => 'hi'];
+
+        $result = $this->runInChild(fn () => $plugin->handleAjaxStream());
+
+        self::assertStringContainsString('event: error', $result['output']);
+        self::assertStringContainsString('Rate limit reached, try again shortly.', $result['output']);
+        self::assertStringContainsString('HTTP-STATUS:429', $result['output']);
+    }
+
+    public function test_handle_ajax_stream_emits_generic_message_on_a_non_429_provider_exception(): void
+    {
+        Functions\when('current_user_can')->justReturn(true);
+        Functions\when('headers_sent')->justReturn(false);
+        Functions\when('header')->justReturn(null);
+        Functions\when('ob_get_level')->justReturn(0);
+        Functions\when('status_header')->justReturn(null);
+        Functions\when('wp_json_encode')->alias(static fn (array $d) => json_encode($d));
+
+        $engine = Mockery::mock(PhpClawInterface::class);
+        $engine->allows('conversation')->andThrow(new ProviderException('upstream failed', 500));
+
+        $plugin = $this->makePluginWithoutConstructor($engine);
+        $_POST = ['message' => 'hi'];
+
+        $result = $this->runInChild(fn () => $plugin->handleAjaxStream());
+
+        self::assertStringContainsString('event: error', $result['output']);
+        self::assertStringContainsString('An internal error occurred. Please try again.', $result['output']);
+        self::assertStringNotContainsString('Rate limit reached', $result['output']);
     }
 
     public function test_handle_ajax_stream_emits_error_frame_on_throwable(): void

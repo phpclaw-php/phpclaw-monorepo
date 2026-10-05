@@ -12,6 +12,8 @@ use PhpClaw\Agent\Conversation;
 use PhpClaw\Agent\ConversationTurn;
 use PhpClaw\Contracts\ClawInterface as PhpClawInterface;
 use PhpClaw\Exceptions\GuardException;
+use PhpClaw\Exceptions\ProviderException;
+use PhpClaw\Exceptions\TokenBudgetExceededException;
 use PhpClaw\WordPress\Exceptions\ConversationAccessDeniedException;
 use PhpClaw\WordPress\Rest\PhpClawRestController;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -156,6 +158,28 @@ final class PhpClawRestControllerTest extends TestCase
         self::assertSame(422, $result->data['status']);
     }
 
+    public function test_it_returns_422_on_token_budget_exceeded(): void
+    {
+        Functions\expect('__')->zeroOrMoreTimes()->andReturnFirstArg();
+
+        $conversation = Conversation::start();
+
+        $engine = \Mockery::mock(PhpClawInterface::class);
+        $engine->expects('conversation')->once()->andReturn($conversation);
+        $engine->expects('streamInConversation')->once()->andThrow(new TokenBudgetExceededException(500, 400));
+
+        $controller = new PhpClawRestController($engine, []);
+        $request = new \WP_REST_Request;
+        $request->setParam('message', 'Hello');
+
+        $result = $controller->handle($request);
+
+        self::assertInstanceOf(\WP_Error::class, $result);
+        self::assertSame('phpclaw_budget_exceeded', $result->code);
+        self::assertSame(422, $result->data['status']);
+        self::assertSame('Token budget reached for this run.', $result->message);
+    }
+
     public function test_it_returns_500_on_provider_exception(): void
     {
         $conversation = Conversation::start();
@@ -163,6 +187,47 @@ final class PhpClawRestControllerTest extends TestCase
         $engine = \Mockery::mock(PhpClawInterface::class);
         $engine->expects('conversation')->once()->andReturn($conversation);
         $engine->expects('streamInConversation')->once()->andThrow(new \RuntimeException('Network error'));
+
+        $controller = new PhpClawRestController($engine, []);
+        $request = new \WP_REST_Request;
+        $request->setParam('message', 'Hello');
+
+        $result = $controller->handle($request);
+
+        self::assertInstanceOf(\WP_Error::class, $result);
+        self::assertSame('phpclaw_error', $result->code);
+        self::assertSame(500, $result->data['status']);
+    }
+
+    public function test_it_returns_429_on_provider_exception_rate_limited(): void
+    {
+        Functions\expect('__')->zeroOrMoreTimes()->andReturnFirstArg();
+
+        $conversation = Conversation::start();
+
+        $engine = \Mockery::mock(PhpClawInterface::class);
+        $engine->expects('conversation')->once()->andReturn($conversation);
+        $engine->expects('streamInConversation')->once()->andThrow(new ProviderException('rate limit wait exceeded', 429));
+
+        $controller = new PhpClawRestController($engine, []);
+        $request = new \WP_REST_Request;
+        $request->setParam('message', 'Hello');
+
+        $result = $controller->handle($request);
+
+        self::assertInstanceOf(\WP_Error::class, $result);
+        self::assertSame('phpclaw_rate_limited', $result->code);
+        self::assertSame(429, $result->data['status']);
+        self::assertSame('Rate limit reached, try again shortly.', $result->message);
+    }
+
+    public function test_it_returns_500_on_a_non_429_provider_exception(): void
+    {
+        $conversation = Conversation::start();
+
+        $engine = \Mockery::mock(PhpClawInterface::class);
+        $engine->expects('conversation')->once()->andReturn($conversation);
+        $engine->expects('streamInConversation')->once()->andThrow(new ProviderException('upstream failed', 500));
 
         $controller = new PhpClawRestController($engine, []);
         $request = new \WP_REST_Request;

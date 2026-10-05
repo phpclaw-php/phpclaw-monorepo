@@ -12,6 +12,8 @@ use PhpClaw\ClawConfig;
 use PhpClaw\Cloud\CloudManager;
 use PhpClaw\Contracts\ClawInterface as PhpClawInterface;
 use PhpClaw\Exceptions\GuardException;
+use PhpClaw\Exceptions\ProviderException;
+use PhpClaw\Exceptions\TokenBudgetExceededException;
 use PhpClaw\Guards\GuardRegistry;
 use PhpClaw\Hooks\HookEventBridge;
 use PhpClaw\Hooks\HookRegistry;
@@ -426,6 +428,16 @@ class Plugin
         } catch (GuardException $e) {
             error_log('phpClaw: guard blocked AJAX send: '.$e->getMessage());
             wp_send_json_error(['message' => __('Your message was blocked by a security guard. Rephrase your prompt and try again.', 'phpclaw')], 422);
+        } catch (TokenBudgetExceededException $e) {
+            error_log('phpClaw: AJAX send token budget exceeded: '.$e->getMessage());
+            wp_send_json_error(['message' => __('Token budget reached for this run.', 'phpclaw')], 422);
+        } catch (ProviderException $e) {
+            if ($e->statusCode === 429) {
+                wp_send_json_error(['message' => __('Rate limit reached, try again shortly.', 'phpclaw')], 429);
+            }
+
+            error_log('phpClaw: AJAX send error: '.$e->getMessage());
+            wp_send_json_error(['message' => __('An internal error occurred. Please try again.', 'phpclaw')], 500);
         } catch (\Throwable $e) {
             error_log('phpClaw: AJAX send error: '.$e->getMessage());
             wp_send_json_error(['message' => __('An internal error occurred. Please try again.', 'phpclaw')], 500);
@@ -551,6 +563,18 @@ class Plugin
         } catch (GuardException $e) {
             error_log('phpClaw: guard blocked stream: '.$e->getMessage());
             $this->emitSseError(__('Your message was blocked by a security guard. Rephrase your prompt and try again.', 'phpclaw'));
+        } catch (TokenBudgetExceededException $e) {
+            error_log('phpClaw: stream token budget exceeded: '.$e->getMessage());
+            $this->emitSseError(__('Token budget reached for this run.', 'phpclaw'), 422);
+        } catch (ProviderException $e) {
+            if ($e->statusCode === 429) {
+                $this->emitSseError(__('Rate limit reached, try again shortly.', 'phpclaw'), 429);
+
+                return;
+            }
+
+            error_log('phpClaw: stream error: '.$e->getMessage());
+            $this->emitSseError(__('An internal error occurred. Please try again.', 'phpclaw'));
         } catch (\Throwable $e) {
             error_log('phpClaw: stream error: '.$e->getMessage());
             $this->emitSseError(__('An internal error occurred. Please try again.', 'phpclaw'));

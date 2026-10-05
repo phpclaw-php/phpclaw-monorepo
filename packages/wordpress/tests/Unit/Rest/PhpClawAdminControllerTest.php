@@ -11,6 +11,8 @@ use PhpClaw\Agent\AgentResponse;
 use PhpClaw\Agent\Conversation;
 use PhpClaw\Agent\ConversationTurn;
 use PhpClaw\Contracts\ClawInterface as PhpClawInterface;
+use PhpClaw\Exceptions\ProviderException;
+use PhpClaw\Exceptions\TokenBudgetExceededException;
 use PhpClaw\Hooks\HookRegistry;
 use PhpClaw\WordPress\Exceptions\ConversationAccessDeniedException;
 use PhpClaw\WordPress\Rest\PhpClawAdminController;
@@ -323,6 +325,80 @@ final class PhpClawAdminControllerTest extends TestCase
         self::assertSame(11, $last['data']['tokens']);
         self::assertSame(2, $last['data']['iterations']);
         self::assertSame($conv->id, $last['data']['conversation_id']);
+    }
+
+    public function test_stream_chat_emits_budget_message_on_token_budget_exceeded_in_process(): void
+    {
+        Functions\when('wp_json_encode')->alias(static fn (array $d) => json_encode($d));
+        Functions\when('__')->returnArg();
+
+        $engine = \Mockery::mock(PhpClawInterface::class);
+        $engine->expects('conversation')->once()->andThrow(new TokenBudgetExceededException(500, 400));
+
+        $captured = [];
+        $emit = static function (string $event, array $data) use (&$captured): void {
+            $captured[] = ['event' => $event, 'data' => $data];
+        };
+
+        $controller = new PhpClawAdminController($engine, []);
+        $ref = new \ReflectionMethod(PhpClawAdminController::class, 'streamChat');
+        $ref->setAccessible(true);
+
+        $ref->invoke($controller, 'hi', '', $emit);
+
+        self::assertCount(1, $captured);
+        self::assertSame('error', $captured[0]['event']);
+        self::assertSame('Token budget reached for this run.', $captured[0]['data']['message']);
+    }
+
+    public function test_stream_chat_emits_rate_limited_message_on_429_provider_exception_in_process(): void
+    {
+        Functions\when('wp_json_encode')->alias(static fn (array $d) => json_encode($d));
+        Functions\when('__')->returnArg();
+        Functions\when('headers_sent')->justReturn(false);
+        Functions\when('status_header')->justReturn(null);
+
+        $engine = \Mockery::mock(PhpClawInterface::class);
+        $engine->expects('conversation')->once()->andThrow(new ProviderException('rate limit wait exceeded', 429));
+
+        $captured = [];
+        $emit = static function (string $event, array $data) use (&$captured): void {
+            $captured[] = ['event' => $event, 'data' => $data];
+        };
+
+        $controller = new PhpClawAdminController($engine, []);
+        $ref = new \ReflectionMethod(PhpClawAdminController::class, 'streamChat');
+        $ref->setAccessible(true);
+
+        $ref->invoke($controller, 'hi', '', $emit);
+
+        self::assertCount(1, $captured);
+        self::assertSame('error', $captured[0]['event']);
+        self::assertSame('Rate limit reached, try again shortly.', $captured[0]['data']['message']);
+    }
+
+    public function test_stream_chat_emits_generic_message_on_non_429_provider_exception_in_process(): void
+    {
+        Functions\when('wp_json_encode')->alias(static fn (array $d) => json_encode($d));
+        Functions\when('__')->returnArg();
+
+        $engine = \Mockery::mock(PhpClawInterface::class);
+        $engine->expects('conversation')->once()->andThrow(new ProviderException('upstream failed', 500));
+
+        $captured = [];
+        $emit = static function (string $event, array $data) use (&$captured): void {
+            $captured[] = ['event' => $event, 'data' => $data];
+        };
+
+        $controller = new PhpClawAdminController($engine, []);
+        $ref = new \ReflectionMethod(PhpClawAdminController::class, 'streamChat');
+        $ref->setAccessible(true);
+
+        $ref->invoke($controller, 'hi', '', $emit);
+
+        self::assertCount(1, $captured);
+        self::assertSame('error', $captured[0]['event']);
+        self::assertSame('An internal error occurred. Please try again.', $captured[0]['data']['message']);
     }
 
     public function test_stream_chat_emits_error_frame_on_throwable_in_process(): void

@@ -6,6 +6,8 @@ namespace PhpClaw\WordPress\CLI;
 
 use PhpClaw\Contracts\ClawInterface as PhpClawInterface;
 use PhpClaw\Exceptions\GuardException;
+use PhpClaw\Exceptions\ProviderException;
+use PhpClaw\Exceptions\TokenBudgetExceededException;
 use PhpClaw\WordPress\Engine\EngineFactory;
 use PhpClaw\WordPress\Plugin;
 use PhpClaw\WordPress\Rest\PhpClawRestController;
@@ -134,6 +136,19 @@ final class PhpClawCommand
         } catch (GuardException $e) {
             error_log('phpClaw: guard blocked CLI send: '.$e->getMessage());
             \WP_CLI::error('Your message was blocked by a security guard. Rephrase your prompt and try again.');
+        } catch (TokenBudgetExceededException $e) {
+            error_log('phpClaw: CLI send token budget exceeded: '.$e->getMessage());
+            \WP_CLI::error('Token budget reached for this run.');
+        } catch (ProviderException $e) {
+            if ($e->statusCode === 429) {
+                error_log('phpClaw: CLI send rate limited: '.$e->getMessage());
+                \WP_CLI::error('Rate limit reached, try again shortly.');
+
+                return;
+            }
+
+            error_log('phpClaw: CLI send error: '.$e->getMessage());
+            \WP_CLI::error('An error occurred. Check your API key and provider settings.');
         } catch (\Throwable $e) {
             error_log('phpClaw: CLI send error: '.$e->getMessage());
             \WP_CLI::error('An error occurred. Check your API key and provider settings.');
@@ -185,6 +200,19 @@ final class PhpClawCommand
         } catch (GuardException $e) {
             error_log('phpClaw: guard blocked CLI stream: '.$e->getMessage());
             \WP_CLI::error('Your message was blocked by a security guard. Rephrase your prompt and try again.');
+        } catch (TokenBudgetExceededException $e) {
+            error_log('phpClaw: CLI stream token budget exceeded: '.$e->getMessage());
+            \WP_CLI::error('Token budget reached for this run.');
+        } catch (ProviderException $e) {
+            if ($e->statusCode === 429) {
+                error_log('phpClaw: CLI stream rate limited: '.$e->getMessage());
+                \WP_CLI::error('Rate limit reached, try again shortly.');
+
+                return;
+            }
+
+            error_log('phpClaw: CLI stream error: '.$e->getMessage());
+            \WP_CLI::error('An error occurred. Check your API key and provider settings.');
         } catch (\Throwable $e) {
             error_log('phpClaw: CLI stream error: '.$e->getMessage());
             \WP_CLI::error('An error occurred. Check your API key and provider settings.');

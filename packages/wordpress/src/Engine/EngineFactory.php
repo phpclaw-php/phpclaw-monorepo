@@ -7,6 +7,7 @@ namespace PhpClaw\WordPress\Engine;
 use PhpClaw\Agent\CliApprovalGate;
 use PhpClaw\AutoDiscovery\Bootstrap;
 use PhpClaw\Claw as PhpClaw;
+use PhpClaw\ClawBuilder;
 use PhpClaw\ClawConfig;
 use PhpClaw\Exceptions\MemoryException;
 use PhpClaw\Guards\Contracts\GuardInterface;
@@ -40,6 +41,7 @@ use PhpClaw\WooCommerce\Tools\ShippingTool;
 use PhpClaw\WooCommerce\Tools\StockTool;
 use PhpClaw\WooCommerce\Tools\TaxTool;
 use PhpClaw\WordPress\Plugin;
+use PhpClaw\WordPress\Support\TransientCache;
 use PhpClaw\WordPress\Tools\DatabaseTool;
 use PhpClaw\WordPress\Tools\LogTool;
 use PhpClaw\WordPress\Tools\WpCommentTool;
@@ -175,7 +177,44 @@ final class EngineFactory
             $builder->withRemoteSkills($url);
         }
 
+        self::applyAgentOptions($builder, $saved);
+
         return $builder->build();
+    }
+
+    /**
+     * Apply the fallback provider, outbound rate limit, response cache, and token budget
+     * primitives from saved settings; each stays off unless the site owner turned it on.
+     *
+     * @param  ClawBuilder  $builder
+     * @param  array<string, mixed>  $saved  Saved admin settings.
+     * @return void
+     */
+    private static function applyAgentOptions(ClawBuilder $builder, array $saved): void
+    {
+        $fallbackProvider = (string) ($saved['fallback_provider'] ?? '');
+        if ($fallbackProvider !== '') {
+            $builder->withFallback(
+                $fallbackProvider,
+                (string) ($saved['fallback_model'] ?? ''),
+                (string) ($saved['fallback_api_key'] ?? ''),
+            );
+        }
+
+        $rateLimit = (int) ($saved['rate_limit_rpm'] ?? 0);
+        if ($rateLimit > 0) {
+            $builder->rateLimit($rateLimit, store: new TransientCache);
+        }
+
+        if ((string) ($saved['response_cache'] ?? '0') === '1') {
+            $ttl = (int) ($saved['response_cache_ttl'] ?? 0);
+            $builder->responseCache(new TransientCache, $ttl > 0 ? $ttl : 3600);
+        }
+
+        $tokenBudget = (int) ($saved['max_token_budget'] ?? 0);
+        if ($tokenBudget > 0) {
+            $builder->maxTokenBudget($tokenBudget);
+        }
     }
 
     /**

@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 namespace PhpClaw\WordPress\Admin;
 
+use PhpClaw\ClawConfig;
 use PhpClaw\Cloud\CloudManager;
 use PhpClaw\Providers\ProviderCatalogue;
 use PhpClaw\Tools\Contracts\ConfigurableToolInterface;
+use PhpClaw\Tools\ToolRegistry;
 use PhpClaw\WordPress\Plugin;
 
 /**
@@ -70,6 +72,13 @@ final class SettingsPage
             'store_messages' => __('Store Messages', 'phpclaw'),
             'max_iterations' => __('Max Iterations', 'phpclaw'),
             'remote_skill_urls' => __('Remote Skill URLs', 'phpclaw'),
+            'fallback_provider' => __('Fallback Provider', 'phpclaw'),
+            'fallback_model' => __('Fallback Model', 'phpclaw'),
+            'fallback_api_key' => __('Fallback API Key', 'phpclaw'),
+            'rate_limit_rpm' => __('Rate Limit (requests/min)', 'phpclaw'),
+            'response_cache' => __('Response Cache', 'phpclaw'),
+            'response_cache_ttl' => __('Response Cache TTL (seconds)', 'phpclaw'),
+            'max_token_budget' => __('Max Token Budget', 'phpclaw'),
         ];
 
         if (class_exists(CloudManager::class)) {
@@ -118,6 +127,8 @@ final class SettingsPage
             <h1 class="pc-page-header">
                 🤖 <?= esc_html__('phpClaw AI Agent Engine', 'phpclaw') ?>
             </h1>
+
+            <?php settings_errors(); ?>
 
             <?php self::renderConnectionBadge(); ?>
             <?php self::renderCloudHiddenNotice(); ?>
@@ -233,6 +244,45 @@ final class SettingsPage
                 esc_textarea(is_array($value) ? implode("\n", array_filter($value, 'is_string')) : (string) $value),
                 esc_html__('One HTTPS URL per line. Each points to a phpClaw JSON skill collection or a SKILL.md file. Remote skills are inert text injected into prompts, never executed. Fetched with SSRF protection and cached for 24 hours.', 'phpclaw'),
             ),
+            'fallback_provider' => self::renderFallbackProviderSelect($name, (string) $value, (string) ($settings['provider'] ?? '')),
+            'fallback_model' => printf(
+                '<input type="text" id="phpclaw_fallback_model" name="%s" value="%s" class="regular-text" placeholder="%s" />'
+                .'<p class="description">%s</p>',
+                esc_attr($name),
+                esc_attr((string) $value),
+                esc_attr__('e.g. llama3.1:8b, gpt-4o-mini', 'phpclaw'),
+                esc_html__('Model for the fallback provider. Leave blank to use its default.', 'phpclaw'),
+            ),
+            'fallback_api_key' => self::renderFallbackApiKeyField($name, (string) $value),
+            'rate_limit_rpm' => printf(
+                '<input type="number" id="phpclaw_rate_limit_rpm" name="%s" value="%s" min="0" max="600" class="small-text" />'
+                .'<p class="description">%s</p>',
+                esc_attr($name),
+                esc_attr($value !== '' ? (string) $value : '0'),
+                esc_html__('Maximum outbound requests per minute to the provider. 0 = off (unlimited).', 'phpclaw'),
+            ),
+            'response_cache' => printf(
+                '<label><input type="checkbox" id="phpclaw_response_cache" name="%s" value="1"%s /> %s</label>'
+                .'<p class="description">%s</p>',
+                esc_attr($name),
+                checked(! empty($value), true, false),
+                esc_html__('Cache identical replies', 'phpclaw'),
+                esc_html__('When enabled, an identical request within the cache TTL is answered from a local cache instead of calling the provider again.', 'phpclaw'),
+            ),
+            'response_cache_ttl' => printf(
+                '<input type="number" id="phpclaw_response_cache_ttl" name="%s" value="%s" min="60" max="86400" class="small-text" />'
+                .'<p class="description">%s</p>',
+                esc_attr($name),
+                esc_attr($value !== '' ? (string) $value : '3600'),
+                esc_html__('Seconds a cached response stays valid. Default: 3600.', 'phpclaw'),
+            ),
+            'max_token_budget' => printf(
+                '<input type="number" id="phpclaw_max_token_budget" name="%s" value="%s" min="0" max="10000000" class="small-text" />'
+                .'<p class="description">%s</p>',
+                esc_attr($name),
+                esc_attr($value !== '' ? (string) $value : '0'),
+                esc_html__('Maximum estimated tokens spent per run. 0 = off (unlimited).', 'phpclaw'),
+            ),
             default => self::renderDynamicField($field, $name, (string) $value),
         };
     }
@@ -337,7 +387,77 @@ final class SettingsPage
             $clean['remote_skill_urls'] = [];
         }
 
+        if (isset($input['fallback_provider'])) {
+            $clean['fallback_provider'] = self::sanitizeFallbackProvider((string) $input['fallback_provider'], (string) ($clean['provider'] ?? ''));
+        }
+
+        if (isset($input['fallback_model'])) {
+            $clean['fallback_model'] = sanitize_text_field((string) $input['fallback_model']);
+        }
+
+        $clearFallbackKey = isset($input['fallback_api_key_clear']) && (string) $input['fallback_api_key_clear'] === '1';
+
+        if ($clearFallbackKey) {
+            $clean['fallback_api_key'] = '';
+        } elseif (isset($input['fallback_api_key'])) {
+            $clean['fallback_api_key'] = self::preserveSecret('fallback_api_key', $input['fallback_api_key']);
+        }
+
+        if (isset($input['rate_limit_rpm'])) {
+            $clean['rate_limit_rpm'] = max(0, min(600, (int) $input['rate_limit_rpm']));
+        }
+
+        if (isset($input['response_cache'])) {
+            $rc = $input['response_cache'];
+            $on = $rc === '1' || $rc === 1 || $rc === true;
+            $clean['response_cache'] = $on ? '1' : '0';
+        } else {
+            $clean['response_cache'] = '0';
+        }
+
+        if (isset($input['response_cache_ttl'])) {
+            $raw = $input['response_cache_ttl'];
+            $ttl = $raw === '' ? 3600 : (int) $raw;
+            $clean['response_cache_ttl'] = max(60, min(86400, $ttl));
+        }
+
+        if (isset($input['max_token_budget'])) {
+            $clean['max_token_budget'] = max(0, min(10_000_000, (int) $input['max_token_budget']));
+        }
+
         return $clean;
+    }
+
+    /**
+     * Sanitize the fallback provider slug: '' turns fallback off, 'custom' is rejected, and a
+     * mismatched tool-schema format raises a settings error and clears the field.
+     *
+     * @param  string  $candidate  Raw submitted fallback provider slug.
+     * @param  string  $primaryProvider  The primary provider slug being saved or already stored; '' means auto-detected.
+     * @return string The sanitised fallback provider slug, or '' when off or rejected.
+     */
+    private static function sanitizeFallbackProvider(string $candidate, string $primaryProvider): string
+    {
+        if ($candidate === '') {
+            return '';
+        }
+
+        $allowed = array_diff(array_keys(ProviderCatalogue::all()), ['custom']);
+
+        if (
+            in_array($candidate, $allowed, true)
+            && ToolRegistry::toolFormat($candidate) === self::primaryToolFormat($primaryProvider)
+        ) {
+            return $candidate;
+        }
+
+        add_settings_error(
+            self::OPTION,
+            'phpclaw_fallback_provider',
+            __('Fallback provider must use the same tool format as the primary provider, and cannot be Custom. Fallback was turned off.', 'phpclaw'),
+        );
+
+        return '';
     }
 
     /**
@@ -444,6 +564,29 @@ final class SettingsPage
     }
 
     /**
+     * Render the fallback API key secret field plus a checkbox to remove the saved key.
+     *
+     * @param  string  $name  Fully-qualified option field name attribute for the secret input.
+     * @param  string  $stored  Currently stored fallback API key (used only to indicate saved state).
+     * @return void
+     */
+    private static function renderFallbackApiKeyField(string $name, string $stored): void
+    {
+        self::renderSecretField(
+            'phpclaw_fallback_api_key',
+            $name,
+            $stored,
+            esc_html__('API key for the fallback provider. Leave blank to keep the saved key.', 'phpclaw'),
+        );
+
+        printf(
+            '<label><input type="checkbox" name="%s" value="1" /> %s</label>',
+            esc_attr(self::OPTION.'[fallback_api_key_clear]'),
+            esc_html__('Remove the saved fallback key', 'phpclaw'),
+        );
+    }
+
+    /**
      * Sanitise a secret field, preserving the stored value when the submission is blank.
      *
      * @param  string  $field  Option key of the secret (e.g. api_key).
@@ -481,6 +624,60 @@ final class SettingsPage
         }
 
         return $options;
+    }
+
+    /**
+     * Render the fallback provider dropdown, then its usage description.
+     *
+     * @param  string  $name  The HTML select name attribute.
+     * @param  string  $current  The currently selected fallback provider slug.
+     * @param  string  $primaryProvider  The saved primary provider slug, used to filter the dropdown by tool format.
+     * @return void
+     */
+    private static function renderFallbackProviderSelect(string $name, string $current, string $primaryProvider = ''): void
+    {
+        self::renderSelect($name, $current, self::fallbackProviderOptions($primaryProvider), 'phpclaw_fallback_provider');
+        printf(
+            '<p class="description">%s</p>',
+            esc_html__('Optional. Tried when the primary provider fails. Must use the same tool format as the primary provider. Leave unselected to turn fallback off.', 'phpclaw'),
+        );
+    }
+
+    /**
+     * Build the fallback provider dropdown options: an "off" placeholder plus every catalogue provider except
+     * Custom, filtered to the primary provider's tool format.
+     *
+     * @param  string  $primaryProvider  The saved primary provider slug, or '' when it is auto-detected.
+     * @return array<string, string>
+     */
+    private static function fallbackProviderOptions(string $primaryProvider = ''): array
+    {
+        $options = ['' => __('Off', 'phpclaw')];
+        $primaryFormat = self::primaryToolFormat($primaryProvider);
+
+        foreach (ProviderCatalogue::all() as $slug => $entry) {
+            $key = (string) $slug;
+            if ($key === '' || $key === 'custom') {
+                continue;
+            }
+            if (ToolRegistry::toolFormat($key) !== $primaryFormat) {
+                continue;
+            }
+            $options[$key] = (string) $entry['label'];
+        }
+
+        return $options;
+    }
+
+    /**
+     * Tool format of the primary provider; an empty slug resolves to the provider core auto-detects from the environment.
+     *
+     * @param  string  $primaryProvider  The primary provider slug, or '' when it is auto-detected.
+     * @return string
+     */
+    private static function primaryToolFormat(string $primaryProvider): string
+    {
+        return ToolRegistry::toolFormat($primaryProvider !== '' ? $primaryProvider : (new ClawConfig)->providerName);
     }
 
     /**

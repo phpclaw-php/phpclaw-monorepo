@@ -43,6 +43,7 @@ final class SettingsPageTest extends TestCase
             'add_settings_field' => static function (...$a): void {},
             'settings_fields' => static function (...$a): void {},
             'do_settings_sections' => static function (...$a): void {},
+            'settings_errors' => static function (...$a): void {},
             'submit_button' => static function (...$a): void {
                 echo '<button type="submit">Save</button>';
             },
@@ -92,7 +93,7 @@ final class SettingsPageTest extends TestCase
             }
         }
 
-        $expectedCount = ($cloudInstalled ? 11 : 8) + $dynamicFields;
+        $expectedCount = ($cloudInstalled ? 18 : 15) + $dynamicFields;
 
         self::assertSame(1, $calls['setting']);
         self::assertSame(1, $calls['section']);
@@ -101,7 +102,9 @@ final class SettingsPageTest extends TestCase
         $alwaysPresent = [
             'phpclaw_provider', 'phpclaw_model', 'phpclaw_api_key', 'phpclaw_base_url',
             'phpclaw_system_prompt', 'phpclaw_store_messages', 'phpclaw_max_iterations',
-            'phpclaw_remote_skill_urls',
+            'phpclaw_remote_skill_urls', 'phpclaw_fallback_provider', 'phpclaw_fallback_model',
+            'phpclaw_fallback_api_key', 'phpclaw_rate_limit_rpm', 'phpclaw_response_cache',
+            'phpclaw_response_cache_ttl', 'phpclaw_max_token_budget',
         ];
         foreach ($alwaysPresent as $expected) {
             self::assertContains($expected, $fieldIds);
@@ -213,6 +216,29 @@ final class SettingsPageTest extends TestCase
         $html = ob_get_clean();
 
         self::assertStringContainsString('Not configured', $html);
+    }
+
+    public function test_render_calls_settings_errors_right_after_the_page_heading(): void
+    {
+        Functions\expect('current_user_can')->once()->andReturnTrue();
+        Functions\expect('get_option')->atLeast()->once()->andReturn(['provider' => 'ollama']);
+        Functions\when('settings_errors')->alias(static function (): void {
+            echo '<div id="setting-error-settings_updated">Settings saved.</div>';
+        });
+
+        ob_start();
+        SettingsPage::render();
+        $html = (string) ob_get_clean();
+
+        $headingPos = strpos($html, '</h1>');
+        $noticePos = strpos($html, 'setting-error-settings_updated');
+        $badgePos = strpos($html, 'pc-badge');
+
+        self::assertNotFalse($headingPos);
+        self::assertNotFalse($noticePos);
+        self::assertNotFalse($badgePos);
+        self::assertGreaterThan($headingPos, $noticePos);
+        self::assertLessThan($badgePos, $noticePos);
     }
 
     public function test_sanitize_returns_empty_array_for_non_array_input(): void
@@ -803,5 +829,351 @@ final class SettingsPageTest extends TestCase
                 ? [FieldedToolStub::class]
                 : $value,
         );
+    }
+
+    public function test_sanitize_fallback_provider_off_when_blank(): void
+    {
+        Functions\expect('get_option')->atLeast()->once()->andReturn([]);
+
+        $r = SettingsPage::sanitize(['provider' => 'openai', 'fallback_provider' => '']);
+
+        self::assertSame('', $r['fallback_provider']);
+    }
+
+    public function test_sanitize_fallback_provider_accepts_matching_tool_format(): void
+    {
+        Functions\expect('get_option')->atLeast()->once()->andReturn([]);
+
+        $r = SettingsPage::sanitize(['provider' => 'openai', 'fallback_provider' => 'groq']);
+
+        self::assertSame('groq', $r['fallback_provider']);
+    }
+
+    public function test_sanitize_fallback_provider_rejects_mismatched_tool_format(): void
+    {
+        Functions\expect('get_option')->atLeast()->once()->andReturn([]);
+        Functions\expect('add_settings_error')->once();
+
+        $r = SettingsPage::sanitize(['provider' => 'ollama', 'fallback_provider' => 'anthropic']);
+
+        self::assertSame('', $r['fallback_provider']);
+    }
+
+    public function test_sanitize_fallback_provider_rejects_custom(): void
+    {
+        Functions\expect('get_option')->atLeast()->once()->andReturn([]);
+        Functions\expect('add_settings_error')->once();
+
+        $r = SettingsPage::sanitize(['provider' => 'openai', 'fallback_provider' => 'custom']);
+
+        self::assertSame('', $r['fallback_provider']);
+    }
+
+    public function test_sanitize_fallback_provider_uses_the_stored_primary_when_provider_not_submitted(): void
+    {
+        Functions\expect('get_option')->atLeast()->once()->andReturn(['provider' => 'openai']);
+
+        $r = SettingsPage::sanitize(['fallback_provider' => 'groq']);
+
+        self::assertSame('groq', $r['fallback_provider']);
+    }
+
+    public function test_sanitize_fallback_provider_with_no_primary_accepts_a_match_for_the_auto_detected_provider(): void
+    {
+        Functions\expect('get_option')->atLeast()->once()->andReturn([]);
+
+        $r = $this->withOnlyEnv(['OPENAI_API_KEY' => 'sk-openai'], static fn () => SettingsPage::sanitize(['provider' => '', 'fallback_provider' => 'groq']));
+
+        self::assertSame('groq', $r['fallback_provider']);
+    }
+
+    public function test_sanitize_fallback_provider_with_no_primary_rejects_a_mismatch_for_the_auto_detected_provider(): void
+    {
+        Functions\expect('get_option')->atLeast()->once()->andReturn([]);
+        Functions\expect('add_settings_error')->once();
+
+        $r = $this->withOnlyEnv(['OPENAI_API_KEY' => 'sk-openai'], static fn () => SettingsPage::sanitize(['provider' => '', 'fallback_provider' => 'anthropic']));
+
+        self::assertSame('', $r['fallback_provider']);
+    }
+
+    public function test_sanitize_fallback_model_trims_and_sanitizes(): void
+    {
+        Functions\expect('get_option')->atLeast()->once()->andReturn([]);
+
+        $r = SettingsPage::sanitize(['fallback_model' => '  llama-3.1-8b-instant  ']);
+
+        self::assertSame('llama-3.1-8b-instant', $r['fallback_model']);
+    }
+
+    public function test_sanitize_fallback_api_key_preserves_stored_value_when_blank(): void
+    {
+        Functions\expect('get_option')->atLeast()->once()->andReturn(['fallback_api_key' => 'gk-stored']);
+
+        $r = SettingsPage::sanitize(['fallback_api_key' => '']);
+
+        self::assertSame('gk-stored', $r['fallback_api_key']);
+    }
+
+    public function test_sanitize_fallback_api_key_replaces_stored_value_when_submitted(): void
+    {
+        Functions\expect('get_option')->atLeast()->once()->andReturn(['fallback_api_key' => 'gk-stored']);
+
+        $r = SettingsPage::sanitize(['fallback_api_key' => 'gk-new']);
+
+        self::assertSame('gk-new', $r['fallback_api_key']);
+    }
+
+    public function test_sanitize_rate_limit_rpm_clamps_to_0_600(): void
+    {
+        Functions\expect('get_option')->atLeast()->once()->andReturn([]);
+
+        self::assertSame(600, SettingsPage::sanitize(['rate_limit_rpm' => 1000])['rate_limit_rpm']);
+        self::assertSame(0, SettingsPage::sanitize(['rate_limit_rpm' => -5])['rate_limit_rpm']);
+        self::assertSame(30, SettingsPage::sanitize(['rate_limit_rpm' => '30'])['rate_limit_rpm']);
+    }
+
+    public function test_sanitize_response_cache_normalizes_to_0_or_1(): void
+    {
+        Functions\expect('get_option')->atLeast()->once()->andReturn([]);
+
+        self::assertSame('1', SettingsPage::sanitize(['response_cache' => '1'])['response_cache']);
+        self::assertSame('0', SettingsPage::sanitize(['response_cache' => '0'])['response_cache']);
+        self::assertSame('0', SettingsPage::sanitize([])['response_cache']);
+    }
+
+    public function test_sanitize_response_cache_ttl_clamps_and_defaults(): void
+    {
+        Functions\expect('get_option')->atLeast()->once()->andReturn([]);
+
+        self::assertSame(60, SettingsPage::sanitize(['response_cache_ttl' => 10])['response_cache_ttl']);
+        self::assertSame(86400, SettingsPage::sanitize(['response_cache_ttl' => 999999])['response_cache_ttl']);
+        self::assertSame(3600, SettingsPage::sanitize(['response_cache_ttl' => ''])['response_cache_ttl']);
+        self::assertSame(7200, SettingsPage::sanitize(['response_cache_ttl' => '7200'])['response_cache_ttl']);
+    }
+
+    public function test_sanitize_max_token_budget_clamps_to_0_10000000(): void
+    {
+        Functions\expect('get_option')->atLeast()->once()->andReturn([]);
+
+        self::assertSame(0, SettingsPage::sanitize(['max_token_budget' => -1])['max_token_budget']);
+        self::assertSame(10_000_000, SettingsPage::sanitize(['max_token_budget' => 20_000_000])['max_token_budget']);
+        self::assertSame(5000, SettingsPage::sanitize(['max_token_budget' => '5000'])['max_token_budget']);
+    }
+
+    public function test_render_field_fallback_provider_lists_every_option_except_custom(): void
+    {
+        Functions\expect('get_option')->once()->andReturn(['provider' => 'openai', 'fallback_provider' => 'groq']);
+
+        ob_start();
+        SettingsPage::renderField(['field' => 'fallback_provider']);
+        $html = (string) ob_get_clean();
+
+        self::assertStringContainsString('<select', $html);
+        self::assertStringContainsString('groq', $html);
+        self::assertStringNotContainsString('value="custom"', $html);
+    }
+
+    public function test_render_field_fallback_provider_with_no_primary_lists_only_the_auto_detected_format(): void
+    {
+        Functions\expect('get_option')->once()->andReturn([]);
+
+        $html = $this->withOnlyEnv(['OPENAI_API_KEY' => 'sk-openai'], static function (): string {
+            ob_start();
+            SettingsPage::renderField(['field' => 'fallback_provider']);
+
+            return (string) ob_get_clean();
+        });
+
+        self::assertStringContainsString('value="groq"', $html);
+        self::assertStringNotContainsString('value="anthropic"', $html);
+    }
+
+    public function test_render_field_fallback_model(): void
+    {
+        Functions\expect('get_option')->once()->andReturn(['fallback_model' => 'gpt-4o-mini']);
+
+        ob_start();
+        SettingsPage::renderField(['field' => 'fallback_model']);
+        $html = (string) ob_get_clean();
+
+        self::assertStringContainsString('id="phpclaw_fallback_model"', $html);
+        self::assertStringContainsString('gpt-4o-mini', $html);
+        self::assertStringContainsString('Model for the fallback provider', $html);
+    }
+
+    public function test_render_field_fallback_api_key_hides_the_saved_value(): void
+    {
+        Functions\expect('get_option')->once()->andReturn(['fallback_api_key' => 'gk-real']);
+
+        ob_start();
+        SettingsPage::renderField(['field' => 'fallback_api_key']);
+        $html = (string) ob_get_clean();
+
+        self::assertStringContainsString('type="password"', $html);
+        self::assertStringContainsString('id="phpclaw_fallback_api_key"', $html);
+        self::assertStringNotContainsString('gk-real', $html);
+    }
+
+    public function test_render_field_rate_limit_rpm(): void
+    {
+        Functions\expect('get_option')->once()->andReturn(['rate_limit_rpm' => 30]);
+
+        ob_start();
+        SettingsPage::renderField(['field' => 'rate_limit_rpm']);
+        $html = (string) ob_get_clean();
+
+        self::assertStringContainsString('type="number"', $html);
+        self::assertStringContainsString('30', $html);
+    }
+
+    public function test_render_field_response_cache_checked_when_truthy(): void
+    {
+        Functions\expect('get_option')->once()->andReturn(['response_cache' => '1']);
+
+        ob_start();
+        SettingsPage::renderField(['field' => 'response_cache']);
+        $html = (string) ob_get_clean();
+
+        self::assertStringContainsString('type="checkbox"', $html);
+        self::assertStringContainsString('checked', $html);
+    }
+
+    public function test_render_field_response_cache_ttl_defaults_to_3600_when_blank(): void
+    {
+        Functions\expect('get_option')->once()->andReturn([]);
+
+        ob_start();
+        SettingsPage::renderField(['field' => 'response_cache_ttl']);
+        $html = (string) ob_get_clean();
+
+        self::assertStringContainsString('id="phpclaw_response_cache_ttl"', $html);
+        self::assertStringContainsString('value="3600"', $html);
+    }
+
+    public function test_render_field_max_token_budget(): void
+    {
+        Functions\expect('get_option')->once()->andReturn(['max_token_budget' => 5000]);
+
+        ob_start();
+        SettingsPage::renderField(['field' => 'max_token_budget']);
+        $html = (string) ob_get_clean();
+
+        self::assertStringContainsString('id="phpclaw_max_token_budget"', $html);
+        self::assertStringContainsString('type="number"', $html);
+        self::assertStringContainsString('5000', $html);
+    }
+
+    public function test_fallback_provider_options_excludes_custom_and_includes_off(): void
+    {
+        $options = $this->invoke('fallbackProviderOptions', 'openai');
+
+        self::assertArrayHasKey('', $options);
+        self::assertArrayNotHasKey('custom', $options);
+        self::assertArrayHasKey('openai', $options);
+    }
+
+    public function test_fallback_provider_options_with_no_primary_filter_to_the_auto_detected_format(): void
+    {
+        $options = $this->withOnlyEnv(['OPENAI_API_KEY' => 'sk-openai'], fn () => $this->invoke('fallbackProviderOptions', ''));
+
+        self::assertArrayHasKey('groq', $options);
+        self::assertArrayNotHasKey('anthropic', $options);
+        self::assertArrayNotHasKey('custom', $options);
+    }
+
+    public function test_fallback_provider_options_filters_to_the_primary_tool_format(): void
+    {
+        $options = $this->invoke('fallbackProviderOptions', 'ollama');
+
+        self::assertArrayHasKey('groq', $options);
+        self::assertArrayNotHasKey('anthropic', $options);
+        self::assertArrayNotHasKey('custom', $options);
+    }
+
+    public function test_render_field_fallback_provider_filters_the_dropdown_by_the_saved_primary(): void
+    {
+        Functions\expect('get_option')->once()->andReturn(['provider' => 'ollama', 'fallback_provider' => '']);
+
+        ob_start();
+        SettingsPage::renderField(['field' => 'fallback_provider']);
+        $html = (string) ob_get_clean();
+
+        self::assertStringContainsString('groq', $html);
+        self::assertStringNotContainsString('anthropic', $html);
+    }
+
+    public function test_render_field_fallback_api_key_includes_a_clear_checkbox(): void
+    {
+        Functions\expect('get_option')->once()->andReturn(['fallback_api_key' => 'gk-real']);
+
+        ob_start();
+        SettingsPage::renderField(['field' => 'fallback_api_key']);
+        $html = (string) ob_get_clean();
+
+        self::assertStringContainsString('name="phpclaw_settings[fallback_api_key_clear]"', $html);
+        self::assertStringContainsString('type="checkbox"', $html);
+        self::assertStringContainsString('Remove the saved fallback key', $html);
+    }
+
+    public function test_sanitize_fallback_api_key_clear_checkbox_empties_the_stored_key(): void
+    {
+        Functions\expect('get_option')->atLeast()->once()->andReturn(['fallback_api_key' => 'gk-stored']);
+
+        $r = SettingsPage::sanitize(['fallback_api_key' => '', 'fallback_api_key_clear' => '1']);
+
+        self::assertSame('', $r['fallback_api_key']);
+    }
+
+    public function test_sanitize_fallback_api_key_clear_checkbox_absent_keeps_the_stored_key(): void
+    {
+        Functions\expect('get_option')->atLeast()->once()->andReturn(['fallback_api_key' => 'gk-stored']);
+
+        $r = SettingsPage::sanitize(['fallback_api_key' => '']);
+
+        self::assertSame('gk-stored', $r['fallback_api_key']);
+    }
+
+    public function test_sanitize_never_persists_the_fallback_api_key_clear_flag(): void
+    {
+        Functions\expect('get_option')->atLeast()->once()->andReturn(['fallback_api_key' => 'gk-stored']);
+
+        $r = SettingsPage::sanitize(['fallback_api_key' => '', 'fallback_api_key_clear' => '1']);
+
+        self::assertArrayNotHasKey('fallback_api_key_clear', $r);
+    }
+
+    private function withOnlyEnv(array $values, callable $callback): mixed
+    {
+        $names = ['PHPCLAW_PROVIDER', 'ANTHROPIC_API_KEY', 'OPENAI_API_KEY', 'GROQ_API_KEY', 'GEMINI_API_KEY', 'MISTRAL_API_KEY', 'DEEPSEEK_API_KEY', 'OLLAMA_HOST'];
+        $saved = [];
+
+        foreach ($names as $name) {
+            $saved[$name] = [getenv($name), $_ENV[$name] ?? null, $_SERVER[$name] ?? null];
+            putenv($name);
+            unset($_ENV[$name], $_SERVER[$name]);
+        }
+
+        foreach ($values as $name => $value) {
+            putenv("{$name}={$value}");
+            $_ENV[$name] = $value;
+        }
+
+        try {
+            return $callback();
+        } finally {
+            foreach ($saved as $name => [$env, $envArray, $server]) {
+                $env === false ? putenv($name) : putenv("{$name}={$env}");
+                unset($_ENV[$name], $_SERVER[$name]);
+
+                if ($envArray !== null) {
+                    $_ENV[$name] = $envArray;
+                }
+
+                if ($server !== null) {
+                    $_SERVER[$name] = $server;
+                }
+            }
+        }
     }
 }

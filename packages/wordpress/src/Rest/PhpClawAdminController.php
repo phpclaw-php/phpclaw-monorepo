@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace PhpClaw\WordPress\Rest;
 
 use PhpClaw\Contracts\ClawInterface as PhpClawInterface;
+use PhpClaw\Exceptions\ProviderException;
+use PhpClaw\Exceptions\TokenBudgetExceededException;
 use PhpClaw\Hooks\HookRegistry;
 use PhpClaw\Hooks\LifecycleEvent;
 use PhpClaw\WordPress\Exceptions\ConversationAccessDeniedException;
@@ -210,6 +212,26 @@ final class PhpClawAdminController
             }
             $emit('error', [
                 'message' => __('You do not have permission to access this resource.', 'phpclaw'),
+            ]);
+        } catch (TokenBudgetExceededException $e) {
+            $emit('error', [
+                'message' => __('Token budget reached for this run.', 'phpclaw'),
+            ]);
+        } catch (ProviderException $e) {
+            if ($e->statusCode === 429) {
+                if (! headers_sent()) {
+                    status_header(429);
+                }
+                $emit('error', [
+                    'message' => __('Rate limit reached, try again shortly.', 'phpclaw'),
+                ]);
+
+                return;
+            }
+
+            error_log('phpClaw REST stream error: '.$e->getMessage());
+            $emit('error', [
+                'message' => __('An internal error occurred. Please try again.', 'phpclaw'),
             ]);
         } catch (\Throwable $e) {
             error_log('phpClaw REST stream error: '.$e->getMessage());
