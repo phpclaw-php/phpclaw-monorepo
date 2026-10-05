@@ -94,6 +94,10 @@ final class CloudPayloadBuilder
             LifecycleEvent::ProviderResponse->value => $base + $this->fromProviderResponse($context),
             LifecycleEvent::ProviderRetry->value => $base + $this->fromProviderRetry($context),
             LifecycleEvent::ProviderCacheHit->value => $base + $this->fromProviderCacheHit($context),
+            LifecycleEvent::ProviderFallback->value => $base + $this->fromProviderFallback($context),
+            LifecycleEvent::ProviderResponseCached->value => $base + $this->fromProviderResponseCached($context),
+            LifecycleEvent::BudgetExceeded->value => $base + $this->fromBudgetExceeded($context),
+            LifecycleEvent::StructuredRepair->value => $base + $this->fromStructuredRepair($context),
             LifecycleEvent::ProviderError->value => $base + $this->fromProviderError($context),
             LifecycleEvent::ProviderToken->value => $base + $this->fromProviderToken($context),
             LifecycleEvent::ToolBefore->value => $base + $this->fromToolBefore($context),
@@ -329,6 +333,72 @@ final class CloudPayloadBuilder
             'model' => self::str($context, 'model'),
             'cache_read_tokens' => self::int($context, 'cache_read_tokens'),
             'cache_write_tokens' => self::int($context, 'cache_write_tokens'),
+        ];
+    }
+
+    /**
+     * Build the cloud payload for the `provider.fallback` event.
+     *
+     * @param  array<string, mixed>  $context  Raw event context from the hook dispatcher.
+     * @return array<string, mixed> Cloud-ready payload fields for this event.
+     */
+    private function fromProviderFallback(array $context): array
+    {
+        return [
+            'run_id' => self::str($context, 'run_id'),
+            'parent_run_id' => self::str($context, 'parent_run_id'),
+            'from' => self::str($context, 'from'),
+            'to' => self::str($context, 'to'),
+            'status' => self::int($context, 'status'),
+        ];
+    }
+
+    /**
+     * Build the cloud payload for the `provider.response_cached` event.
+     *
+     * @param  array<string, mixed>  $context  Raw event context from the hook dispatcher.
+     * @return array<string, mixed> Cloud-ready payload fields for this event.
+     */
+    private function fromProviderResponseCached(array $context): array
+    {
+        return [
+            'run_id' => self::str($context, 'run_id'),
+            'parent_run_id' => self::str($context, 'parent_run_id'),
+            'provider' => self::str($context, 'provider'),
+            'model' => self::str($context, 'model'),
+            'key_hash' => self::str($context, 'key_hash'),
+        ];
+    }
+
+    /**
+     * Build the cloud payload for the `budget.exceeded` event.
+     *
+     * @param  array<string, mixed>  $context  Raw event context from the hook dispatcher.
+     * @return array<string, mixed> Cloud-ready payload fields for this event.
+     */
+    private function fromBudgetExceeded(array $context): array
+    {
+        return [
+            'run_id' => self::str($context, 'run_id'),
+            'parent_run_id' => self::str($context, 'parent_run_id'),
+            'tokens_spent' => self::int($context, 'tokens_spent'),
+            'budget' => self::int($context, 'budget'),
+        ];
+    }
+
+    /**
+     * Build the cloud payload for the `structured.repair` event.
+     *
+     * @param  array<string, mixed>  $context  Raw event context from the hook dispatcher.
+     * @return array<string, mixed> Cloud-ready payload fields for this event.
+     */
+    private function fromStructuredRepair(array $context): array
+    {
+        return [
+            'run_id' => self::str($context, 'run_id'),
+            'parent_run_id' => self::str($context, 'parent_run_id'),
+            'attempt' => self::int($context, 'attempt'),
+            'error_count' => self::int($context, 'error_count'),
         ];
     }
 

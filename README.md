@@ -148,7 +148,7 @@ Full guard reference, the exact `ShellTool` blocklist, and the SSRF/sandbox impl
 ```text
 Message
   → Guards       (blocks injection/PII before the LLM sees it)
-  → Hooks         (lifecycle events fire, 40 across the loop)
+  → Hooks         (lifecycle events fire, 44 across the loop)
   → Agent          (ReAct loop: provider + tools + memory + skills)
   → AgentResponse  (text, tokens, tool calls, timing)
 ```

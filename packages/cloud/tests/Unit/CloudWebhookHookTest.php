@@ -330,6 +330,41 @@ final class CloudWebhookHookTest extends TestCase
         $this->assertSame(50, $p['cache_write_tokens']);
     }
 
+    public function test_provider_fallback_is_flat_with_from_to_and_status(): void
+    {
+        $p = $this->buildPayload('provider.fallback', ['from' => 'openai', 'to' => 'groq', 'status' => 503, 'run_id' => '01RUN']);
+        $this->assertSame('openai', $p['from']);
+        $this->assertSame('groq', $p['to']);
+        $this->assertSame(503, $p['status']);
+        $this->assertSame('01RUN', $p['run_id']);
+        $this->assertArrayNotHasKey('payload', $p);
+    }
+
+    public function test_provider_response_cached_is_flat_with_provider_model_and_key_hash(): void
+    {
+        $p = $this->buildPayload('provider.response_cached', ['provider' => 'openai', 'model' => 'gpt-4o-mini', 'key_hash' => 'phpclaw_3f2a9c']);
+        $this->assertSame('openai', $p['provider']);
+        $this->assertSame('gpt-4o-mini', $p['model']);
+        $this->assertSame('phpclaw_3f2a9c', $p['key_hash']);
+        $this->assertArrayNotHasKey('payload', $p);
+    }
+
+    public function test_budget_exceeded_is_flat_with_tokens_spent_and_budget(): void
+    {
+        $p = $this->buildPayload('budget.exceeded', ['tokens_spent' => 48210, 'budget' => 50000]);
+        $this->assertSame(48210, $p['tokens_spent']);
+        $this->assertSame(50000, $p['budget']);
+        $this->assertArrayNotHasKey('payload', $p);
+    }
+
+    public function test_structured_repair_is_flat_with_attempt_and_error_count(): void
+    {
+        $p = $this->buildPayload('structured.repair', ['attempt' => 1, 'error_count' => 2]);
+        $this->assertSame(1, $p['attempt']);
+        $this->assertSame(2, $p['error_count']);
+        $this->assertArrayNotHasKey('payload', $p);
+    }
+
     public function test_provider_error_includes_iteration(): void
     {
         $p = $this->buildPayload('provider.error', ['error' => '500', 'iteration' => 3]);
