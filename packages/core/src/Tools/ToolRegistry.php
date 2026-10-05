@@ -17,7 +17,7 @@ final class ToolRegistry
 
     public const TOOL_FORMAT_ANTHROPIC = 'anthropic';
 
-    private const OPENAI_COMPATIBLE_PROVIDERS = ['openai', 'groq', 'gemini', 'mistral', 'ollama'];
+    private const OPENAI_COMPATIBLE_PROVIDERS = ['openai', 'groq', 'gemini', 'mistral', 'ollama', 'deepseek', 'custom'];
 
     private array $tools = [];
 

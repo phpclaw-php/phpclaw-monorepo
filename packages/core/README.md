@@ -172,7 +172,7 @@ $claw = Claw::builder()
 
 ## Trust signals
 
-2,411 tests, 6,407 assertions, zero real network calls or API keys required to run the suite, every provider and tool call is mocked. 80% line coverage enforced in CI as one whole-package figure (covered statements over total statements), not per class. One public API (`Claw::send`/`stream`/`conversation`) that doesn't break without a major version bump.
+2,417 tests, zero real network calls or API keys required to run the suite, every provider and tool call is mocked. 80% line coverage enforced in CI as one whole-package figure (covered statements over total statements), not per class. One public API (`Claw::send`/`stream`/`conversation`) that doesn't break without a major version bump.
 
 ## Documentation
 

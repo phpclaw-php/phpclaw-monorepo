@@ -256,7 +256,7 @@ final class ClawBuilderTest extends TestCase
 
     public function test_with_fallback_string_form_threads_through_as_a_provider_model_key_triple(): void
     {
-        $claw = Claw::builder()->withFallback('deepseek', 'deepseek-chat', 'dk-key')->build();
+        $claw = Claw::builder()->provider('openai')->apiKey('sk-test')->withFallback('deepseek', 'deepseek-chat', 'dk-key')->build();
 
         $this->assertSame(
             [['provider' => 'deepseek', 'model' => 'deepseek-chat', 'apiKey' => 'dk-key']],
@@ -267,7 +267,8 @@ final class ClawBuilderTest extends TestCase
     public function test_with_fallback_is_repeatable_and_appends_in_order(): void
     {
         $first = $this->createMock(ProviderInterface::class);
-        $claw = Claw::builder()->withFallback($first)->withFallback('deepseek', 'deepseek-chat', 'dk-key')->build();
+        $first->method('name')->willReturn('groq');
+        $claw = Claw::builder()->provider('openai')->apiKey('sk-test')->withFallback($first)->withFallback('deepseek', 'deepseek-chat', 'dk-key')->build();
 
         $this->assertCount(2, $claw->config()->fallbacks);
         $this->assertSame($first, $claw->config()->fallbacks[0]);

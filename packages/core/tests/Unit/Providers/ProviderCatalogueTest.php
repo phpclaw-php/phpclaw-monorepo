@@ -5,6 +5,9 @@ declare(strict_types=1);
 namespace PhpClaw\Tests\Unit\Providers;
 
 use PhpClaw\AutoDiscovery\ComposerExtras;
+use PhpClaw\AutoDiscovery\DiscoveryCache;
+use PhpClaw\Providers\AnthropicProvider;
+use PhpClaw\Providers\GeminiProvider;
 use PhpClaw\Providers\OpenAIProvider;
 use PhpClaw\Providers\ProviderCatalogue;
 use PHPUnit\Framework\TestCase;
@@ -14,6 +17,23 @@ final class ProviderCatalogueTest extends TestCase
     protected function tearDown(): void
     {
         ProviderCatalogue::reset();
+        DiscoveryCache::reset();
+    }
+
+    public function test_discovered_providers_come_in_slug_order_whatever_order_the_scan_found_them(): void
+    {
+        (new \ReflectionProperty(DiscoveryCache::class, 'memoryCache'))->setValue(null, [
+            'tools' => [], 'memory' => [], 'skills' => [], 'hooks' => [], 'guards' => [],
+            'providers' => [
+                GeminiProvider::class => ['name' => 'gemini', 'label' => 'Gemini'],
+                AnthropicProvider::class => ['name' => 'anthropic', 'label' => 'Anthropic'],
+            ],
+        ]);
+
+        $this->assertSame(
+            ['anthropic', 'gemini', 'openai', 'groq', 'deepseek', 'mistral', 'ollama', 'custom'],
+            array_keys(ProviderCatalogue::all()),
+        );
     }
 
     public function test_all_returns_built_in_providers(): void

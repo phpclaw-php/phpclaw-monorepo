@@ -129,7 +129,8 @@ final class ProviderCatalogue implements CatalogueInterface
     }
 
     /**
-     * Pull attribute-discovered providers out of {@see DiscoveryCache} and return them in the catalogue's slug-keyed shape.
+     * Pull attribute-discovered providers out of {@see DiscoveryCache} and return them in the catalogue's slug-keyed
+     * shape, sorted by slug so the order is the same on every install whatever order the class scan found them in.
      *
      * @return array<string, array{label: string, class: class-string<ProviderInterface>}>
      */
@@ -158,6 +159,8 @@ final class ProviderCatalogue implements CatalogueInterface
 
             $out[$slug] = ['label' => $label, 'class' => $class];
         }
+
+        ksort($out);
 
         return $out;
     }

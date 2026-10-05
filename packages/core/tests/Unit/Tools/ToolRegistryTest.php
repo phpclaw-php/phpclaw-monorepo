@@ -195,6 +195,26 @@ final class ToolRegistryTest extends TestCase
         $this->assertArrayNotHasKey('input_schema', $ollama[0]);
     }
 
+    #[DataProvider('openAiCompatiblePresets')]
+    public function test_schemas_for_an_openai_compatible_preset_match_openai(string $providerName): void
+    {
+        $this->registry->register([$this->makeTool('tool_p', 'Preset tool')]);
+
+        $openai = $this->registry->schemas('openai');
+        $preset = $this->registry->schemas($providerName);
+
+        $this->assertSame($openai, $preset);
+        $this->assertSame('function', $preset[0]['type']);
+        $this->assertArrayHasKey('function', $preset[0]);
+        $this->assertArrayNotHasKey('input_schema', $preset[0]);
+    }
+
+    public static function openAiCompatiblePresets(): iterable
+    {
+        yield 'deepseek' => ['deepseek'];
+        yield 'custom' => ['custom'];
+    }
+
     public function test_schemas_unknown_provider_falls_back_to_anthropic_shape(): void
     {
         $schema = ['type' => 'object'];
@@ -371,6 +391,8 @@ final class ToolRegistryTest extends TestCase
         yield 'gemini' => ['gemini'];
         yield 'mistral' => ['mistral'];
         yield 'ollama' => ['ollama'];
+        yield 'deepseek' => ['deepseek'];
+        yield 'custom' => ['custom'];
     }
 
     #[DataProvider('openAiCompatibleProviderNames')]
@@ -382,8 +404,6 @@ final class ToolRegistryTest extends TestCase
     public static function anthropicShapedProviderNames(): iterable
     {
         yield 'anthropic' => ['anthropic'];
-        yield 'deepseek' => ['deepseek'];
-        yield 'custom' => ['custom'];
         yield 'empty string' => [''];
         yield 'unknown provider' => ['some-unregistered-provider'];
     }

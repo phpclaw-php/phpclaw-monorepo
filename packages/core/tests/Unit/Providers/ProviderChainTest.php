@@ -154,4 +154,26 @@ final class ProviderChainTest extends TestCase
 
         self::assertSame('plain', $response['text']);
     }
+
+    public function test_a_chain_of_openai_and_deepseek_is_accepted(): void
+    {
+        $chain = new ProviderChain([$this->makeProvider('openai', 'gpt-4o-mini'), $this->makeProvider('deepseek', 'deepseek-chat')]);
+
+        self::assertSame('openai', $chain->name());
+    }
+
+    public function test_a_chain_of_custom_and_groq_is_accepted(): void
+    {
+        $chain = new ProviderChain([$this->makeProvider('custom', 'my-model'), $this->makeProvider('groq', 'llama-3.1-8b-instant')]);
+
+        self::assertSame('custom', $chain->name());
+    }
+
+    public function test_a_chain_of_anthropic_and_deepseek_is_rejected(): void
+    {
+        $this->expectException(AdapterException::class);
+        $this->expectExceptionMessage('ProviderChain requires every provider to share the same tool format.');
+
+        new ProviderChain([$this->makeProvider('anthropic', 'claude-haiku-4-5-20251001'), $this->makeProvider('deepseek', 'deepseek-chat')]);
+    }
 }
