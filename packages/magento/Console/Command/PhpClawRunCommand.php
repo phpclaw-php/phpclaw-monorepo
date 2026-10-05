@@ -8,7 +8,9 @@ use Magento\Framework\Console\Cli;
 use PhpClaw\Exceptions\GuardException;
 use PhpClaw\Exceptions\MaxIterationsException;
 use PhpClaw\Exceptions\ProviderException;
+use PhpClaw\Exceptions\TokenBudgetExceededException;
 use PhpClaw\Magento\Factory\PhpClawFactoryInterface;
+use PhpClaw\Magento\Service\LimitResponse;
 use PhpClaw\Magento\Service\ToolCallCollectorFactory;
 use PhpClaw\Magento\Service\ToolHistorySplicer;
 use Psr\Log\LoggerInterface;
@@ -114,7 +116,14 @@ class PhpClawRunCommand extends Command
             $output->writeln('<error>Prompt injection detected.</error>');
 
             return Cli::RETURN_FAILURE;
-        } catch (ProviderException $e) {
+        } catch (ProviderException|TokenBudgetExceededException $e) {
+            $limitMessage = LimitResponse::message($e);
+            if ($limitMessage !== null) {
+                $output->writeln('<error>'.$limitMessage.'</error>');
+
+                return Cli::RETURN_FAILURE;
+            }
+
             $this->logger->error('phpClaw provider error', ['exception' => $e]);
             $output->writeln('<error>AI provider error. Check configuration and try again.</error>');
 

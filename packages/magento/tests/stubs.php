@@ -653,8 +653,58 @@ namespace PhpClaw {
                 return $this;
             }
 
+            private array $fallbacks = [];
+
+            private int $requestsPerMinute = 0;
+
+            private ?object $rateLimitStore = null;
+
+            private ?object $responseCache = null;
+
+            private int $responseCacheTtl = 3600;
+
+            private int $maxTokenBudget = 0;
+
+            public function withFallback(string $provider, string $model = '', string $apiKey = ''): self
+            {
+                $this->fallbacks[] = ['provider' => $provider, 'model' => $model, 'apiKey' => $apiKey];
+
+                return $this;
+            }
+
+            public function rateLimit(int $requestsPerMinute, int $maxWaitMs = 30_000, ?object $store = null): self
+            {
+                $this->requestsPerMinute = $requestsPerMinute;
+                $this->rateLimitStore = $store;
+
+                return $this;
+            }
+
+            public function responseCache(object $cache, int $ttl = 3600): self
+            {
+                $this->responseCache = $cache;
+                $this->responseCacheTtl = $ttl;
+
+                return $this;
+            }
+
+            public function maxTokenBudget(int $tokens): self
+            {
+                $this->maxTokenBudget = $tokens;
+
+                return $this;
+            }
+
             public function build(): Claw
             {
+                $config = new ClawConfig;
+                $config->fallbacks = $this->fallbacks;
+                $config->requestsPerMinute = $this->requestsPerMinute;
+                $config->rateLimitStore = $this->rateLimitStore;
+                $config->responseCache = $this->responseCache;
+                $config->responseCacheTtl = $this->responseCacheTtl;
+                $config->maxTokenBudget = $this->maxTokenBudget;
+
                 return new Claw(
                     apiKey: $this->apiKey,
                     provider: $this->provider,
@@ -665,6 +715,7 @@ namespace PhpClaw {
                     systemPrompt: $this->systemPrompt,
                     tools: $this->tools,
                     approvalGate: $this->approvalGate,
+                    config: $config,
                 );
             }
         }
@@ -680,6 +731,26 @@ namespace PhpClaw {
             public string $provider = '';
 
             public string $model = '';
+
+            public string $providerName;
+
+            public array $fallbacks = [];
+
+            public int $requestsPerMinute = 0;
+
+            public ?object $rateLimitStore = null;
+
+            public ?object $responseCache = null;
+
+            public int $responseCacheTtl = 3600;
+
+            public int $maxTokenBudget = 0;
+
+            public function __construct()
+            {
+                $override = (string) ($_ENV['PHPCLAW_PROVIDER'] ?? getenv('PHPCLAW_PROVIDER'));
+                $this->providerName = $override !== '' ? strtolower($override) : 'anthropic';
+            }
         }
     }
 
@@ -704,11 +775,17 @@ namespace PhpClaw {
                 string $systemPrompt = '',
                 array $tools = [],
                 ?object $approvalGate = null,
+                private ?ClawConfig $config = null,
             ) {
                 $this->memory = $memory;
                 $this->storeMessages = $storeMessages;
                 $this->tools = $tools;
                 $this->approvalGate = $approvalGate;
+            }
+
+            public function config(): ClawConfig
+            {
+                return $this->config ?? new ClawConfig;
             }
 
             public function send(string $message): AgentResponse

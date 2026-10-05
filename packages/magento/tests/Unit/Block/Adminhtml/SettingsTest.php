@@ -8,11 +8,14 @@ use Magento\Backend\Block\Template\Context;
 use PhpClaw\Magento\Block\Adminhtml\Settings;
 use PhpClaw\Magento\Model\Config;
 use PhpClaw\Magento\Model\Config\Source\Provider;
+use PhpClaw\Magento\Tests\Unit\Support\PinsProviderEnv;
 use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
 
 final class SettingsTest extends TestCase
 {
+    use PinsProviderEnv;
+
     private Context&MockObject $context;
 
     private Config&MockObject $config;
@@ -48,6 +51,8 @@ final class SettingsTest extends TestCase
             'provider', 'model', 'api_key', 'base_url', 'system_prompt',
             'store_messages', 'max_iterations', 'cloud_key',
             'cloud_signing_secret', 'cloud_disable', 'remote_skill_urls',
+            'fallback_provider', 'fallback_model', 'fallback_api_key', 'rate_limit_rpm',
+            'response_cache', 'response_cache_ttl', 'max_token_budget',
         ], array_keys($this->block->getValues()));
     }
 
@@ -109,12 +114,14 @@ final class SettingsTest extends TestCase
         self::assertSame('', $values['api_key']);
     }
 
-    public function test_get_provider_options_delegates_to_source_model(): void
+    public function test_get_provider_options_starts_with_select_a_provider_then_the_source_model_options(): void
     {
-        $expected = [['value' => 'anthropic', 'label' => 'Anthropic (Claude)']];
-        $this->provider->method('toOptionArray')->willReturn($expected);
+        $this->provider->method('toOptionArray')->willReturn([['value' => 'anthropic', 'label' => 'Anthropic']]);
 
-        self::assertSame($expected, $this->block->getProviderOptions());
+        self::assertSame(
+            [['value' => '', 'label' => 'Select a provider'], ['value' => 'anthropic', 'label' => 'Anthropic']],
+            $this->block->getProviderOptions(),
+        );
     }
 
     public function test_get_save_url_contains_settings_save(): void
@@ -241,5 +248,92 @@ final class SettingsTest extends TestCase
         $this->config->method('isStoreMessages')->willReturn(false);
 
         self::assertFalse($this->block->storeMessagesEnabled());
+    }
+
+    private function catalogue(): array
+    {
+        return [
+            ['value' => 'anthropic', 'label' => 'Anthropic'],
+            ['value' => 'openai', 'label' => 'OpenAI'],
+            ['value' => 'groq', 'label' => 'Groq'],
+            ['value' => 'deepseek', 'label' => 'DeepSeek'],
+            ['value' => 'ollama', 'label' => 'Ollama (Local)'],
+            ['value' => 'custom', 'label' => 'Custom'],
+        ];
+    }
+
+    public function test_get_values_returns_the_seven_agent_settings_with_the_fallback_key_masked(): void
+    {
+        $this->config->method('getFallbackProvider')->willReturn('groq');
+        $this->config->method('getFallbackModel')->willReturn('llama-3.1-8b-instant');
+        $this->config->method('getFallbackApiKey')->willReturn('sk-fallback');
+        $this->config->method('getRateLimitRpm')->willReturn(30);
+        $this->config->method('isResponseCache')->willReturn(true);
+        $this->config->method('getResponseCacheTtl')->willReturn(600);
+        $this->config->method('getMaxTokenBudget')->willReturn(50000);
+
+        $values = $this->block->getValues();
+
+        self::assertSame('groq', $values['fallback_provider']);
+        self::assertSame('llama-3.1-8b-instant', $values['fallback_model']);
+        self::assertSame('__phpclaw_secret_set__', $values['fallback_api_key']);
+        self::assertSame(30, $values['rate_limit_rpm']);
+        self::assertTrue($values['response_cache']);
+        self::assertSame(600, $values['response_cache_ttl']);
+        self::assertSame(50000, $values['max_token_budget']);
+    }
+
+    public function test_get_values_leaves_an_unset_fallback_key_empty(): void
+    {
+        $this->config->method('getFallbackApiKey')->willReturn('');
+
+        self::assertSame('', $this->block->getValues()['fallback_api_key']);
+        self::assertFalse($this->block->hasFallbackApiKey());
+    }
+
+    public function test_has_fallback_api_key_is_true_once_a_key_is_saved(): void
+    {
+        $this->config->method('getFallbackApiKey')->willReturn('sk-fallback');
+
+        self::assertTrue($this->block->hasFallbackApiKey());
+    }
+
+    public function test_fallback_options_list_only_the_main_providers_tool_format_without_custom(): void
+    {
+        $this->provider->method('toOptionArray')->willReturn($this->catalogue());
+        $this->config->method('getProvider')->willReturn('custom');
+
+        self::assertSame(
+            ['' => 'Off', 'openai' => 'OpenAI', 'groq' => 'Groq', 'deepseek' => 'DeepSeek', 'ollama' => 'Ollama (Local)'],
+            $this->block->getFallbackProviderOptions(),
+        );
+    }
+
+    public function test_fallback_options_under_anthropic_offer_only_anthropic(): void
+    {
+        $this->provider->method('toOptionArray')->willReturn($this->catalogue());
+        $this->config->method('getProvider')->willReturn('anthropic');
+
+        self::assertSame(['' => 'Off', 'anthropic' => 'Anthropic'], $this->block->getFallbackProviderOptions());
+    }
+
+    public function test_fallback_script_data_carries_labels_without_custom_and_formats_with_it(): void
+    {
+        $this->provider->method('toOptionArray')->willReturn($this->catalogue());
+
+        $data = $this->block->getFallbackScriptData();
+
+        self::assertSame('Off', $data['offLabel']);
+        self::assertArrayNotHasKey('custom', $data['providers']);
+        self::assertSame('Ollama (Local)', $data['providers']['ollama']);
+        self::assertSame('openai', $data['formats']['custom']);
+        self::assertSame('anthropic', $data['formats']['anthropic']);
+        self::assertSame('openai', $data['formats']['deepseek']);
+    }
+
+    public function test_fallback_script_data_auto_format_follows_the_provider_core_auto_detects(): void
+    {
+        self::assertSame('anthropic', $this->withEnvProvider('anthropic', fn () => $this->block->getFallbackScriptData()['autoFormat']));
+        self::assertSame('openai', $this->withEnvProvider('groq', fn () => $this->block->getFallbackScriptData()['autoFormat']));
     }
 }

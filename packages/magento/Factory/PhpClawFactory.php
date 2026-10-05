@@ -9,12 +9,15 @@ use Magento\Framework\App\ResourceConnection;
 use Magento\Framework\AuthorizationInterface;
 use PhpClaw\Agent\CliApprovalGate;
 use PhpClaw\Claw;
+use PhpClaw\ClawBuilder;
+use PhpClaw\ClawConfig;
 use PhpClaw\Contracts\ClawInterface as PhpClawInterface;
 use PhpClaw\Magento\Memory\RouterMemory;
 use PhpClaw\Magento\Model\Config;
 use PhpClaw\Magento\Model\IdentityResolver;
 use PhpClaw\Magento\Registry\PhpClawRegistrar;
 use PhpClaw\Magento\Service\CsvList;
+use PhpClaw\Magento\Service\MagentoCache;
 use PhpClaw\Magento\Service\UrlSafety;
 use PhpClaw\Magento\Tools\DatabaseTool;
 use PhpClaw\Magento\Tools\LogTool;
@@ -35,6 +38,7 @@ use PhpClaw\Tools\HttpTool;
 use PhpClaw\Tools\ShellTool;
 use PhpClaw\Tools\ToolCatalogue;
 use PhpClaw\Tools\ToolProfileResolver;
+use PhpClaw\Tools\ToolRegistry;
 
 /**
  * Factory that builds a configured phpClaw agent instance for Magento.
@@ -48,6 +52,8 @@ class PhpClawFactory implements PhpClawFactoryInterface
         'group:system' => ['magento_cache', 'db_query', 'read_log'],
     ];
 
+    private const PROVIDER_CUSTOM = 'custom';
+
     /**
      * Bind the config reader and registrar this factory builds agents from.
      *
@@ -57,6 +63,8 @@ class PhpClawFactory implements PhpClawFactoryInterface
      * @param  TypeListInterface  $cacheTypeList  Magento cache type registry forwarded to MagentoCacheTool.
      * @param  RouterMemory  $routerMemory  Namespace-routing memory driver wired by di.xml.
      * @param  AuthorizationInterface  $authorization
+     * @param  IdentityResolver  $identity  Resolves the caller and whether this run is a console command.
+     * @param  MagentoCache  $agentCache  Store shared by the rate limit and the response cache.
      * @return void
      */
     public function __construct(
@@ -67,6 +75,7 @@ class PhpClawFactory implements PhpClawFactoryInterface
         private readonly RouterMemory $routerMemory,
         private readonly AuthorizationInterface $authorization,
         private readonly IdentityResolver $identity,
+        private readonly MagentoCache $agentCache,
     ) {}
 
     /**
@@ -279,7 +288,47 @@ class PhpClawFactory implements PhpClawFactoryInterface
 
         $builder->approvalGate(new CliApprovalGate);
 
+        $this->applyAgentPrimitives($builder);
+
         return $builder->build();
+    }
+
+    /**
+     * Apply the fallback provider, rate limit, response cache and token budget from the settings; a fallback that is
+     * Custom or uses another tool format than the main provider is skipped and logged.
+     *
+     * @param  ClawBuilder  $builder  Builder being configured.
+     * @return void
+     */
+    private function applyAgentPrimitives(ClawBuilder $builder): void
+    {
+        $main = $this->config->getProvider();
+        $fallback = $this->config->getFallbackProvider();
+        $fallbackCompatible = $fallback !== ''
+            && $fallback !== self::PROVIDER_CUSTOM
+            && ToolRegistry::toolFormat($fallback) === ToolRegistry::toolFormat($main !== '' ? $main : (new ClawConfig)->providerName);
+
+        if ($fallbackCompatible) {
+            $builder->withFallback($fallback, $this->config->getFallbackModel(), $this->config->getFallbackApiKey());
+        } elseif ($fallback !== '') {
+            error_log('phpClaw: fallback provider "'.$fallback.'" is custom or uses another tool format than the main provider, skipping fallback.');
+        }
+
+        $rpm = $this->config->getRateLimitRpm();
+
+        if ($rpm > 0) {
+            $builder->rateLimit($rpm, store: $this->agentCache);
+        }
+
+        if ($this->config->isResponseCache()) {
+            $builder->responseCache($this->agentCache, $this->config->getResponseCacheTtl());
+        }
+
+        $budget = $this->config->getMaxTokenBudget();
+
+        if ($budget > 0) {
+            $builder->maxTokenBudget($budget);
+        }
     }
 
     /**

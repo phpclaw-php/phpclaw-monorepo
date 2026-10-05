@@ -7,6 +7,7 @@ namespace PhpClaw\Magento\Tests\Unit\Service;
 use PhpClaw\Exceptions\GuardException;
 use PhpClaw\Exceptions\MaxIterationsException;
 use PhpClaw\Exceptions\ProviderException;
+use PhpClaw\Exceptions\TokenBudgetExceededException;
 use PhpClaw\Magento\Exception\ConversationAccessDeniedException;
 use PhpClaw\Magento\Service\TurnErrorFrames;
 use PHPUnit\Framework\TestCase;
@@ -114,5 +115,30 @@ final class TurnErrorFramesTest extends TestCase
 
         self::assertStringNotContainsString('hunter2', $frame['error']);
         self::assertStringNotContainsString('db-primary', $frame['error']);
+    }
+
+    public function test_a_spent_token_budget_maps_to_a_422_budget_frame(): void
+    {
+        self::assertSame(
+            ['error' => 'Token budget reached for this run.', 'code' => 422],
+            $this->subject->frameFor(new TokenBudgetExceededException(1200, 1)),
+        );
+        self::assertSame([], $this->logged);
+    }
+
+    public function test_a_provider_rate_limit_maps_to_a_429_rate_limit_frame(): void
+    {
+        self::assertSame(
+            ['error' => 'Rate limit reached, try again shortly.', 'code' => 429],
+            $this->subject->frameFor(new ProviderException('rate limit wait exceeded', statusCode: 429)),
+        );
+    }
+
+    public function test_a_provider_500_still_maps_to_the_provider_error_frame(): void
+    {
+        self::assertSame(
+            ['error' => 'AI provider error. Check your API key and try again.', 'code' => 502],
+            $this->subject->frameFor(new ProviderException('down', statusCode: 500)),
+        );
     }
 }

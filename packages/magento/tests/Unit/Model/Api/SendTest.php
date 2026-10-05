@@ -13,6 +13,7 @@ use PhpClaw\Contracts\ClawInterface as PhpClawInterface;
 use PhpClaw\Exceptions\GuardException;
 use PhpClaw\Exceptions\MaxIterationsException;
 use PhpClaw\Exceptions\ProviderException;
+use PhpClaw\Exceptions\TokenBudgetExceededException;
 use PhpClaw\Magento\Factory\PhpClawFactoryInterface;
 use PhpClaw\Magento\Model\Api\Send;
 use PhpClaw\Magento\Model\IdentityResolver;
@@ -152,6 +153,36 @@ final class SendTest extends TestCase
             self::fail('A non-admin Web API caller must be refused.');
         } catch (WebapiException $e) {
             self::assertSame(403, $e->getHttpCode());
+        }
+    }
+
+    public function test_a_spent_token_budget_is_a_422_with_the_budget_message(): void
+    {
+        $this->engine->method('conversation')->willReturn($this->makeConversation());
+        $this->engine->method('sendInConversation')->willThrowException(new TokenBudgetExceededException(1200, 1));
+        $this->logger->expects(self::never())->method('error');
+
+        try {
+            $this->model->send('Write a long story');
+            self::fail('Expected WebapiException was not thrown.');
+        } catch (WebapiException $e) {
+            self::assertSame(422, $e->getHttpCode());
+            self::assertSame('Token budget reached for this run.', $e->getMessage());
+        }
+    }
+
+    public function test_a_provider_rate_limit_is_a_429_with_the_rate_limit_message(): void
+    {
+        $this->engine->method('conversation')->willReturn($this->makeConversation());
+        $this->engine->method('sendInConversation')->willThrowException(new ProviderException('rate limit wait exceeded', statusCode: 429));
+        $this->logger->expects(self::never())->method('error');
+
+        try {
+            $this->model->send('hello');
+            self::fail('Expected WebapiException was not thrown.');
+        } catch (WebapiException $e) {
+            self::assertSame(429, $e->getHttpCode());
+            self::assertSame('Rate limit reached, try again shortly.', $e->getMessage());
         }
     }
 }

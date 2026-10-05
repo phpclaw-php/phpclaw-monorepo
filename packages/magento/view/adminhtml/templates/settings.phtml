@@ -10,6 +10,7 @@ $maxIter   = (int) $values['max_iterations'] > 0 ? (int) $values['max_iterations
 $provider  = (string) $values['provider'];
 $isOllama  = $provider === 'ollama';
 $isCustom  = $provider === 'custom';
+$fallback  = (string) $values['fallback_provider'];
 $escape    = static fn ($value): string => htmlspecialchars((string) $value, ENT_QUOTES, 'UTF-8');
 ?>
 <div class="phpclaw-admin-page">
@@ -53,7 +54,7 @@ $escape    = static fn ($value): string => htmlspecialchars((string) $value, ENT
                      autocomplete="new-password"
                      value="<?= $escape($values['api_key']) ?>"
                      placeholder="<?= $block->hasApiKey() ? '(saved, leave blank to keep)' : '' ?>"/>
-              <p class="phpclaw-field-help">Your API key for the selected provider. Not required for Ollama (local models).</p>
+              <p class="phpclaw-field-help">Your API key for the selected provider. Leave blank for Ollama (local models).</p>
             </td>
           </tr>
 
@@ -63,7 +64,7 @@ $escape    = static fn ($value): string => htmlspecialchars((string) $value, ENT
               <input id="phpclaw-base-url" type="url" name="base_url" class="phpclaw-input"
                      value="<?= $escape($values['base_url']) ?>"
                      placeholder="https://openrouter.ai/api/v1/chat/completions"/>
-              <p class="phpclaw-field-help">OpenAI-compatible endpoint URL. Only used when provider is set to Custom.</p>
+              <p class="phpclaw-field-help">For the Custom provider only. The full OpenAI-compatible /chat/completions endpoint URL. Enter your API key above if the endpoint requires one.</p>
             </td>
           </tr>
 
@@ -84,7 +85,7 @@ $escape    = static fn ($value): string => htmlspecialchars((string) $value, ENT
                        <?= $values['store_messages'] ? 'checked' : '' ?>/>
                 Enable chat history (recommended)
               </label>
-              <p class="phpclaw-field-help">When enabled: prompt and response text is persisted via your configured memory driver, required for multi-turn chat to remember previous messages. When disabled: no message content is ever saved; each prompt is processed independently with no memory of previous turns.</p>
+              <p class="phpclaw-field-help">When enabled: prompt and response text is saved, so a conversation remembers previous messages. When disabled: no message content is ever saved; each prompt is processed independently.</p>
             </td>
           </tr>
 
@@ -95,6 +96,80 @@ $escape    = static fn ($value): string => htmlspecialchars((string) $value, ENT
                      class="phpclaw-input phpclaw-input--small"
                      value="<?= $escape($maxIter) ?>"/>
               <p class="phpclaw-field-help">Maximum tool-call iterations per request. Default: 20.</p>
+            </td>
+          </tr>
+
+          <tr>
+            <th><label for="phpclaw-fallback-provider">Fallback Provider</label></th>
+            <td>
+              <select id="phpclaw-fallback-provider" name="fallback_provider" class="phpclaw-input">
+                <?php foreach ($block->getFallbackProviderOptions() as $value => $label): ?>
+                  <option value="<?= $escape($value) ?>" <?= $fallback === (string) $value ? 'selected' : '' ?>><?= $escape($label) ?></option>
+                <?php endforeach; ?>
+              </select>
+              <p class="phpclaw-field-help">Optional. Used only when the main provider fails with a connection error, a 429 or a 5xx. Lists only providers with the same tool format as the main provider. Off turns fallback off.</p>
+            </td>
+          </tr>
+
+          <tr>
+            <th><label for="phpclaw-fallback-model">Fallback Model</label></th>
+            <td>
+              <input id="phpclaw-fallback-model" type="text" name="fallback_model" class="phpclaw-input"
+                     value="<?= $escape($values['fallback_model']) ?>"/>
+              <p class="phpclaw-field-help">Leave blank to use the fallback provider's default model.</p>
+            </td>
+          </tr>
+
+          <tr id="phpclaw-row-fallback-api-key"<?= in_array($fallback, ['', 'ollama'], true) ? ' hidden' : '' ?>>
+            <th><label for="phpclaw-fallback-api-key">Fallback API Key</label></th>
+            <td>
+              <input id="phpclaw-fallback-api-key" type="password" name="fallback_api_key" class="phpclaw-input"
+                     autocomplete="new-password"
+                     value="<?= $escape($values['fallback_api_key']) ?>"
+                     placeholder="<?= $block->hasFallbackApiKey() ? '(saved, leave blank to keep)' : '' ?>"/>
+              <p class="phpclaw-field-help">API key for the fallback provider.</p>
+            </td>
+          </tr>
+
+          <tr>
+            <th><label for="phpclaw-rate-limit-rpm">Rate Limit (requests/min)</label></th>
+            <td>
+              <input id="phpclaw-rate-limit-rpm" type="number" name="rate_limit_rpm" min="0" max="600"
+                     class="phpclaw-input phpclaw-input--small"
+                     value="<?= $escape($values['rate_limit_rpm']) ?>"/>
+              <p class="phpclaw-field-help">Most calls to the AI provider per minute, shared by every request. 0 turns it off. Maximum 600.</p>
+            </td>
+          </tr>
+
+          <tr>
+            <th><label for="phpclaw-response-cache">Response Cache</label></th>
+            <td>
+              <label class="phpclaw-checkbox-label">
+                <input id="phpclaw-response-cache" type="checkbox" name="response_cache" value="1"
+                       <?= $values['response_cache'] ? 'checked' : '' ?>/>
+                Reuse the answer for an identical request
+              </label>
+              <p class="phpclaw-field-help">An identical request within the TTL is answered from the cache instead of calling the provider again.</p>
+            </td>
+          </tr>
+
+          <tr id="phpclaw-row-response-cache-ttl"<?= $values['response_cache'] ? '' : ' hidden' ?>>
+            <th><label for="phpclaw-response-cache-ttl">Response Cache TTL (seconds)</label></th>
+            <td>
+              <input id="phpclaw-response-cache-ttl" type="number" name="response_cache_ttl" min="60" max="86400"
+                     class="phpclaw-input phpclaw-input--small"
+                     value="<?= $escape($values['response_cache_ttl']) ?>"/>
+              <p class="phpclaw-field-help">How long a cached answer is kept, in seconds: 60 to 86400. Default 3600.</p>
+            </td>
+          </tr>
+
+          <tr>
+            <th><label for="phpclaw-max-token-budget">Max Token Budget</label></th>
+            <td>
+              <input id="phpclaw-max-token-budget" type="number" name="max_token_budget" min="0" max="10000000"
+                     class="phpclaw-input phpclaw-input--small"
+                     value="<?= $escape($values['max_token_budget']) ?>"/>
+              <p class="phpclaw-field-help">Stops a run before a provider call would take its token spend over this number. 0 turns it off. Maximum 10000000.</p>
             </td>
           </tr>
 
@@ -116,7 +191,7 @@ $escape    = static fn ($value): string => htmlspecialchars((string) $value, ENT
                      autocomplete="new-password"
                      value="<?= $escape($values['cloud_key']) ?>"
                      placeholder="<?= $block->hasCloudKey() ? '(saved, leave blank to keep)' : '' ?>"/>
-              <p class="phpclaw-field-help">phpClaw Cloud API key. Enables cloud guards and webhook features. Optional. Requires a phpClaw Cloud account; visit <a href="https://phpclaw.ai" target="_blank" rel="noopener">phpclaw.ai</a> to sign up.</p>
+              <p class="phpclaw-field-help">phpClaw Cloud API key. Enables cloud guards and webhook features. Optional.</p>
             </td>
           </tr>
 
@@ -137,7 +212,7 @@ $escape    = static fn ($value): string => htmlspecialchars((string) $value, ENT
               <input id="phpclaw-cloud-disable" type="text" name="cloud_disable" class="phpclaw-input"
                      value="<?= $escape($values['cloud_disable']) ?>"
                      placeholder="e.g. guards, webhooks"/>
-              <p class="phpclaw-field-help">Comma-separated cloud feature names to disable. Leave empty to enable all features from your plan. Only applies when a Cloud Key is set above.</p>
+              <p class="phpclaw-field-help">Comma-separated cloud feature names to turn off, or hide_inputs, hide_outputs and hide_metadata to keep that content on your server while tracing stays on. Leave empty to use every feature in your plan. Only applies when a Cloud Key is set above.</p>
             </td>
           </tr>
           <?php endif; ?>
@@ -171,6 +246,7 @@ $escape    = static fn ($value): string => htmlspecialchars((string) $value, ENT
 <?= /* @noEscape */ json_encode([
     'test_url' => $testUrl,
     'form_key' => $formKey,
+    'fallback' => $block->getFallbackScriptData(),
 ], JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>
 </script>
 <script src="<?= $block->escapeUrl($block->getViewFileUrl('PhpClaw_Magento::js/phpclaw-settings.js')) ?>"></script>

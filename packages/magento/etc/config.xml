@@ -20,6 +20,13 @@
                 <cloud_signing_secret/>
                 <cloud_disable/>
                 <remote_skill_urls/>
+                <fallback_provider/>
+                <fallback_model/>
+                <fallback_api_key/>
+                <rate_limit_rpm>0</rate_limit_rpm>
+                <response_cache>0</response_cache>
+                <response_cache_ttl>3600</response_cache_ttl>
+                <max_token_budget>0</max_token_budget>
             </general>
             <security>
                 <shell_allowlist/>

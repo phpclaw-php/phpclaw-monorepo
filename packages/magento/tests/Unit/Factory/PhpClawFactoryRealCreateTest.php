@@ -14,6 +14,8 @@ use PhpClaw\Magento\Memory\RouterMemory;
 use PhpClaw\Magento\Model\Config;
 use PhpClaw\Magento\Model\IdentityResolver;
 use PhpClaw\Magento\Registry\PhpClawRegistrar;
+use PhpClaw\Magento\Service\MagentoCache;
+use PhpClaw\Magento\Tests\Unit\Support\ArrayAppCache;
 use PhpClaw\Providers\ProviderRegistry;
 use PHPUnit\Framework\TestCase;
 
@@ -56,6 +58,7 @@ final class ConsoleOverrideFactory extends PhpClawFactory
                 }
             },
             new IdentityResolverStub,
+            new MagentoCache(new ArrayAppCache),
         );
     }
 
@@ -101,7 +104,7 @@ final class PhpClawFactoryRealCreateTest extends TestCase
         $routerMemory = $this->createMock(RouterMemory::class);
         $authorization = $this->createMock(AuthorizationInterface::class);
 
-        return new PhpClawFactory($config, $registrar, $resourceConnection, $cache, $routerMemory, $authorization, $this->createMock(IdentityResolver::class));
+        return new PhpClawFactory($config, $registrar, $resourceConnection, $cache, $routerMemory, $authorization, $this->createMock(IdentityResolver::class), new MagentoCache(new ArrayAppCache));
     }
 
     private function makeFactoryWithConsole(bool $forcedIsConsole, array $overrides = []): PhpClawFactory
@@ -184,6 +187,7 @@ final class PhpClawFactoryRealCreateTest extends TestCase
             $this->createMock(RouterMemory::class),
             $this->createMock(AuthorizationInterface::class),
             $identity,
+            new MagentoCache(new ArrayAppCache),
         );
 
         $isConsole = new \ReflectionMethod($factory, 'isConsole');
@@ -205,6 +209,7 @@ final class PhpClawFactoryRealCreateTest extends TestCase
             $this->createMock(RouterMemory::class),
             $this->createMock(AuthorizationInterface::class),
             $consoleIdentity,
+            new MagentoCache(new ArrayAppCache),
         );
 
         self::assertTrue($isConsole->invoke($consoleFactory));

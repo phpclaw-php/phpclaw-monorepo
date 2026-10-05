@@ -25,7 +25,8 @@
         "php": "^8.1",
         "phpclaw/phpclaw": "^0.1",
         "phpclaw/phpclaw-cloud": "^0.1",
-        "phpclaw/phpclaw-mcp": "^0.1"
+        "phpclaw/phpclaw-mcp": "^0.1",
+        "psr/simple-cache": "^3.0"
     },
     "support": {
         "issues": "https://github.com/phpclaw-php/phpclaw-monorepo/issues",

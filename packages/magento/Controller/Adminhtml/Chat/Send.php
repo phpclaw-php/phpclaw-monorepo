@@ -11,8 +11,10 @@ use Magento\Framework\Controller\Result\JsonFactory;
 use PhpClaw\Exceptions\GuardException;
 use PhpClaw\Exceptions\MaxIterationsException;
 use PhpClaw\Exceptions\ProviderException;
+use PhpClaw\Exceptions\TokenBudgetExceededException;
 use PhpClaw\Magento\Exception\ConversationAccessDeniedException;
 use PhpClaw\Magento\Factory\PhpClawFactoryInterface;
+use PhpClaw\Magento\Service\LimitResponse;
 use PhpClaw\Magento\Service\ToolCallCollectorFactory;
 use PhpClaw\Magento\Service\ToolHistorySplicer;
 use PhpClaw\Support\Ulid;
@@ -122,7 +124,12 @@ class Send extends Action
             return $result->setData(['error' => 'You do not have permission to access this conversation.'])->setHttpResponseCode(403);
         } catch (GuardException) {
             return $result->setData(['error' => 'Blocked request.'])->setHttpResponseCode(422);
-        } catch (ProviderException) {
+        } catch (ProviderException|TokenBudgetExceededException $e) {
+            $limitStatus = LimitResponse::status($e);
+            if ($limitStatus !== null) {
+                return $result->setData(['error' => LimitResponse::message($e)])->setHttpResponseCode($limitStatus);
+            }
+
             return $result->setData(['error' => 'AI provider error. Check your API key and try again.'])->setHttpResponseCode(502);
         } catch (MaxIterationsException) {
             return $result->setData(['error' => 'Could not complete. Try a simpler question.'])->setHttpResponseCode(504);

@@ -13,6 +13,7 @@ use PhpClaw\Magento\Api\SendInterface;
 use PhpClaw\Magento\Factory\PhpClawFactoryInterface;
 use PhpClaw\Magento\Model\Api\Data\SendResponse;
 use PhpClaw\Magento\Model\IdentityResolver;
+use PhpClaw\Magento\Service\LimitResponse;
 use Psr\Log\LoggerInterface;
 
 /**
@@ -42,7 +43,7 @@ class Send implements SendInterface
      * @return SendResponseInterface Structured response with text, provider, model, tokens, iterations.
      *
      * @throws InputException When `$message` is empty after trimming.
-     * @throws WebapiException HTTP 403 for a caller that is not an admin user; HTTP 422 on guard block; HTTP 500 on agent/provider failure.
+     * @throws WebapiException HTTP 403 for a caller that is not an admin user; HTTP 422 on guard block or a spent token budget; HTTP 429 on a provider rate limit; HTTP 500 on any other agent/provider failure.
      */
     public function send(string $message): SendResponseInterface
     {
@@ -72,6 +73,11 @@ class Send implements SendInterface
                 422,
             );
         } catch (\Throwable $e) {
+            $limitStatus = LimitResponse::status($e);
+            if ($limitStatus !== null) {
+                throw new WebapiException(new Phrase((string) LimitResponse::message($e)), 0, $limitStatus);
+            }
+
             $this->logger->error('phpclaw rest send: '.$e->getMessage(), ['exception' => $e]);
             throw new WebapiException(
                 new Phrase('An internal error occurred. Please try again.'),

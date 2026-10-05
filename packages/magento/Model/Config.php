@@ -46,6 +46,30 @@ class Config
 
     private const XML_PATH_REMOTE_SKILL_URLS = 'phpclaw/general/remote_skill_urls';
 
+    private const XML_PATH_FALLBACK_PROVIDER = 'phpclaw/general/fallback_provider';
+
+    private const XML_PATH_FALLBACK_MODEL = 'phpclaw/general/fallback_model';
+
+    private const XML_PATH_FALLBACK_API_KEY = 'phpclaw/general/fallback_api_key';
+
+    private const XML_PATH_RATE_LIMIT_RPM = 'phpclaw/general/rate_limit_rpm';
+
+    private const XML_PATH_RESPONSE_CACHE = 'phpclaw/general/response_cache';
+
+    private const XML_PATH_RESPONSE_CACHE_TTL = 'phpclaw/general/response_cache_ttl';
+
+    private const XML_PATH_MAX_TOKEN_BUDGET = 'phpclaw/general/max_token_budget';
+
+    private const MAX_RATE_LIMIT_RPM = 600;
+
+    private const MIN_CACHE_TTL = 60;
+
+    private const MAX_CACHE_TTL = 86400;
+
+    private const DEFAULT_CACHE_TTL = 3600;
+
+    private const MAX_TOKEN_BUDGET = 10000000;
+
     /**
      * Bind Magento's config reader and encryptor this accessor resolves settings through.
      *
@@ -209,6 +233,113 @@ class Config
     public function getToolDeny(): array
     {
         return CsvList::parse((string) $this->scopeConfig->getValue(self::XML_PATH_TOOL_DENY));
+    }
+
+    /**
+     * Return the fallback provider slug tried when the main provider fails, or '' when fallback is off.
+     *
+     * @return string
+     */
+    public function getFallbackProvider(): string
+    {
+        return (string) $this->scopeConfig->getValue(self::XML_PATH_FALLBACK_PROVIDER);
+    }
+
+    /**
+     * Return the fallback model, or '' for the fallback provider's default model.
+     *
+     * @return string
+     */
+    public function getFallbackModel(): string
+    {
+        return (string) $this->scopeConfig->getValue(self::XML_PATH_FALLBACK_MODEL);
+    }
+
+    /**
+     * Return the fallback provider's API key, decrypted from Magento's encrypted storage.
+     *
+     * @return string Plaintext key, or empty string when not configured.
+     */
+    public function getFallbackApiKey(): string
+    {
+        return $this->decryptIfNeeded((string) $this->scopeConfig->getValue(self::XML_PATH_FALLBACK_API_KEY));
+    }
+
+    /**
+     * Return the most provider calls allowed per minute, clamped to 0 to 600; 0 turns the limit off.
+     *
+     * @return int
+     */
+    public function getRateLimitRpm(): int
+    {
+        return self::clampRateLimitRpm($this->scopeConfig->getValue(self::XML_PATH_RATE_LIMIT_RPM));
+    }
+
+    /**
+     * Return whether an identical request is answered from the response cache.
+     *
+     * @return bool
+     */
+    public function isResponseCache(): bool
+    {
+        return (bool) $this->scopeConfig->getValue(self::XML_PATH_RESPONSE_CACHE);
+    }
+
+    /**
+     * Return how long a cached answer is kept, clamped to 60 to 86400 seconds; unset is 3600.
+     *
+     * @return int
+     */
+    public function getResponseCacheTtl(): int
+    {
+        return self::clampResponseCacheTtl($this->scopeConfig->getValue(self::XML_PATH_RESPONSE_CACHE_TTL));
+    }
+
+    /**
+     * Return the token budget per run, clamped to 0 to 10000000; 0 turns the budget off.
+     *
+     * @return int
+     */
+    public function getMaxTokenBudget(): int
+    {
+        return self::clampMaxTokenBudget($this->scopeConfig->getValue(self::XML_PATH_MAX_TOKEN_BUDGET));
+    }
+
+    /**
+     * Hold a requests-per-minute value inside 0 to 600.
+     *
+     * @param  mixed  $raw  Stored or submitted value.
+     * @return int
+     */
+    public static function clampRateLimitRpm(mixed $raw): int
+    {
+        return max(0, min(self::MAX_RATE_LIMIT_RPM, (int) $raw));
+    }
+
+    /**
+     * Hold a cache TTL inside 60 to 86400 seconds; an empty value is the 3600-second default.
+     *
+     * @param  mixed  $raw  Stored or submitted value.
+     * @return int
+     */
+    public static function clampResponseCacheTtl(mixed $raw): int
+    {
+        if ($raw === null || trim((string) $raw) === '') {
+            return self::DEFAULT_CACHE_TTL;
+        }
+
+        return max(self::MIN_CACHE_TTL, min(self::MAX_CACHE_TTL, (int) $raw));
+    }
+
+    /**
+     * Hold a token budget inside 0 to 10000000.
+     *
+     * @param  mixed  $raw  Stored or submitted value.
+     * @return int
+     */
+    public static function clampMaxTokenBudget(mixed $raw): int
+    {
+        return max(0, min(self::MAX_TOKEN_BUDGET, (int) $raw));
     }
 
     /**

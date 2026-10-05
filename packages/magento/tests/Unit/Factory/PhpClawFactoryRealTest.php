@@ -13,6 +13,8 @@ use PhpClaw\Magento\Memory\RouterMemory;
 use PhpClaw\Magento\Model\Config;
 use PhpClaw\Magento\Model\IdentityResolver;
 use PhpClaw\Magento\Registry\PhpClawRegistrar;
+use PhpClaw\Magento\Service\MagentoCache;
+use PhpClaw\Magento\Tests\Unit\Support\ArrayAppCache;
 use PhpClaw\Memory\PrivacyAwareMemory;
 use PhpClaw\Providers\OpenAIProvider;
 use PhpClaw\Providers\ProviderRegistry;
@@ -63,6 +65,7 @@ final class PhpClawFactoryRealTest extends TestCase
             $routerMemory,
             $authorization,
             $this->createMock(IdentityResolver::class),
+            new MagentoCache(new ArrayAppCache),
         );
     }
 
@@ -213,6 +216,7 @@ final class PhpClawFactoryRealTest extends TestCase
             $this->createMock(RouterMemory::class),
             $authorization,
             $this->createMock(IdentityResolver::class),
+            new MagentoCache(new ArrayAppCache),
         );
 
         $method = new \ReflectionMethod($factory, 'defaultTools');

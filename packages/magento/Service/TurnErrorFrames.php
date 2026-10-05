@@ -38,7 +38,8 @@ trait TurnErrorFrames
     }
 
     /**
-     * Map a turn exception to its SSE error frame, logging only unexpected failures.
+     * Map a turn exception to its SSE error frame, logging only unexpected failures; a spent token budget or a provider
+     * rate limit also sets HTTP 422 or 429 while no output has been sent yet.
      *
      * @param  \Throwable  $e  Exception thrown while running the agent turn.
      * @param  string  $logContext  Log message used when the failure is unexpected.
@@ -46,6 +47,16 @@ trait TurnErrorFrames
      */
     private function errorFrame(\Throwable $e, string $logContext): array
     {
+        $limitStatus = LimitResponse::status($e);
+
+        if ($limitStatus !== null) {
+            if (! headers_sent()) {
+                http_response_code($limitStatus);
+            }
+
+            return ['error' => (string) LimitResponse::message($e), 'code' => $limitStatus];
+        }
+
         foreach (self::turnErrorMap() as $class => $frame) {
             if ($e instanceof $class) {
                 return $frame;

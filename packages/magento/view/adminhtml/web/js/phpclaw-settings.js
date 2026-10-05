@@ -19,6 +19,46 @@
     toggleProvider();
   }
 
+  var fallbackSel    = document.getElementById('phpclaw-fallback-provider');
+  var fallbackKeyRow = document.getElementById('phpclaw-row-fallback-api-key');
+  function toggleFallbackKey() {
+    if (!fallbackSel || !fallbackKeyRow) { return; }
+    fallbackKeyRow.hidden = fallbackSel.value === '' || fallbackSel.value === 'ollama';
+  }
+  if (fallbackSel) {
+    fallbackSel.addEventListener('change', toggleFallbackKey);
+    toggleFallbackKey();
+  }
+
+  var fallbackData = CONFIG.fallback || null;
+  if (provSel && fallbackSel && fallbackData) {
+    provSel.addEventListener('change', function () {
+      var format  = provSel.value === '' ? fallbackData.autoFormat : fallbackData.formats[provSel.value];
+      var current = fallbackSel.value;
+      var keep    = false;
+      fallbackSel.options.length = 0;
+      fallbackSel.add(new Option(fallbackData.offLabel, ''));
+      Object.keys(fallbackData.providers).forEach(function (slug) {
+        if (fallbackData.formats[slug] === format) {
+          fallbackSel.add(new Option(fallbackData.providers[slug], slug));
+          keep = keep || slug === current;
+        }
+      });
+      fallbackSel.value = keep ? current : '';
+      fallbackSel.dispatchEvent(new Event('change'));
+    });
+  }
+
+  var cacheBox = document.getElementById('phpclaw-response-cache');
+  var ttlRow   = document.getElementById('phpclaw-row-response-cache-ttl');
+  if (cacheBox && ttlRow) {
+    var syncTtl = function () {
+      ttlRow.hidden = !cacheBox.checked;
+    };
+    cacheBox.addEventListener('change', syncTtl);
+    syncTtl();
+  }
+
   function phpclawReadJson(r) {
     var ct = r.headers.get('content-type') || '';
     if (!r.ok || ct.indexOf('application/json') === -1) {

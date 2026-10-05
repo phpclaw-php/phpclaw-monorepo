@@ -12,6 +12,7 @@ use PhpClaw\Contracts\ClawInterface as PhpClawInterface;
 use PhpClaw\Exceptions\GuardException;
 use PhpClaw\Exceptions\MaxIterationsException;
 use PhpClaw\Exceptions\ProviderException;
+use PhpClaw\Exceptions\TokenBudgetExceededException;
 use PhpClaw\Magento\Console\Command\PhpClawRunCommand;
 use PhpClaw\Magento\Factory\PhpClawFactoryInterface;
 use PhpClaw\Magento\Service\ToolCallCollectorFactory;
@@ -192,5 +193,29 @@ final class PhpClawRunCommandTest extends TestCase
         $output = new BufferedOutput;
 
         $this->command->run($input, $output);
+    }
+
+    public function test_a_spent_token_budget_prints_the_budget_message(): void
+    {
+        $this->agent->method('conversation')->willReturn($this->makeConversation());
+        $this->agent->method('sendInConversation')->willThrowException(new TokenBudgetExceededException(1200, 1));
+        $this->logger->expects(self::never())->method('error');
+
+        [$code, $out] = $this->runCommand('Write a long story');
+
+        self::assertSame(Cli::RETURN_FAILURE, $code);
+        self::assertSame('Token budget reached for this run.', trim($out));
+    }
+
+    public function test_a_provider_rate_limit_prints_the_rate_limit_message(): void
+    {
+        $this->agent->method('conversation')->willReturn($this->makeConversation());
+        $this->agent->method('sendInConversation')->willThrowException(new ProviderException('rate limit wait exceeded', statusCode: 429));
+        $this->logger->expects(self::never())->method('error');
+
+        [$code, $out] = $this->runCommand('hello');
+
+        self::assertSame(Cli::RETURN_FAILURE, $code);
+        self::assertSame('Rate limit reached, try again shortly.', trim($out));
     }
 }

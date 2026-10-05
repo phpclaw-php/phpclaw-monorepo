@@ -256,4 +256,77 @@ final class ConfigTest extends TestCase
     {
         self::assertSame('router', $this->config->getMemoryDriver());
     }
+
+    private function withValues(array $values): void
+    {
+        $this->scopeConfig->method('getValue')->willReturnCallback(fn (string $path): mixed => $values[$path] ?? null);
+    }
+
+    public function test_the_agent_settings_read_their_install_defaults_when_unset(): void
+    {
+        $this->withValues([]);
+
+        self::assertSame('', $this->config->getFallbackProvider());
+        self::assertSame('', $this->config->getFallbackModel());
+        self::assertSame('', $this->config->getFallbackApiKey());
+        self::assertSame(0, $this->config->getRateLimitRpm());
+        self::assertFalse($this->config->isResponseCache());
+        self::assertSame(3600, $this->config->getResponseCacheTtl());
+        self::assertSame(0, $this->config->getMaxTokenBudget());
+    }
+
+    public function test_the_agent_settings_read_their_saved_values(): void
+    {
+        $this->withValues([
+            'phpclaw/general/fallback_provider' => 'groq',
+            'phpclaw/general/fallback_model' => 'llama-3.1-8b-instant',
+            'phpclaw/general/rate_limit_rpm' => '30',
+            'phpclaw/general/response_cache' => '1',
+            'phpclaw/general/response_cache_ttl' => '600',
+            'phpclaw/general/max_token_budget' => '50000',
+        ]);
+
+        self::assertSame('groq', $this->config->getFallbackProvider());
+        self::assertSame('llama-3.1-8b-instant', $this->config->getFallbackModel());
+        self::assertSame(30, $this->config->getRateLimitRpm());
+        self::assertTrue($this->config->isResponseCache());
+        self::assertSame(600, $this->config->getResponseCacheTtl());
+        self::assertSame(50000, $this->config->getMaxTokenBudget());
+    }
+
+    public function test_the_fallback_api_key_is_decrypted(): void
+    {
+        $this->withValues(['phpclaw/general/fallback_api_key' => '0:3:fb==']);
+        $this->encryptor->expects(self::once())->method('decrypt')->with('0:3:fb==')->willReturn('sk-fallback');
+
+        self::assertSame('sk-fallback', $this->config->getFallbackApiKey());
+    }
+
+    public function test_out_of_range_numbers_are_clamped_when_read(): void
+    {
+        $this->withValues([
+            'phpclaw/general/rate_limit_rpm' => '9999',
+            'phpclaw/general/response_cache_ttl' => '30',
+            'phpclaw/general/max_token_budget' => '-1',
+        ]);
+
+        self::assertSame(600, $this->config->getRateLimitRpm());
+        self::assertSame(60, $this->config->getResponseCacheTtl());
+        self::assertSame(0, $this->config->getMaxTokenBudget());
+    }
+
+    public function test_the_clamp_helpers_hold_each_number_inside_its_range(): void
+    {
+        self::assertSame(0, Config::clampRateLimitRpm('-5'));
+        self::assertSame(600, Config::clampRateLimitRpm('601'));
+        self::assertSame(25, Config::clampRateLimitRpm('25'));
+        self::assertSame(3600, Config::clampResponseCacheTtl(''));
+        self::assertSame(3600, Config::clampResponseCacheTtl(null));
+        self::assertSame(60, Config::clampResponseCacheTtl('5'));
+        self::assertSame(86400, Config::clampResponseCacheTtl('999999'));
+        self::assertSame(120, Config::clampResponseCacheTtl('120'));
+        self::assertSame(10000000, Config::clampMaxTokenBudget('99999999'));
+        self::assertSame(0, Config::clampMaxTokenBudget('-1'));
+        self::assertSame(5000, Config::clampMaxTokenBudget('5000'));
+    }
 }

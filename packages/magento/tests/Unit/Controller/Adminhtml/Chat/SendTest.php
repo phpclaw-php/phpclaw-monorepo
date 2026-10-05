@@ -15,6 +15,7 @@ use PhpClaw\Contracts\ClawInterface as PhpClawInterface;
 use PhpClaw\Exceptions\GuardException;
 use PhpClaw\Exceptions\MaxIterationsException;
 use PhpClaw\Exceptions\ProviderException;
+use PhpClaw\Exceptions\TokenBudgetExceededException;
 use PhpClaw\Hooks\HookRegistry;
 use PhpClaw\Magento\Controller\Adminhtml\Chat\Send;
 use PhpClaw\Magento\Factory\PhpClawFactoryInterface;
@@ -384,5 +385,31 @@ final class SendTest extends TestCase
         self::assertSame('tool', $captured['history'][1]['role']);
 
         HookRegistry::reset();
+    }
+
+    public function test_it_returns_422_with_the_budget_message_when_the_token_budget_is_spent(): void
+    {
+        $this->request->method('getContent')->willReturn(json_encode(['message' => 'Write a long story']));
+        $this->engine->method('conversation')->willReturn($this->makeConversation());
+        $this->engine->method('streamInConversation')->willThrowException(new TokenBudgetExceededException(1200, 1));
+
+        $this->jsonResult->expects(self::once())->method('setHttpResponseCode')->with(422)->willReturn($this->jsonResult);
+
+        $this->controller->execute();
+
+        self::assertSame(['error' => 'Token budget reached for this run.'], $this->lastSetData);
+    }
+
+    public function test_it_returns_429_with_the_rate_limit_message_on_a_provider_rate_limit(): void
+    {
+        $this->request->method('getContent')->willReturn(json_encode(['message' => 'hello']));
+        $this->engine->method('conversation')->willReturn($this->makeConversation());
+        $this->engine->method('streamInConversation')->willThrowException(new ProviderException('rate limit wait exceeded', statusCode: 429));
+
+        $this->jsonResult->expects(self::once())->method('setHttpResponseCode')->with(429)->willReturn($this->jsonResult);
+
+        $this->controller->execute();
+
+        self::assertSame(['error' => 'Rate limit reached, try again shortly.'], $this->lastSetData);
     }
 }

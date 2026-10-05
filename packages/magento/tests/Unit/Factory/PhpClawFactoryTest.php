@@ -12,6 +12,8 @@ use PhpClaw\Magento\Factory\PhpClawFactory;
 use PhpClaw\Magento\Memory\RouterMemory;
 use PhpClaw\Magento\Model\Config;
 use PhpClaw\Magento\Registry\PhpClawRegistrar;
+use PhpClaw\Magento\Service\MagentoCache;
+use PhpClaw\Magento\Tests\Unit\Support\ArrayAppCache;
 use PhpClaw\Providers\ProviderRegistry;
 use PHPUnit\Framework\TestCase;
 
@@ -41,6 +43,7 @@ final class TestablePhpClawFactory extends PhpClawFactory
                 }
             },
             new IdentityResolverStub,
+            new MagentoCache(new ArrayAppCache),
         );
         $this->returnValue = $mockPhpClaw;
     }
