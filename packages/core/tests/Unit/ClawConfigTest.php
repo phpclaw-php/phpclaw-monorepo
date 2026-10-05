@@ -12,7 +12,9 @@ use PhpClaw\Config\SkillConfig;
 use PhpClaw\Config\ToolConfig;
 use PhpClaw\Exceptions\AdapterException;
 use PhpClaw\Providers\AnthropicProvider;
+use PhpClaw\Providers\Contracts\SupportsStructuredOutputInterface;
 use PhpClaw\Providers\OpenAIProvider;
+use PhpClaw\Tests\Unit\Flow\Support\ArrayCache;
 use PHPUnit\Framework\TestCase;
 
 final class ClawConfigTest extends TestCase
@@ -196,6 +198,24 @@ final class ClawConfigTest extends TestCase
         $this->assertInstanceOf(OpenAIProvider::class, $provider);
         $this->assertSame('groq', $provider->name());
         $this->assertSame('https://api.groq.com/openai/v1/chat/completions', $provider->endpoint());
+    }
+
+    public function test_build_provider_for_openai_supports_native_structured_output(): void
+    {
+        $config = new ClawConfig(provider: new ProviderConfig(apiKey: 'sk-oai-test', provider: 'openai'));
+        $provider = $config->buildProvider();
+
+        $this->assertInstanceOf(SupportsStructuredOutputInterface::class, $provider);
+        $this->assertTrue($provider->supportsResponseSchema());
+    }
+
+    public function test_build_provider_for_groq_does_not_support_native_structured_output(): void
+    {
+        $config = new ClawConfig(provider: new ProviderConfig(apiKey: 'gsk-test', provider: 'groq'));
+        $provider = $config->buildProvider();
+
+        $this->assertInstanceOf(SupportsStructuredOutputInterface::class, $provider);
+        $this->assertFalse($provider->supportsResponseSchema());
     }
 
     public function test_build_provider_returns_deepseek_as_openai_engine_with_deepseek_endpoint(): void
@@ -423,5 +443,138 @@ final class ClawConfigTest extends TestCase
     {
         $this->assertNotContains('php', ClawConfig::DEFAULT_SHELL_ALLOWLIST);
         $this->assertNotContains('composer', ClawConfig::DEFAULT_SHELL_ALLOWLIST);
+    }
+
+    public function test_fallbacks_defaults_to_an_empty_array(): void
+    {
+        $config = new ClawConfig(provider: new ProviderConfig(apiKey: 'x', provider: 'anthropic'));
+
+        $this->assertSame([], $config->fallbacks);
+    }
+
+    public function test_fallbacks_are_read_from_the_provider_config(): void
+    {
+        $fallback = ['provider' => 'deepseek', 'model' => 'deepseek-chat', 'apiKey' => 'dk-key'];
+        $config = new ClawConfig(provider: new ProviderConfig(apiKey: 'x', provider: 'anthropic', fallbacks: [$fallback]));
+
+        $this->assertSame([$fallback], $config->fallbacks);
+    }
+
+    public function test_requests_per_minute_defaults_to_zero(): void
+    {
+        $config = new ClawConfig(provider: new ProviderConfig(apiKey: 'x', provider: 'anthropic'));
+
+        $this->assertSame(0, $config->requestsPerMinute);
+    }
+
+    public function test_requests_per_minute_can_be_set(): void
+    {
+        $config = new ClawConfig(provider: new ProviderConfig(apiKey: 'x', provider: 'anthropic', requestsPerMinute: 60));
+
+        $this->assertSame(60, $config->requestsPerMinute);
+    }
+
+    public function test_requests_per_minute_negative_becomes_zero(): void
+    {
+        $config = new ClawConfig(provider: new ProviderConfig(apiKey: 'x', provider: 'anthropic', requestsPerMinute: -10));
+
+        $this->assertSame(0, $config->requestsPerMinute);
+    }
+
+    public function test_max_wait_ms_defaults_to_thirty_seconds(): void
+    {
+        $config = new ClawConfig(provider: new ProviderConfig(apiKey: 'x', provider: 'anthropic'));
+
+        $this->assertSame(30_000, $config->maxWaitMs);
+    }
+
+    public function test_max_wait_ms_can_be_set(): void
+    {
+        $config = new ClawConfig(provider: new ProviderConfig(apiKey: 'x', provider: 'anthropic', maxWaitMs: 5_000));
+
+        $this->assertSame(5_000, $config->maxWaitMs);
+    }
+
+    public function test_max_wait_ms_negative_becomes_zero(): void
+    {
+        $config = new ClawConfig(provider: new ProviderConfig(apiKey: 'x', provider: 'anthropic', maxWaitMs: -1));
+
+        $this->assertSame(0, $config->maxWaitMs);
+    }
+
+    public function test_response_cache_defaults_to_null(): void
+    {
+        $config = new ClawConfig(provider: new ProviderConfig(apiKey: 'x', provider: 'anthropic'));
+
+        $this->assertNull($config->responseCache);
+    }
+
+    public function test_response_cache_is_read_from_the_provider_config(): void
+    {
+        $cache = new ArrayCache;
+        $config = new ClawConfig(provider: new ProviderConfig(apiKey: 'x', provider: 'anthropic', responseCache: $cache));
+
+        $this->assertSame($cache, $config->responseCache);
+    }
+
+    public function test_response_cache_ttl_defaults_to_thirty_six_hundred(): void
+    {
+        $config = new ClawConfig(provider: new ProviderConfig(apiKey: 'x', provider: 'anthropic'));
+
+        $this->assertSame(3600, $config->responseCacheTtl);
+    }
+
+    public function test_response_cache_ttl_can_be_set(): void
+    {
+        $config = new ClawConfig(provider: new ProviderConfig(apiKey: 'x', provider: 'anthropic', responseCacheTtl: 120));
+
+        $this->assertSame(120, $config->responseCacheTtl);
+    }
+
+    public function test_response_cache_ttl_negative_becomes_zero(): void
+    {
+        $config = new ClawConfig(provider: new ProviderConfig(apiKey: 'x', provider: 'anthropic', responseCacheTtl: -1));
+
+        $this->assertSame(0, $config->responseCacheTtl);
+    }
+
+    public function test_with_provider_returns_a_copy_using_the_explicit_api_key_given(): void
+    {
+        $config = new ClawConfig(provider: new ProviderConfig(apiKey: 'primary-key', provider: 'openai', model: 'gpt-4o-mini'));
+
+        $copy = $config->withProvider('groq', 'llama-3.1-8b-instant', 'fallback-key');
+
+        $this->assertSame('groq', $copy->providerName);
+        $this->assertSame('llama-3.1-8b-instant', $copy->model);
+        $this->assertSame('fallback-key', $copy->apiKey);
+        $this->assertSame('primary-key', $config->apiKey);
+        $this->assertSame('openai', $config->providerName);
+    }
+
+    public function test_with_provider_resolves_an_empty_api_key_through_the_conventional_env_var(): void
+    {
+        $_ENV['GROQ_API_KEY'] = 'env-groq-key';
+        $config = new ClawConfig(provider: new ProviderConfig(apiKey: 'primary-key', provider: 'openai', model: 'gpt-4o-mini'));
+
+        $copy = $config->withProvider('groq', 'llama-3.1-8b-instant', '');
+
+        $this->assertSame('env-groq-key', $copy->apiKey);
+    }
+
+    public function test_with_provider_keeps_every_other_field_unchanged(): void
+    {
+        $config = new ClawConfig(provider: new ProviderConfig(
+            apiKey: 'primary-key',
+            provider: 'openai',
+            model: 'gpt-4o-mini',
+            systemPrompt: 'Be concise.',
+            maxTokens: 512,
+        ));
+
+        $copy = $config->withProvider('groq', 'llama-3.1-8b-instant', 'fallback-key');
+
+        $this->assertSame('Be concise.', $copy->systemPrompt);
+        $this->assertSame(512, $copy->maxTokens);
+        $this->assertSame($config->maxIterations, $copy->maxIterations);
     }
 }

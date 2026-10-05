@@ -30,6 +30,8 @@ class RawHttpClient
 
     private const HEADER_INJECTION_CHARS = ["\r", "\n"];
 
+    private const ERROR_SNIPPET_MAX_LENGTH = 200;
+
     private readonly int $timeout;
 
     private readonly int $connectTimeout;
@@ -95,15 +97,18 @@ class RawHttpClient
             throw new ProviderException('Unexpected cURL response type.');
         }
 
-        try {
-            $decoded = json_decode($response, true, self::JSON_DECODE_DEPTH, JSON_THROW_ON_ERROR);
-        } catch (\JsonException $e) {
-            throw new ProviderException("Provider returned malformed JSON: {$e->getMessage()}");
-        }
+        $decoded = self::tryDecodeJson($response);
 
         if ($httpStatus < self::HTTP_SUCCESS_MIN || $httpStatus >= self::HTTP_SUCCESS_MAX) {
-            $errorMessage = $this->extractErrorMessage($decoded, $httpStatus);
-            throw new ProviderException("Provider returned HTTP {$httpStatus}: {$errorMessage}");
+            $errorMessage = $decoded !== null
+                ? $this->extractErrorMessage($decoded, $httpStatus)
+                : self::snippetOf($response);
+
+            throw new ProviderException("Provider returned HTTP {$httpStatus}: {$errorMessage}", $httpStatus);
+        }
+
+        if ($decoded === null) {
+            throw new ProviderException('Provider returned malformed JSON.', $httpStatus);
         }
 
         return $decoded;
@@ -231,6 +236,38 @@ class RawHttpClient
         $envValue = getenv($name);
 
         return ($envValue !== false && is_numeric($envValue) && (int) $envValue > 0) ? (int) $envValue : $default;
+    }
+
+    /**
+     * Decode a response body as JSON, returning null instead of throwing on malformed input.
+     *
+     * @param  string  $response  Raw HTTP response body.
+     * @return array<string, mixed>|null Decoded body, or null when it is not valid JSON or not a JSON object/array.
+     */
+    private static function tryDecodeJson(string $response): ?array
+    {
+        try {
+            $decoded = json_decode($response, true, self::JSON_DECODE_DEPTH, JSON_THROW_ON_ERROR);
+        } catch (\JsonException) {
+            return null;
+        }
+
+        return is_array($decoded) ? $decoded : null;
+    }
+
+    /**
+     * Reduce a non-JSON error body to a short, tag-stripped snippet safe to embed in an exception message.
+     *
+     * @param  string  $body  Raw response body.
+     * @return string Trimmed, tag-stripped body, capped at ERROR_SNIPPET_MAX_LENGTH characters.
+     */
+    private static function snippetOf(string $body): string
+    {
+        $stripped = trim(strip_tags($body));
+
+        return mb_strlen($stripped) > self::ERROR_SNIPPET_MAX_LENGTH
+            ? mb_substr($stripped, 0, self::ERROR_SNIPPET_MAX_LENGTH).'...'
+            : $stripped;
     }
 
     /**

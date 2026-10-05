@@ -21,6 +21,7 @@ use PhpClaw\Providers\Contracts\ProviderInterface;
 use PhpClaw\Providers\OpenAIPresets;
 use PhpClaw\Providers\OpenAIProvider;
 use PhpClaw\Providers\ProviderRegistry;
+use Psr\SimpleCache\CacheInterface;
 
 /**
  * Immutable configuration value object: produced by ClawBuilder and consumed by Claw.
@@ -75,6 +76,18 @@ final class ClawConfig
 
     public readonly array $providerTools;
 
+    public readonly array $fallbacks;
+
+    public readonly int $requestsPerMinute;
+
+    public readonly int $maxWaitMs;
+
+    public readonly ?CacheInterface $responseCache;
+
+    public readonly int $responseCacheTtl;
+
+    public readonly ?CacheInterface $rateLimitStore;
+
     public readonly ?ProviderInterface $providerOverride;
 
     public readonly ?MemoryInterface $memory;
@@ -104,6 +117,10 @@ final class ClawConfig
     public readonly int $maxHistoryTokens;
 
     public readonly int $maxToolResultTokens;
+
+    public readonly int $maxTokenBudget;
+
+    public readonly int $maxParseRetries;
 
     /**
      * Build the immutable configuration from six grouped setting objects.
@@ -146,6 +163,12 @@ final class ClawConfig
         $this->thinkingBudget = $provider->thinkingBudget;
         $this->providerOverride = $provider->providerOverride;
         $this->providerTools = $provider->providerTools;
+        $this->fallbacks = $provider->fallbacks;
+        $this->requestsPerMinute = $provider->requestsPerMinute;
+        $this->maxWaitMs = $provider->maxWaitMs;
+        $this->responseCache = $provider->responseCache;
+        $this->responseCacheTtl = $provider->responseCacheTtl;
+        $this->rateLimitStore = $provider->rateLimitStore;
 
         $this->maxIterations = $limits->maxIterations;
         $this->maxRetries = $limits->maxRetries;
@@ -153,6 +176,8 @@ final class ClawConfig
         $this->maxHistoryTokens = $limits->maxHistoryTokens;
         $this->maxToolResultTokens = $limits->maxToolResultTokens;
         $this->maxToolsPerTurn = $limits->maxToolsPerTurn;
+        $this->maxTokenBudget = $limits->maxTokenBudget;
+        $this->maxParseRetries = $limits->maxParseRetries;
 
         $this->tools = $tools->tools;
         $this->shellAllowlist = $tools->shellAllowlist;
@@ -243,7 +268,7 @@ final class ClawConfig
      * Build the shared OpenAIProvider engine from a preset row.
      *
      * @param  string  $slug  Preset slug.
-     * @param  array<string, string>  $preset  Preset row from OpenAIPresets.
+     * @param  array{label: string, baseUrl: string, model: string, auth: string, keyEnv: string, structuredOutput: bool}  $preset  Preset row from OpenAIPresets.
      * @return ProviderInterface Configured OpenAIProvider.
      *
      * @throws AdapterException When a key-authed preset has no API key, or `custom` lacks a base URL.
@@ -265,6 +290,7 @@ final class ClawConfig
             endpoint: $endpoint,
             name: $slug,
             authStyle: $preset['auth'],
+            nativeStructuredOutput: $preset['structuredOutput'],
         );
     }
 
@@ -272,7 +298,7 @@ final class ClawConfig
      * Resolve a preset's effective endpoint, applying runtime overrides.
      *
      * @param  string  $slug  Preset slug.
-     * @param  array<string, string>  $preset  Preset row.
+     * @param  array{label: string, baseUrl: string, model: string, auth: string, keyEnv: string, structuredOutput: bool}  $preset  Preset row.
      * @return string Full /chat/completions endpoint.
      *
      * @throws AdapterException When `custom` has no OPENAI_BASE_URL set.
@@ -356,6 +382,32 @@ final class ClawConfig
 
         foreach (get_object_vars($this) as $name => $value) {
             $copy->{$name} = $name === 'systemPrompt' ? $systemPrompt : $value;
+        }
+
+        return $copy;
+    }
+
+    /**
+     * Return a copy of this configuration built for a different provider, model, and key; every other value is kept.
+     *
+     * @param  string  $name  Provider slug for the copy.
+     * @param  string  $model  Model identifier for the copy.
+     * @param  string  $apiKey  API key for the copy; empty resolves through the provider's conventional env var.
+     * @return self The copy.
+     */
+    public function withProvider(string $name, string $model, string $apiKey): self
+    {
+        $copy = (new \ReflectionClass(self::class))->newInstanceWithoutConstructor();
+        $providerName = strtolower($name);
+        $resolvedApiKey = $apiKey !== '' ? $apiKey : $this->resolveApiKey($providerName);
+
+        foreach (get_object_vars($this) as $propertyName => $value) {
+            $copy->{$propertyName} = match ($propertyName) {
+                'providerName' => $providerName,
+                'model' => $model,
+                'apiKey' => $resolvedApiKey,
+                default => $value,
+            };
         }
 
         return $copy;

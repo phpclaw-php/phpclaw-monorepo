@@ -111,7 +111,7 @@ print_r($response->toolsCalled);
 
 ✅ **8 default guards + 1 opt-in**: prompt-injection, Unicode/homoglyph, role-switch, PII, code-injection, destructive-SQL and length checks scan every message before it reaches the provider, on by default, zero config.
 
-✅ **40 lifecycle hooks**: observe or react to every step of the agent loop, `agent.before` through `skill.not_matched`, without touching core code.
+✅ **44 lifecycle hooks**: observe or react to every step of the agent loop, `agent.before` through `skill.not_matched`, without touching core code.
 
 ✅ **Streaming, prompt caching, extended thinking**: token-by-token output, cached input tokens billed at Anthropic's discounted cache-read rate (see [Anthropic's pricing](https://www.anthropic.com/pricing)), Claude's reasoning chain exposed on `$response->thinking`.
 
@@ -126,9 +126,53 @@ Your message → GuardRegistry (blocks injection/PII before the LLM ever sees it
              → AgentResponse (text, tokens, tool calls, timing)
 ```
 
+## Building blocks
+
+Six opt-in primitives, all off by default. Leave them out and the agent behaves exactly as before.
+
+**Prompt templates.** `{name}` placeholders, `{{` and `}}` for literal braces. A missing value, or one that is not a scalar or `Stringable`, throws `PromptTemplateException`. No escaping is done; the rendered text still passes the guard stack when you send it.
+
+```php
+use PhpClaw\Prompt\PromptTemplate;
+
+$prompt = PromptTemplate::from('Extract the order details from: {body}')->format(['body' => $email]);
+```
+
+**Structured output.** `sendStructured()` returns data checked against your JSON Schema. It uses the vendor's native mode where phpClaw supports it (the `openai` preset, and the Anthropic models on its supported list), and otherwise asks the model to call one tool shaped like the schema. A reply that does not match is sent back for repair up to `maxParseRetries()` times (default 2), then `StructuredOutputException` is thrown. Supported keywords: `type`, `properties`, `required`, `items`, `enum`, `additionalProperties: false`, `minimum`, `maximum`, `minLength`, `maxLength`, `description`, `title`; any other keyword throws `UnsupportedSchemaException` before a call is made.
+
+```php
+$order = $claw->sendStructured($prompt, [
+    'type' => 'object',
+    'properties' => ['order_id' => ['type' => 'string'], 'total' => ['type' => 'number']],
+    'required' => ['order_id', 'total'],
+]);
+
+$order->data['order_id'];
+```
+
+**Provider fallback.** `withFallback()` adds a provider tried when the one before it fails with a timeout, a connection error, a 429 or a 5xx. A 401, 403 or other 4xx does not fail over. Every provider in the chain must use the same tool format (for example `openai` and `groq`); mixing formats throws `AdapterException` at `build()`. Each fallback fires `provider.fallback`, and the response names the provider that answered.
+
+**Outbound rate limit.** `rateLimit($requestsPerMinute, $maxWaitMs, $store)` spaces out calls to the provider with a token bucket. When the wait would pass `$maxWaitMs` the call throws `ProviderException` with status 429 instead of sleeping. Without `$store` the bucket lives in the built agent only; pass a PSR-16 store to share one bucket across every agent and process that uses it.
+
+**Response cache.** `responseCache($psr16Cache, $ttl)` serves an identical request from any PSR-16 cache (`composer require psr/simple-cache` and a store). A hit costs no tokens and fires `provider.response_cached`. The key covers the providers, system prompt, token settings, messages and tools, so a changed history misses. Never share one store across tenants.
+
+**Token budget.** `maxTokenBudget($tokens)` stops a run with `TokenBudgetExceededException` before the provider call that would take the spent input and output tokens over the budget, and fires `budget.exceeded`. The budget is checked between calls only, so one reply can overshoot it. Compaction summaries are not counted.
+
+The stream fast path (a `stream()` call with no tools) is not budgeted, not cached and not retried. A streamed run with tools goes through the full loop and is.
+
+```php
+$claw = Claw::builder()
+    ->provider('openai')->model('gpt-4o-mini')
+    ->withFallback('groq', 'llama-3.1-8b-instant')
+    ->rateLimit(60)
+    ->responseCache($psr16)
+    ->maxTokenBudget(50_000)
+    ->build();
+```
+
 ## Trust signals
 
-2,208 tests, 6,059 assertions, zero real network calls or API keys required to run the suite, every provider and tool call is mocked. 80% line coverage enforced in CI as one whole-package figure (covered statements over total statements), not per class. One public API (`Claw::send`/`stream`/`conversation`) that doesn't break without a major version bump.
+2,411 tests, 6,407 assertions, zero real network calls or API keys required to run the suite, every provider and tool call is mocked. 80% line coverage enforced in CI as one whole-package figure (covered statements over total statements), not per class. One public API (`Claw::send`/`stream`/`conversation`) that doesn't break without a major version bump.
 
 ## Documentation
 

@@ -18,7 +18,7 @@ final class OpenAIPresets
     /**
      * Every OpenAI-compatible preset, in auto-detection priority order.
      *
-     * @return array<string, array{label: string, baseUrl: string, model: string, auth: string, keyEnv: string}>
+     * @return array<string, array{label: string, baseUrl: string, model: string, auth: string, keyEnv: string, structuredOutput: bool}>
      */
     public static function all(): array
     {
@@ -29,6 +29,7 @@ final class OpenAIPresets
                 'model' => 'gpt-4o-mini',
                 'auth' => self::AUTH_BEARER,
                 'keyEnv' => EnvVars::OPENAI_API_KEY,
+                'structuredOutput' => true,
             ],
             'groq' => [
                 'label' => 'Groq',
@@ -36,6 +37,7 @@ final class OpenAIPresets
                 'model' => 'llama-3.1-8b-instant',
                 'auth' => self::AUTH_BEARER,
                 'keyEnv' => EnvVars::GROQ_API_KEY,
+                'structuredOutput' => false,
             ],
             'deepseek' => [
                 'label' => 'DeepSeek',
@@ -43,6 +45,7 @@ final class OpenAIPresets
                 'model' => 'deepseek-flash',
                 'auth' => self::AUTH_BEARER,
                 'keyEnv' => EnvVars::DEEPSEEK_API_KEY,
+                'structuredOutput' => false,
             ],
             'mistral' => [
                 'label' => 'Mistral',
@@ -50,6 +53,7 @@ final class OpenAIPresets
                 'model' => 'mistral-small-latest',
                 'auth' => self::AUTH_BEARER,
                 'keyEnv' => EnvVars::MISTRAL_API_KEY,
+                'structuredOutput' => false,
             ],
             'ollama' => [
                 'label' => 'Ollama (Local)',
@@ -57,6 +61,7 @@ final class OpenAIPresets
                 'model' => 'qwen2.5:7b',
                 'auth' => self::AUTH_NONE,
                 'keyEnv' => '',
+                'structuredOutput' => false,
             ],
             'custom' => [
                 'label' => 'Custom (OpenAI-compatible)',
@@ -64,6 +69,7 @@ final class OpenAIPresets
                 'model' => '',
                 'auth' => self::AUTH_BEARER,
                 'keyEnv' => EnvVars::OPENAI_API_KEY,
+                'structuredOutput' => false,
             ],
         ];
     }
@@ -83,7 +89,7 @@ final class OpenAIPresets
      * Look up a single preset row by slug.
      *
      * @param  string  $slug  Provider slug.
-     * @return array{label: string, baseUrl: string, model: string, auth: string, keyEnv: string}|null
+     * @return array{label: string, baseUrl: string, model: string, auth: string, keyEnv: string, structuredOutput: bool}|null
      */
     public static function find(string $slug): ?array
     {

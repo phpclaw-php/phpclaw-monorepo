@@ -73,6 +73,13 @@ final class OpenAIPresetsTest extends TestCase
         $this->assertNull(OpenAIPresets::find('not-a-provider'));
     }
 
+    public function test_only_openai_declares_native_structured_output(): void
+    {
+        foreach (OpenAIPresets::all() as $slug => $preset) {
+            $this->assertSame($slug === 'openai', $preset['structuredOutput'], "Preset '{$slug}' structuredOutput mismatch.");
+        }
+    }
+
     public static function networkPresetProvider(): array
     {
         return [

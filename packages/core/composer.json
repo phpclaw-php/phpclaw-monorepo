@@ -31,7 +31,11 @@
     "require-dev": {
         "phpunit/phpunit": "^10.0|^11.0",
         "laravel/pint": "^1.0",
-        "phpstan/phpstan": "^1.0"
+        "phpstan/phpstan": "^1.0",
+        "psr/simple-cache": "^3.0"
+    },
+    "suggest": {
+        "psr/simple-cache": "Needed for ClawBuilder::responseCache(), which takes any PSR-16 cache."
     },
     "autoload": {
         "psr-4": {

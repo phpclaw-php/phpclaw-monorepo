@@ -13,6 +13,10 @@ use PhpClaw\Tools\Contracts\ToolRoutingInterface;
 /** Holds all registered tools and formats their schemas per provider for the agent loop. */
 final class ToolRegistry
 {
+    public const TOOL_FORMAT_OPENAI = 'openai';
+
+    public const TOOL_FORMAT_ANTHROPIC = 'anthropic';
+
     private const OPENAI_COMPATIBLE_PROVIDERS = ['openai', 'groq', 'gemini', 'mistral', 'ollama'];
 
     private array $tools = [];
@@ -199,6 +203,19 @@ final class ToolRegistry
     }
 
     /**
+     * The tool-schema shape a provider name maps to: TOOL_FORMAT_OPENAI or TOOL_FORMAT_ANTHROPIC.
+     *
+     * @param  string  $providerName  Provider name to resolve.
+     * @return string
+     */
+    public static function toolFormat(string $providerName): string
+    {
+        return in_array($providerName, self::OPENAI_COMPATIBLE_PROVIDERS, strict: true)
+            ? self::TOOL_FORMAT_OPENAI
+            : self::TOOL_FORMAT_ANTHROPIC;
+    }
+
+    /**
      * Format a single tool's schema for the given provider's API. Unknown providers receive Anthropic-native shape as a safe default.
      *
      * @param  ToolInterface  $tool  Tool whose schema is being formatted.
@@ -211,7 +228,7 @@ final class ToolRegistry
         $schema = $this->normalizeSchema($tool->inputSchema());
         $description = $lean ? trim((string) strtok($tool->description(), "\n")) : $tool->description();
 
-        if (in_array($providerName, self::OPENAI_COMPATIBLE_PROVIDERS, strict: true)) {
+        if (self::toolFormat($providerName) === self::TOOL_FORMAT_OPENAI) {
             return $this->openAiFunctionShape($tool, $schema, $description);
         }
 

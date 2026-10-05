@@ -58,10 +58,12 @@ echo json_encode(['error' => ['message' => 'Invalid API key']]);
 PHP);
 
         try {
-            $this->expectException(ProviderException::class);
-            $this->expectExceptionMessage('HTTP 401');
-
             $client->post("http://127.0.0.1:{$port}/index.php", [], []);
+            self::fail('Expected ProviderException.');
+        } catch (ProviderException $e) {
+            self::assertSame(401, $e->statusCode);
+            self::assertStringContainsString('HTTP 401', $e->getMessage());
+            self::assertStringContainsString('Invalid API key', $e->getMessage());
         } finally {
             $this->killLocalServer($pid, $docRoot);
         }
@@ -79,10 +81,78 @@ echo json_encode(['error' => 'overloaded']);
 PHP);
 
         try {
-            $this->expectException(ProviderException::class);
-            $this->expectExceptionMessage('HTTP 503');
-
             $client->post("http://127.0.0.1:{$port}/index.php", [], []);
+            self::fail('Expected ProviderException.');
+        } catch (ProviderException $e) {
+            self::assertSame(503, $e->statusCode);
+            self::assertStringContainsString('HTTP 503', $e->getMessage());
+        } finally {
+            $this->killLocalServer($pid, $docRoot);
+        }
+    }
+
+    public function test_post_throws_provider_exception_with_status_401_on_an_html_error_body(): void
+    {
+        $client = new RawHttpClient(timeout: 5, connectTimeout: 2);
+
+        [$pid, $port, $docRoot] = $this->spawnLocalServer(<<<'PHP'
+<?php
+http_response_code(401);
+header('Content-Type: text/html');
+echo '<html><head><title>401 Unauthorized</title></head><body><h1>Unauthorized</h1><p>'.str_repeat('padding filler text. ', 30).'</p></body></html>';
+PHP);
+
+        try {
+            $client->post("http://127.0.0.1:{$port}/index.php", [], []);
+            self::fail('Expected ProviderException.');
+        } catch (ProviderException $e) {
+            self::assertSame(401, $e->statusCode);
+            self::assertStringContainsString('HTTP 401', $e->getMessage());
+            self::assertStringNotContainsString('<html>', $e->getMessage());
+            self::assertLessThan(260, strlen($e->getMessage()));
+        } finally {
+            $this->killLocalServer($pid, $docRoot);
+        }
+    }
+
+    public function test_post_throws_provider_exception_with_status_502_on_an_html_bad_gateway_body(): void
+    {
+        $client = new RawHttpClient(timeout: 5, connectTimeout: 2);
+
+        [$pid, $port, $docRoot] = $this->spawnLocalServer(<<<'PHP'
+<?php
+http_response_code(502);
+header('Content-Type: text/html');
+echo '<html><body><h1>502 Bad Gateway</h1><p>nginx</p></body></html>';
+PHP);
+
+        try {
+            $client->post("http://127.0.0.1:{$port}/index.php", [], []);
+            self::fail('Expected ProviderException.');
+        } catch (ProviderException $e) {
+            self::assertSame(502, $e->statusCode);
+            self::assertStringContainsString('HTTP 502', $e->getMessage());
+        } finally {
+            $this->killLocalServer($pid, $docRoot);
+        }
+    }
+
+    public function test_post_throws_provider_exception_with_its_2xx_status_on_malformed_json(): void
+    {
+        $client = new RawHttpClient(timeout: 5, connectTimeout: 2);
+
+        [$pid, $port, $docRoot] = $this->spawnLocalServer(<<<'PHP'
+<?php
+http_response_code(200);
+header('Content-Type: text/plain');
+echo 'not json at all';
+PHP);
+
+        try {
+            $client->post("http://127.0.0.1:{$port}/index.php", [], []);
+            self::fail('Expected ProviderException.');
+        } catch (ProviderException $e) {
+            self::assertSame(200, $e->statusCode);
         } finally {
             $this->killLocalServer($pid, $docRoot);
         }
@@ -92,9 +162,12 @@ PHP);
     {
         $client = new RawHttpClient(timeout: 2, connectTimeout: 1);
 
-        $this->expectException(ProviderException::class);
-
-        $client->post('http://127.0.0.1:1/', [], []);
+        try {
+            $client->post('http://127.0.0.1:1/', [], []);
+            self::fail('Expected ProviderException.');
+        } catch (ProviderException $e) {
+            self::assertSame(0, $e->statusCode);
+        }
     }
 
     public function test_post_sends_request_headers_to_server(): void

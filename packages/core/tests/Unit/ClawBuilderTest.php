@@ -246,6 +246,34 @@ final class ClawBuilderTest extends TestCase
         $this->assertSame($provider, $claw->config()->providerOverride);
     }
 
+    public function test_with_fallback_provider_interface_threads_through_verbatim(): void
+    {
+        $provider = $this->createMock(ProviderInterface::class);
+        $claw = Claw::builder()->withFallback($provider)->build();
+
+        $this->assertSame([$provider], $claw->config()->fallbacks);
+    }
+
+    public function test_with_fallback_string_form_threads_through_as_a_provider_model_key_triple(): void
+    {
+        $claw = Claw::builder()->withFallback('deepseek', 'deepseek-chat', 'dk-key')->build();
+
+        $this->assertSame(
+            [['provider' => 'deepseek', 'model' => 'deepseek-chat', 'apiKey' => 'dk-key']],
+            $claw->config()->fallbacks,
+        );
+    }
+
+    public function test_with_fallback_is_repeatable_and_appends_in_order(): void
+    {
+        $first = $this->createMock(ProviderInterface::class);
+        $claw = Claw::builder()->withFallback($first)->withFallback('deepseek', 'deepseek-chat', 'dk-key')->build();
+
+        $this->assertCount(2, $claw->config()->fallbacks);
+        $this->assertSame($first, $claw->config()->fallbacks[0]);
+        $this->assertSame(['provider' => 'deepseek', 'model' => 'deepseek-chat', 'apiKey' => 'dk-key'], $claw->config()->fallbacks[1]);
+    }
+
     public function test_memory_setter_threads_through(): void
     {
         $memory = new ArrayMemory;

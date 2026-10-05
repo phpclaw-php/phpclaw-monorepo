@@ -6,6 +6,7 @@ namespace PhpClaw\Hooks\Dispatchers;
 
 use PhpClaw\Hooks\EventPayload;
 use PhpClaw\Hooks\HookRegistry;
+use PhpClaw\Hooks\HookRunContext;
 use PhpClaw\Hooks\LifecycleEvent;
 
 /**
@@ -159,6 +160,50 @@ final class ProviderEventDispatcher
             ],
             runId: $runId,
             parentRunId: $parentRunId,
+        );
+    }
+
+    /**
+     * Fires when CachedProvider serves a send() response from its PSR-16 store instead of calling the inner provider.
+     *
+     * @param  string  $provider  Provider name.
+     * @param  string  $model  Model identifier.
+     * @param  string  $keyHash  Cache key the response was served from.
+     * @return void
+     */
+    public static function responseCached(string $provider, string $model, string $keyHash): void
+    {
+        EventPayload::fire(
+            LifecycleEvent::ProviderResponseCached->value,
+            [
+                'provider' => $provider,
+                'model' => $model,
+                'key_hash' => $keyHash,
+            ],
+            runId: HookRunContext::currentRunId(),
+            parentRunId: HookRunContext::currentParentRunId(),
+        );
+    }
+
+    /**
+     * Fires when a provider in a fallback chain fails over to the next provider.
+     *
+     * @param  string  $from  Provider name that failed.
+     * @param  string  $to  Provider name receiving the next attempt.
+     * @param  int  $status  HTTP status (or 0 for a transport failure) that triggered the failover.
+     * @return void
+     */
+    public static function fallback(string $from, string $to, int $status): void
+    {
+        EventPayload::fire(
+            LifecycleEvent::ProviderFallback->value,
+            [
+                'from' => $from,
+                'to' => $to,
+                'status' => $status,
+            ],
+            runId: HookRunContext::currentRunId(),
+            parentRunId: HookRunContext::currentParentRunId(),
         );
     }
 

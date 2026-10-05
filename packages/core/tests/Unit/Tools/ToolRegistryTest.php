@@ -6,6 +6,7 @@ namespace PhpClaw\Tests\Unit\Tools;
 
 use PhpClaw\Tools\Contracts\ToolInterface;
 use PhpClaw\Tools\ToolRegistry;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
 final class ToolRegistryTest extends TestCase
@@ -361,5 +362,35 @@ final class ToolRegistryTest extends TestCase
         $this->assertStringContainsString('long explanation follows', $anthropicFull[0]['description']);
         $this->assertSame('Read the thing.', $openAiLean[0]['function']['description']);
         $this->assertSame($anthropicFull[0]['input_schema'], $anthropicLean[0]['input_schema']);
+    }
+
+    public static function openAiCompatibleProviderNames(): iterable
+    {
+        yield 'openai' => ['openai'];
+        yield 'groq' => ['groq'];
+        yield 'gemini' => ['gemini'];
+        yield 'mistral' => ['mistral'];
+        yield 'ollama' => ['ollama'];
+    }
+
+    #[DataProvider('openAiCompatibleProviderNames')]
+    public function test_tool_format_returns_openai_for_every_compatible_provider(string $providerName): void
+    {
+        $this->assertSame(ToolRegistry::TOOL_FORMAT_OPENAI, ToolRegistry::toolFormat($providerName));
+    }
+
+    public static function anthropicShapedProviderNames(): iterable
+    {
+        yield 'anthropic' => ['anthropic'];
+        yield 'deepseek' => ['deepseek'];
+        yield 'custom' => ['custom'];
+        yield 'empty string' => [''];
+        yield 'unknown provider' => ['some-unregistered-provider'];
+    }
+
+    #[DataProvider('anthropicShapedProviderNames')]
+    public function test_tool_format_returns_anthropic_for_every_other_provider(string $providerName): void
+    {
+        $this->assertSame(ToolRegistry::TOOL_FORMAT_ANTHROPIC, ToolRegistry::toolFormat($providerName));
     }
 }

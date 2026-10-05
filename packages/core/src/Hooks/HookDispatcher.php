@@ -341,6 +341,68 @@ final class HookDispatcher
     }
 
     /**
+     * Fire the provider.response_cached event via ProviderEventDispatcher.
+     *
+     * @param  string  $provider  Provider name.
+     * @param  string  $model  Model identifier.
+     * @param  string  $keyHash  Cache key the response was served from.
+     * @return void
+     */
+    public static function providerResponseCached(string $provider, string $model, string $keyHash): void
+    {
+        ProviderEventDispatcher::responseCached($provider, $model, $keyHash);
+    }
+
+    /**
+     * Fire the provider.fallback event via ProviderEventDispatcher.
+     *
+     * @param  string  $from  Provider name that failed.
+     * @param  string  $to  Provider name receiving the next attempt.
+     * @param  int  $status  HTTP status (or 0 for a transport failure) that triggered the failover.
+     * @return void
+     */
+    public static function providerFallback(string $from, string $to, int $status): void
+    {
+        ProviderEventDispatcher::fallback($from, $to, $status);
+    }
+
+    /**
+     * Fire the budget.exceeded event via AgentEventDispatcher.
+     *
+     * @param  int  $tokensSpent  Tokens spent so far this run, before the blocked call.
+     * @param  int  $budget  Configured token budget that was reached.
+     * @param  string  $runId  Active run ID, if any.
+     * @param  string  $parentRunId  Parent run ID, if any.
+     * @return void
+     */
+    public static function budgetExceeded(
+        int $tokensSpent,
+        int $budget,
+        string $runId = '',
+        string $parentRunId = '',
+    ): void {
+        AgentEventDispatcher::budgetExceeded($tokensSpent, $budget, $runId, $parentRunId);
+    }
+
+    /**
+     * Fire the structured.repair event via AgentEventDispatcher.
+     *
+     * @param  int  $attempt  Attempt number that just failed (1-based).
+     * @param  int  $errorCount  Number of validation errors on this attempt.
+     * @param  string  $runId  Active run ID, if any.
+     * @param  string  $parentRunId  Parent run ID, if any.
+     * @return void
+     */
+    public static function structuredRepair(
+        int $attempt,
+        int $errorCount,
+        string $runId = '',
+        string $parentRunId = '',
+    ): void {
+        AgentEventDispatcher::structuredRepair($attempt, $errorCount, $runId, $parentRunId);
+    }
+
+    /**
      * Fire the provider.error event via ProviderEventDispatcher.
      *
      * @param  string  $provider  Provider name.

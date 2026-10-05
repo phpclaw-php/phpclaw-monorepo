@@ -25,6 +25,10 @@ final class LoopConfig
 
     public readonly int $maxToolResultTokens;
 
+    public readonly int $maxTokenBudget;
+
+    public readonly int $maxParseRetries;
+
     /**
      * Group and validate the runtime limits.
      *
@@ -34,6 +38,8 @@ final class LoopConfig
      * @param  int  $maxHistoryTokens  Estimated-token ceiling that triggers history compaction; 0 = count-based only.
      * @param  int  $maxToolsPerTurn  Per-turn tool-schema cap; 0 lets ToolRouter derive a limit from the model id.
      * @param  int  $maxToolResultTokens  Estimated-token ceiling on a single tool result before it is cut; 0 disables the cut.
+     * @param  int  $maxTokenBudget  Total input+output token spend ceiling across the run, checked between provider calls only (one reply can overshoot) and excluding compaction summaries; 0 = unlimited; clamped to >=0.
+     * @param  int  $maxParseRetries  Structured-output repair-retry attempts before StructuredOutputException; clamped to >=0.
      * @return void
      */
     public function __construct(
@@ -43,6 +49,8 @@ final class LoopConfig
         int $maxHistoryTokens = 0,
         int $maxToolsPerTurn = 0,
         int $maxToolResultTokens = self::DEFAULT_MAX_TOOL_RESULT_TOKENS,
+        int $maxTokenBudget = 0,
+        int $maxParseRetries = 2,
     ) {
         $this->maxIterations = $maxIterations > 0 ? $maxIterations : self::DEFAULT_MAX_ITERATIONS;
         $this->maxRetries = max(0, $maxRetries);
@@ -50,5 +58,7 @@ final class LoopConfig
         $this->maxHistoryTokens = max(0, $maxHistoryTokens);
         $this->maxToolsPerTurn = max(0, $maxToolsPerTurn);
         $this->maxToolResultTokens = max(0, $maxToolResultTokens);
+        $this->maxTokenBudget = max(0, $maxTokenBudget);
+        $this->maxParseRetries = max(0, $maxParseRetries);
     }
 }

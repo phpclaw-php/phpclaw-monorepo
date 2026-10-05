@@ -19,6 +19,7 @@ use PhpClaw\Skills\Contracts\SkillInterface;
 use PhpClaw\Skills\SkillRegistry;
 use PhpClaw\Tools\Contracts\ToolInterface;
 use PhpClaw\Tools\RemoteToolActivator;
+use Psr\SimpleCache\CacheInterface;
 
 /**
  * Fluent builder for {@see Claw}: collect every configuration option via chainable setters, then build() to assemble the Claw instance.
@@ -53,6 +54,10 @@ final class ClawBuilder
 
     private int $maxToolResultTokens = LoopConfig::DEFAULT_MAX_TOOL_RESULT_TOKENS;
 
+    private int $maxTokenBudget = 0;
+
+    private int $maxParseRetries = 2;
+
     private string $apiKey = '';
 
     private string $provider = '';
@@ -70,6 +75,18 @@ final class ClawBuilder
     private ?ProviderInterface $providerOverride = null;
 
     private array $providerTools = [];
+
+    private array $fallbacks = [];
+
+    private int $requestsPerMinute = 0;
+
+    private int $maxWaitMs = 30_000;
+
+    private ?CacheInterface $rateLimitStore = null;
+
+    private ?CacheInterface $responseCache = null;
+
+    private int $responseCacheTtl = 3600;
 
     private array $skills = [];
 
@@ -270,6 +287,32 @@ final class ClawBuilder
     }
 
     /**
+     * Total input+output token spend ceiling across the run. 0 = unlimited.
+     *
+     * @param  int  $tokens  Budget checked between provider calls only (one reply can overshoot); compaction summaries are not counted; the stream fast path (no tools) is not budgeted; clamped to >=0.
+     * @return static Builder instance for fluent chaining.
+     */
+    public function maxTokenBudget(int $tokens): static
+    {
+        $this->maxTokenBudget = max(0, $tokens);
+
+        return $this;
+    }
+
+    /**
+     * Structured-output repair-retry attempts before StructuredOutputException. Default 2.
+     *
+     * @param  int  $retries  Repair-retry attempts on prose or invalid JSON; clamped to >=0.
+     * @return static Builder instance for fluent chaining.
+     */
+    public function maxParseRetries(int $retries): static
+    {
+        $this->maxParseRetries = max(0, $retries);
+
+        return $this;
+    }
+
+    /**
      * Set the API key. Empty = auto-detect from env.
      *
      * @param  string  $key  Provider API key, or '' to fall back to the matching env var.
@@ -369,6 +412,55 @@ final class ClawBuilder
     public function providerOverride(ProviderInterface $provider): static
     {
         $this->providerOverride = $provider;
+
+        return $this;
+    }
+
+    /**
+     * Append a fallback provider tried, in order, when an earlier provider fails with a failover-eligible error.
+     *
+     * @param  string|ProviderInterface  $provider  Pre-built provider used as given, or a provider slug built when the Claw is built.
+     * @param  string  $model  Model identifier when $provider is a slug; ignored when $provider is a ProviderInterface.
+     * @param  string  $apiKey  API key when $provider is a slug; empty resolves through the provider's conventional env var; ignored when $provider is a ProviderInterface.
+     * @return static Builder instance for fluent chaining.
+     */
+    public function withFallback(string|ProviderInterface $provider, string $model = '', string $apiKey = ''): static
+    {
+        $this->fallbacks[] = $provider instanceof ProviderInterface
+            ? $provider
+            : ['provider' => $provider, 'model' => $model, 'apiKey' => $apiKey];
+
+        return $this;
+    }
+
+    /**
+     * Throttle outbound calls to the provider through a token bucket held by the built Claw. 0 (default) disables throttling.
+     *
+     * @param  int  $requestsPerMinute  Bucket capacity and refill rate; 0 keeps throttling disabled.
+     * @param  int  $maxWaitMs  Longest wait for a token before ThrottledProvider throws ProviderException.
+     * @param  CacheInterface|null  $store  Optional PSR-16 store so the bucket is shared across every Claw built with this same store, instead of living only on this instance; approximate under concurrent requests.
+     * @return static Builder instance for fluent chaining.
+     */
+    public function rateLimit(int $requestsPerMinute, int $maxWaitMs = 30_000, ?CacheInterface $store = null): static
+    {
+        $this->requestsPerMinute = $requestsPerMinute;
+        $this->maxWaitMs = $maxWaitMs;
+        $this->rateLimitStore = $store;
+
+        return $this;
+    }
+
+    /**
+     * Cache every provider send() response in a PSR-16 store, keyed by the request and the build-time config fingerprint; the no-tools stream fast path is never cached.
+     *
+     * @param  CacheInterface  $cache  PSR-16 store; never share one store across tenants.
+     * @param  int  $ttl  Seconds a cached response stays valid.
+     * @return static Builder instance for fluent chaining.
+     */
+    public function responseCache(CacheInterface $cache, int $ttl = 3600): static
+    {
+        $this->responseCache = $cache;
+        $this->responseCacheTtl = $ttl;
 
         return $this;
     }
@@ -561,6 +653,12 @@ final class ClawBuilder
                 thinkingBudget: $this->thinkingBudget,
                 providerOverride: $this->providerOverride,
                 providerTools: $this->providerTools,
+                fallbacks: $this->fallbacks,
+                requestsPerMinute: $this->requestsPerMinute,
+                maxWaitMs: $this->maxWaitMs,
+                responseCache: $this->responseCache,
+                responseCacheTtl: $this->responseCacheTtl,
+                rateLimitStore: $this->rateLimitStore,
             ),
             limits: new LoopConfig(
                 maxIterations: $this->maxIterations,
@@ -569,6 +667,8 @@ final class ClawBuilder
                 maxHistoryTokens: $this->maxHistoryTokens,
                 maxToolsPerTurn: $maxToolsPerTurn,
                 maxToolResultTokens: $this->maxToolResultTokens,
+                maxTokenBudget: $this->maxTokenBudget,
+                maxParseRetries: $this->maxParseRetries,
             ),
             tools: new ToolConfig(
                 tools: $tools,

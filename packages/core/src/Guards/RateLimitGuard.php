@@ -11,7 +11,7 @@ use PhpClaw\Hooks\HookDispatcher;
 use PhpClaw\Support\Log;
 
 /**
- * Fixed-window rate limiter guard: enforces a maximum number of calls per time window per caller identity, counted in APCu when it is enabled (shared by every request on one server) and in process memory otherwise.
+ * Fixed-window rate limiter guard: enforces a maximum number of calls per time window per caller identity, counted in APCu when it is enabled (shared by every request on one server) and in process memory otherwise; ThrottledProvider is the outbound counterpart, throttling calls made to the provider.
  */
 #[Guard(priority: -1, name: 'rate_limit', label: 'Rate Limit', enabledByDefault: false, since: '1.0.0')]
 final class RateLimitGuard implements GuardInterface

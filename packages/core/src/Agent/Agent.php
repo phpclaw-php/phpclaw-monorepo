@@ -9,6 +9,7 @@ use PhpClaw\Config\LoopConfig;
 use PhpClaw\Exceptions\HumanDeniedException;
 use PhpClaw\Exceptions\MaxIterationsException;
 use PhpClaw\Exceptions\ProviderException;
+use PhpClaw\Exceptions\TokenBudgetExceededException;
 use PhpClaw\Exceptions\ToolException;
 use PhpClaw\Guards\ToolOutputGuard;
 use PhpClaw\Hooks\HookDispatcher;
@@ -59,6 +60,8 @@ final class Agent
 
     private readonly int $fixedPromptTokens;
 
+    private readonly int $maxTokenBudget;
+
     private readonly ToolOutputGuard $toolOutputGuard;
 
     private readonly OutputSanitiser $outputSanitiser;
@@ -85,6 +88,7 @@ final class Agent
      * @param  bool  $leanToolSchemas  When true, tool schemas are sent in their lean form.
      * @param  int  $requestBudgetTokens  Drop the lowest-ranked routed tools until the estimated request fits this budget. 0 = disabled.
      * @param  int  $fixedPromptTokens  Estimated tokens of the fixed prompt parts, counted against the request budget.
+     * @param  int  $maxTokenBudget  Total input+output token spend ceiling across the run; checked between provider calls only, so one reply can overshoot; compaction summaries are not counted; the stream fast path (no tools) is not budgeted. 0 = unlimited.
      */
     public function __construct(
         ProviderInterface $provider,
@@ -102,6 +106,7 @@ final class Agent
         bool $leanToolSchemas = false,
         int $requestBudgetTokens = 0,
         int $fixedPromptTokens = 0,
+        int $maxTokenBudget = 0,
     ) {
         $this->provider = $provider;
         $this->tools = $tools;
@@ -116,6 +121,7 @@ final class Agent
         $this->leanToolSchemas = $leanToolSchemas;
         $this->requestBudgetTokens = $requestBudgetTokens;
         $this->fixedPromptTokens = $fixedPromptTokens;
+        $this->maxTokenBudget = $maxTokenBudget;
         $this->historyCompactor = new HistoryCompactor($this->provider, $this->maxHistoryLength, $compactHistory, $maxHistoryTokens);
         $this->retryLoop = new ProviderRetryLoop($this->provider, $this->maxRetries);
     }
@@ -132,6 +138,7 @@ final class Agent
      * @throws MaxIterationsException When the loop exceeds maxIterations without a text response.
      * @throws ToolException When a tool execution or hallucination cannot be recovered.
      * @throws ProviderException When the upstream provider fails after all retries.
+     * @throws TokenBudgetExceededException When the accumulated token spend would exceed maxTokenBudget.
      */
     public function run(string $message, array $history = [], string $runId = '', string $originalMessage = ''): AgentResponse
     {
@@ -151,6 +158,7 @@ final class Agent
      * @throws MaxIterationsException When the loop exceeds maxIterations without a text response.
      * @throws ToolException When a tool execution fails fatally.
      * @throws ProviderException When the upstream provider fails after all retries.
+     * @throws TokenBudgetExceededException When tools are registered and the accumulated token spend would exceed maxTokenBudget; the no-tools stream fast path is never budgeted.
      */
     public function stream(string $message, callable $onToken, array $history = [], string $runId = '', string $originalMessage = ''): AgentResponse
     {
@@ -214,6 +222,7 @@ final class Agent
      * @throws MaxIterationsException When the loop exhausts all iterations without a text response.
      * @throws ToolException When a tool is not registered or fails fatally.
      * @throws ProviderException When the provider fails after all retries.
+     * @throws TokenBudgetExceededException When the accumulated token spend would exceed maxTokenBudget.
      */
     private function executeIterationLoop(string $message, array $history, string $runId, ?callable $onToken, string $originalMessage): AgentResponse
     {
@@ -221,6 +230,7 @@ final class Agent
         $startNs = hrtime(true);
         $toolsCalled = [];
         $failedCalls = [];
+        $tokensSpent = 0;
 
         $this->tools->resetRunState();
 
@@ -238,6 +248,8 @@ final class Agent
             HookDispatcher::agentIteration($iteration, $message, $this->provider->name(), $this->provider->model(), streaming: $streaming, runId: $runId, history: $history, parentRunId: $iterationId);
 
             $history = $this->historyCompactor->applyIfOversized($history, $message, $runId, $iterationId);
+
+            $this->enforceTokenBudget($tokensSpent, $history, $runId, $iterationId);
 
             HookDispatcher::providerRequest(
                 provider: $this->provider->name(),
@@ -268,6 +280,7 @@ final class Agent
             }
 
             $this->fireProviderResponseHooks($response, streaming: $streaming, runId: $runId, iterationId: $iterationId);
+            $tokensSpent += (int) ($response['input_tokens'] ?? 0) + (int) ($response['output_tokens'] ?? 0);
 
             if ($response['type'] === self::RESPONSE_TYPE_TEXT) {
                 if ($this->isLostToolCall($response, $toolSchemas) && ! $isHallucinationRetry) {
@@ -460,6 +473,34 @@ final class Agent
                 parentRunId: $iterationId,
             );
         }
+    }
+
+    /**
+     * Throw when the run's spent tokens plus this iteration's estimated request would exceed maxTokenBudget; fires budget.exceeded first. A budget of 0 disables the check.
+     *
+     * @param  int  $tokensSpent  Tokens spent so far this run, from prior iterations' input_tokens + output_tokens.
+     * @param  Message[]  $history  History that will be sent this iteration.
+     * @param  string  $runId  Run identifier propagated to the hook.
+     * @param  string  $iterationId  Parent run id for nesting the hook under this iteration.
+     * @return void
+     *
+     * @throws TokenBudgetExceededException When the projected spend exceeds maxTokenBudget.
+     */
+    private function enforceTokenBudget(int $tokensSpent, array $history, string $runId, string $iterationId): void
+    {
+        if ($this->maxTokenBudget <= 0) {
+            return;
+        }
+
+        $projected = $tokensSpent + $this->historyCompactor->estimateTokens($history);
+
+        if ($projected <= $this->maxTokenBudget) {
+            return;
+        }
+
+        HookDispatcher::budgetExceeded($tokensSpent, $this->maxTokenBudget, $runId, $iterationId);
+
+        throw new TokenBudgetExceededException($tokensSpent, $this->maxTokenBudget);
     }
 
     /**

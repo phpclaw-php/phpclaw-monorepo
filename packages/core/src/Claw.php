@@ -11,19 +11,28 @@ use PhpClaw\Agent\ConversationTurn;
 use PhpClaw\Agent\InvocationPipeline;
 use PhpClaw\Agent\MessageAugmenter;
 use PhpClaw\Agent\OutputSanitiser;
+use PhpClaw\Agent\StructuredOutputRunner;
+use PhpClaw\Agent\StructuredResponse;
 use PhpClaw\Cloud\CloudManager;
 use PhpClaw\Contracts\ClawInterface;
 use PhpClaw\Exceptions\GuardException;
 use PhpClaw\Exceptions\MaxIterationsException;
 use PhpClaw\Exceptions\ProviderException;
+use PhpClaw\Exceptions\StructuredOutputException;
 use PhpClaw\Exceptions\ToolException;
+use PhpClaw\Exceptions\UnsupportedSchemaException;
 use PhpClaw\Guards\GuardRegistry;
 use PhpClaw\Memory\Contracts\MemoryInterface;
 use PhpClaw\Memory\PrivacyAwareMemory;
+use PhpClaw\Providers\CachedProvider;
+use PhpClaw\Providers\Contracts\ProviderInterface;
 use PhpClaw\Providers\Contracts\SupportsWebSearchInterface;
+use PhpClaw\Providers\ProviderChain;
+use PhpClaw\Providers\ThrottledProvider;
 use PhpClaw\Providers\Tools\WebSearch;
 use PhpClaw\Skills\RemoteSkillLoader;
 use PhpClaw\Skills\SkillRegistry;
+use PhpClaw\Support\JsonSchemaValidator;
 use PhpClaw\Tools\LoadSkillTool;
 use PhpClaw\Tools\ToolProfileResolver;
 use PhpClaw\Tools\ToolRegistry;
@@ -55,6 +64,8 @@ final class Claw implements ClawInterface
 
     private readonly InvocationPipeline $pipeline;
 
+    private readonly ProviderInterface $provider;
+
     private bool $isCloudBooted = false;
 
     /**
@@ -73,7 +84,7 @@ final class Claw implements ClawInterface
             RemoteSkillLoader::load($url);
         }
 
-        $this->agent = $this->buildAgent();
+        [$this->provider, $this->agent] = $this->buildProviderAndAgent();
         $this->pipeline = new InvocationPipeline(
             new MessageAugmenter($this->memory, $this->config->skillMatchLimit, ToolProfileResolver::skillContextChars($this->profile())),
             $this->memory,
@@ -112,6 +123,43 @@ final class Claw implements ClawInterface
             streaming: false,
             invoke: fn (string $augmented, string $runId, string $original): AgentResponse => $this->agent->run($augmented, runId: $runId, originalMessage: $original),
         );
+    }
+
+    /**
+     * Send a message and return a reply validated against the given JSON Schema.
+     *
+     * @param  string  $message  User message; scanned by every registered guard before reaching the LLM.
+     * @param  array<string, mixed>  $schema  JSON Schema the reply must satisfy.
+     * @return StructuredResponse The validated data, paired with the underlying run.
+     *
+     * @throws GuardException If prompt injection is detected.
+     * @throws ProviderException If the LLM API call fails.
+     * @throws UnsupportedSchemaException If the schema uses a keyword this library does not enforce.
+     * @throws StructuredOutputException If the reply still fails validation after every repair attempt.
+     */
+    public function sendStructured(string $message, array $schema): StructuredResponse
+    {
+        $this->ensureCloudBooted();
+
+        $structured = null;
+
+        $this->pipeline->execute(
+            message: $message,
+            streaming: false,
+            invoke: function (string $augmented, string $runId, string $original) use (&$structured, $schema): AgentResponse {
+                $runner = new StructuredOutputRunner(
+                    $this->provider,
+                    new JsonSchemaValidator,
+                    $this->config->maxParseRetries,
+                    $this->config->maxRetries,
+                );
+                $structured = $runner->run($augmented, $schema, $runId);
+
+                return $structured->raw;
+            },
+        );
+
+        return $structured;
     }
 
     /**
@@ -261,23 +309,23 @@ final class Claw implements ClawInterface
     }
 
     /**
-     * Build the underlying Agent from config: provider + tools + retry/history settings.
+     * Build the final decorated provider and the underlying Agent from config: provider + tools + retry/history settings.
      *
-     * @return Agent The result.
+     * @return array{0: ProviderInterface, 1: Agent} The provider Claw::sendStructured() reuses, and the Agent send()/stream() use.
      */
-    private function buildAgent(): Agent
+    private function buildProviderAndAgent(): array
     {
         $hasSkills = SkillRegistry::count() > 0;
         $config = $hasSkills
             ? $this->config->withSystemPrompt($this->config->systemPrompt.LoadSkillTool::systemPromptSection())
             : $this->config;
-        $provider = $this->config->providerOverride ?? $config->buildProvider();
-
-        if ($provider instanceof SupportsWebSearchInterface) {
-            $provider = $provider->withProviderTools(
-                $this->config->providerTools !== [] ? $this->config->providerTools : [new WebSearch]
-            );
-        }
+        $primary = $this->applyWebSearchTools($this->config->providerOverride ?? $config->buildProvider());
+        $fallbacks = array_map(
+            fn (ProviderInterface|array $fallback): ProviderInterface => $this->applyWebSearchTools($this->buildFallbackProvider($config, $fallback)),
+            $this->config->fallbacks,
+        );
+        $provider = $fallbacks === [] ? $primary : new ProviderChain([$primary, ...$fallbacks]);
+        $provider = $this->decorateProvider($provider, $config, $primary, $fallbacks);
 
         $toolRegistry = new ToolRegistry;
         if (! empty($this->config->tools)) {
@@ -287,7 +335,7 @@ final class Claw implements ClawInterface
             $toolRegistry->register([new LoadSkillTool]);
         }
 
-        return new Agent(
+        $agent = new Agent(
             provider: $provider,
             tools: $toolRegistry,
             maxIterations: $this->config->maxIterations,
@@ -302,7 +350,127 @@ final class Claw implements ClawInterface
             leanToolSchemas: $this->profile() === ToolProfileResolver::PROFILE_MINIMAL,
             requestBudgetTokens: ToolProfileResolver::requestBudget($this->profile()),
             fixedPromptTokens: (int) ceil(strlen($config->systemPrompt) / 4),
+            maxTokenBudget: $this->config->maxTokenBudget,
         );
+
+        return [$provider, $agent];
+    }
+
+    /**
+     * Wrap the provider (or chain) in the configured decorators: throttle first, then the response cache
+     * outermost, so a cache hit never reaches the throttle and takes no token.
+     *
+     * @param  ProviderInterface  $provider  Primary provider, or the ProviderChain built from it and its fallbacks.
+     * @param  ClawConfig  $config  Configuration used to build the response-cache fingerprint (may carry the skills-augmented system prompt).
+     * @param  ProviderInterface  $primary  Primary provider (with web-search tools already applied), used for the cache fingerprint.
+     * @param  ProviderInterface[]  $fallbacks  Fallback providers (with web-search tools already applied), used for the cache fingerprint.
+     * @return ProviderInterface The same provider, or a decorated chain.
+     */
+    private function decorateProvider(ProviderInterface $provider, ClawConfig $config, ProviderInterface $primary, array $fallbacks): ProviderInterface
+    {
+        if ($this->config->requestsPerMinute > 0) {
+            $provider = new ThrottledProvider(
+                $provider,
+                $this->config->requestsPerMinute,
+                $this->config->maxWaitMs,
+                store: $this->config->rateLimitStore,
+            );
+        }
+
+        if ($this->config->responseCache !== null) {
+            $fingerprint = $this->buildProviderCacheFingerprint($config, $primary, $fallbacks);
+            $provider = new CachedProvider($provider, $this->config->responseCache, $fingerprint, $this->config->responseCacheTtl);
+        }
+
+        return $provider;
+    }
+
+    /**
+     * Build the CachedProvider fingerprint from every value that changes what a request means: the provider
+     * chain identity, the system prompt actually used, and the generation settings.
+     *
+     * @param  ClawConfig  $config  Configuration carrying the system prompt actually used (with the skills section when present).
+     * @param  ProviderInterface  $primary  Primary provider.
+     * @param  ProviderInterface[]  $fallbacks  Fallback providers, in order.
+     * @return string
+     */
+    private function buildProviderCacheFingerprint(ClawConfig $config, ProviderInterface $primary, array $fallbacks): string
+    {
+        $providers = array_map(
+            static fn (ProviderInterface $p): array => [$p->name(), $p->model()],
+            [$primary, ...$fallbacks],
+        );
+
+        return (string) json_encode([
+            'providers' => $providers,
+            'system_prompt' => $config->systemPrompt,
+            'max_tokens' => $this->config->maxTokens,
+            'thinking_budget' => $this->config->thinkingBudget,
+            'provider_tool_classes' => $this->providerToolClassesForFingerprint($primary, $fallbacks),
+        ]);
+    }
+
+    /**
+     * Class names of the provider-native tools attached by applyWebSearchTools(), or an empty list when no
+     * provider in the chain supports web search.
+     *
+     * @param  ProviderInterface  $primary  Primary provider.
+     * @param  ProviderInterface[]  $fallbacks  Fallback providers, in order.
+     * @return list<string>
+     */
+    private function providerToolClassesForFingerprint(ProviderInterface $primary, array $fallbacks): array
+    {
+        $webSearchAttached = false;
+        foreach ([$primary, ...$fallbacks] as $provider) {
+            if ($provider instanceof SupportsWebSearchInterface) {
+                $webSearchAttached = true;
+
+                break;
+            }
+        }
+
+        if (! $webSearchAttached) {
+            return [];
+        }
+
+        if ($this->config->providerTools !== []) {
+            return array_map(static fn (object $tool): string => $tool::class, $this->config->providerTools);
+        }
+
+        return [WebSearch::class];
+    }
+
+    /**
+     * Attach the configured (or default) web-search provider tools when the provider supports them.
+     *
+     * @param  ProviderInterface  $provider  Provider to attach tools to.
+     * @return ProviderInterface The same provider when unsupported, or a clone carrying the tools.
+     */
+    private function applyWebSearchTools(ProviderInterface $provider): ProviderInterface
+    {
+        if (! $provider instanceof SupportsWebSearchInterface) {
+            return $provider;
+        }
+
+        return $provider->withProviderTools(
+            $this->config->providerTools !== [] ? $this->config->providerTools : [new WebSearch]
+        );
+    }
+
+    /**
+     * Resolve one configured fallback entry into a real provider instance.
+     *
+     * @param  ClawConfig  $config  Configuration used to build a string fallback's provider.
+     * @param  ProviderInterface|array{provider: string, model: string, apiKey: string}  $fallback  Pre-built provider used as given, or a provider/model/apiKey triple.
+     * @return ProviderInterface
+     */
+    private function buildFallbackProvider(ClawConfig $config, ProviderInterface|array $fallback): ProviderInterface
+    {
+        if ($fallback instanceof ProviderInterface) {
+            return $fallback;
+        }
+
+        return $config->withProvider($fallback['provider'], $fallback['model'], $fallback['apiKey'])->buildProvider();
     }
 
     /**

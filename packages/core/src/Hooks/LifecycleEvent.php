@@ -19,6 +19,8 @@ enum LifecycleEvent: string
     case ProviderResponse = 'provider.response';
     case ProviderRetry = 'provider.retry';
     case ProviderCacheHit = 'provider.cache_hit';
+    case ProviderResponseCached = 'provider.response_cached';
+    case ProviderFallback = 'provider.fallback';
     case ProviderError = 'provider.error';
     case ProviderToken = 'provider.token';
 
@@ -30,6 +32,10 @@ enum LifecycleEvent: string
     case ContextOverflow = 'context.overflow';
     case CompactionBefore = 'compaction.before';
     case CompactionAfter = 'compaction.after';
+
+    case BudgetExceeded = 'budget.exceeded';
+
+    case StructuredRepair = 'structured.repair';
 
     case GuardBlocked = 'guard.blocked';
     case GuardRateLimitExceeded = 'guard.rate_limit_exceeded';

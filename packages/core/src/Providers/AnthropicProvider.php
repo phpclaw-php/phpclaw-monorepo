@@ -12,6 +12,7 @@ use PhpClaw\Http\RawHttpClient;
 use PhpClaw\Http\StreamParser;
 use PhpClaw\Providers\Concerns\HasProviderTools;
 use PhpClaw\Providers\Contracts\ProviderInterface;
+use PhpClaw\Providers\Contracts\SupportsStructuredOutputInterface;
 use PhpClaw\Providers\Contracts\SupportsWebSearchInterface;
 use PhpClaw\Providers\Tools\WebSearch;
 
@@ -19,7 +20,7 @@ use PhpClaw\Providers\Tools\WebSearch;
  * Anthropic Messages API provider: supports prompt caching, extended thinking, tool use, and server-side web search.
  */
 #[Provider(name: 'anthropic', defaultModel: self::DEFAULT_MODEL, label: 'Anthropic', since: '1.0.0')]
-final class AnthropicProvider implements ProviderInterface, SupportsWebSearchInterface
+final class AnthropicProvider implements ProviderInterface, SupportsStructuredOutputInterface, SupportsWebSearchInterface
 {
     use HasProviderTools;
 
@@ -53,6 +54,25 @@ final class AnthropicProvider implements ProviderInterface, SupportsWebSearchInt
         self::MODEL_HAIKU => 8192,
     ];
 
+    private const STRUCTURED_OUTPUT_MODELS = [
+        'claude-fable-5-1',
+        'claude-mythos-5-1',
+        'claude-fable-5',
+        'claude-mythos-5',
+        'claude-mythos-preview',
+        'claude-opus-5-5',
+        'claude-opus-5',
+        'claude-opus-4-8',
+        'claude-opus-4-7',
+        'claude-opus-4-6',
+        'claude-sonnet-5-5',
+        'claude-sonnet-5',
+        'claude-sonnet-4-6',
+        'claude-sonnet-4-5-20250929',
+        'claude-opus-4-5-20251101',
+        'claude-haiku-4-5-20251001',
+    ];
+
     private readonly string $apiKey;
 
     private readonly RawHttpClient $http;
@@ -70,6 +90,8 @@ final class AnthropicProvider implements ProviderInterface, SupportsWebSearchInt
     private readonly int $thinkingBudget;
 
     private readonly string $endpoint;
+
+    private ?array $responseSchema = null;
 
     /**
      * Create a new AnthropicProvider instance.
@@ -200,6 +222,31 @@ final class AnthropicProvider implements ProviderInterface, SupportsWebSearchInt
     }
 
     /**
+     * Whether the configured model is an exact match in STRUCTURED_OUTPUT_MODELS, so it may enforce a
+     * response schema natively via output_config instead of the single-tool mode.
+     *
+     * @return bool
+     */
+    public function supportsResponseSchema(): bool
+    {
+        return in_array($this->model, self::STRUCTURED_OUTPUT_MODELS, true);
+    }
+
+    /**
+     * Return a clone carrying the given schema, sent as output_config.format on every send() the clone makes.
+     *
+     * @param  array<string, mixed>  $schema  JSON Schema Anthropic should enforce on its reply.
+     * @return static
+     */
+    public function withResponseSchema(array $schema): static
+    {
+        $clone = clone $this;
+        $clone->responseSchema = $schema;
+
+        return $clone;
+    }
+
+    /**
      * Return the active API endpoint URL.
      *
      * @return string
@@ -271,7 +318,59 @@ final class AnthropicProvider implements ProviderInterface, SupportsWebSearchInt
             $body['tool_choice'] = ['type' => 'auto'];
         }
 
+        if ($this->responseSchema !== null) {
+            $body['output_config'] = [
+                'format' => [
+                    'type' => 'json_schema',
+                    'schema' => $this->vendorSchema($this->responseSchema),
+                ],
+            ];
+        }
+
         return $body;
+    }
+
+    /**
+     * Rewrite the caller's schema for output_config: add additionalProperties false to every object that lacks
+     * it and drop minimum, maximum, minLength and maxLength; local validation keeps the original schema.
+     *
+     * @param  array<string, mixed>  $schema  Schema fragment to rewrite.
+     * @return array<string, mixed>
+     */
+    private function vendorSchema(array $schema): array
+    {
+        foreach (['minimum', 'maximum', 'minLength', 'maxLength'] as $keyword) {
+            unset($schema[$keyword]);
+        }
+
+        if ($this->isObjectSchema($schema) && ! array_key_exists('additionalProperties', $schema)) {
+            $schema['additionalProperties'] = false;
+        }
+
+        if (isset($schema['properties']) && is_array($schema['properties'])) {
+            foreach ($schema['properties'] as $name => $child) {
+                if (is_array($child)) {
+                    $schema['properties'][$name] = $this->vendorSchema($child);
+                }
+            }
+        }
+
+        if (isset($schema['items']) && is_array($schema['items'])) {
+            $schema['items'] = $this->vendorSchema($schema['items']);
+        }
+
+        return $schema;
+    }
+
+    /**
+     * Whether a schema fragment describes a JSON object, by explicit `type` or by carrying `properties`.
+     *
+     * @param  array<string, mixed>  $schema  Schema fragment to inspect.
+     * @return bool
+     */
+    private function isObjectSchema(array $schema): bool
+    {
+        return ($schema['type'] ?? null) === 'object' || isset($schema['properties']);
     }
 
     /**

@@ -268,4 +268,56 @@ final class AgentEventDispatcher
             parentRunId: $parentRunId,
         );
     }
+
+    /**
+     * Fires when a run's accumulated token spend would exceed the configured budget.
+     *
+     * @param  int  $tokensSpent  Tokens spent so far this run, before the blocked call.
+     * @param  int  $budget  Configured token budget that was reached.
+     * @param  string  $runId  Active run ID, if any.
+     * @param  string  $parentRunId  Parent run ID, if any.
+     * @return void
+     */
+    public static function budgetExceeded(
+        int $tokensSpent,
+        int $budget,
+        string $runId = '',
+        string $parentRunId = '',
+    ): void {
+        EventPayload::fire(
+            LifecycleEvent::BudgetExceeded->value,
+            [
+                'tokens_spent' => $tokensSpent,
+                'budget' => $budget,
+            ],
+            runId: $runId,
+            parentRunId: $parentRunId,
+        );
+    }
+
+    /**
+     * Fires when a structured-output reply fails validation and is about to be retried with a repair prompt.
+     *
+     * @param  int  $attempt  Attempt number that just failed (1-based).
+     * @param  int  $errorCount  Number of validation errors on this attempt.
+     * @param  string  $runId  Active run ID, if any.
+     * @param  string  $parentRunId  Parent run ID, if any.
+     * @return void
+     */
+    public static function structuredRepair(
+        int $attempt,
+        int $errorCount,
+        string $runId = '',
+        string $parentRunId = '',
+    ): void {
+        EventPayload::fire(
+            LifecycleEvent::StructuredRepair->value,
+            [
+                'attempt' => $attempt,
+                'error_count' => $errorCount,
+            ],
+            runId: $runId,
+            parentRunId: $parentRunId,
+        );
+    }
 }

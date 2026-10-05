@@ -609,4 +609,67 @@ final class OpenAIProviderTest extends TestCase
 
         $this->assertSame(OpenAIProvider::DEFAULT_ENDPOINT, $provider->endpoint());
     }
+
+    public function test_supports_response_schema_is_false_by_default(): void
+    {
+        $this->assertFalse($this->provider->supportsResponseSchema());
+    }
+
+    public function test_supports_response_schema_is_true_when_built_with_native_structured_output(): void
+    {
+        $provider = new OpenAIProvider(apiKey: 'k', nativeStructuredOutput: true);
+
+        $this->assertTrue($provider->supportsResponseSchema());
+    }
+
+    public function test_with_response_schema_returns_a_different_instance_carrying_the_schema(): void
+    {
+        $provider = new OpenAIProvider(apiKey: 'k', nativeStructuredOutput: true);
+        $schema = ['type' => 'object', 'properties' => ['order_id' => ['type' => 'string']]];
+
+        $clone = $provider->withResponseSchema($schema);
+
+        $this->assertNotSame($provider, $clone);
+        $this->assertInstanceOf(OpenAIProvider::class, $clone);
+    }
+
+    public function test_send_with_a_response_schema_adds_response_format_with_strict_false_and_the_schema_unchanged(): void
+    {
+        $schema = ['type' => 'object', 'properties' => ['order_id' => ['type' => 'string']], 'required' => ['order_id']];
+        $capturedBody = [];
+        $this->mockHttp->method('post')->willReturnCallback(function (string $url, array $headers, array $body) use (&$capturedBody): array {
+            $capturedBody = $body;
+
+            return ['choices' => [['message' => ['role' => 'assistant', 'content' => '{}']]], 'usage' => []];
+        });
+
+        $provider = (new OpenAIProvider(apiKey: 'k', http: $this->mockHttp, nativeStructuredOutput: true))
+            ->withResponseSchema($schema);
+
+        $provider->send([Message::user('hi')]);
+
+        $this->assertSame([
+            'type' => 'json_schema',
+            'json_schema' => [
+                'name' => 'response',
+                'schema' => $schema,
+                'strict' => false,
+            ],
+        ], $capturedBody['response_format']);
+    }
+
+    public function test_send_without_a_response_schema_never_adds_response_format(): void
+    {
+        $capturedBody = [];
+        $this->mockHttp->method('post')->willReturnCallback(function (string $url, array $headers, array $body) use (&$capturedBody): array {
+            $capturedBody = $body;
+
+            return ['choices' => [['message' => ['role' => 'assistant', 'content' => 'hi']]], 'usage' => []];
+        });
+
+        $provider = new OpenAIProvider(apiKey: 'k', http: $this->mockHttp, nativeStructuredOutput: true);
+        $provider->send([Message::user('hi')]);
+
+        $this->assertArrayNotHasKey('response_format', $capturedBody);
+    }
 }

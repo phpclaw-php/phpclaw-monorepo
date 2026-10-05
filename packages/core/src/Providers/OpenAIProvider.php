@@ -10,13 +10,14 @@ use PhpClaw\Http\RawHttpClient;
 use PhpClaw\Http\StreamParser;
 use PhpClaw\Providers\Concerns\HasProviderTools;
 use PhpClaw\Providers\Contracts\ProviderInterface;
+use PhpClaw\Providers\Contracts\SupportsStructuredOutputInterface;
 use PhpClaw\Providers\Contracts\SupportsWebSearchInterface;
 use PhpClaw\Providers\Tools\WebSearch;
 
 /**
  * Engine for every OpenAI-compatible provider: OpenAI, Groq, DeepSeek, Mistral, Ollama, and any custom `v1/chat/completions` endpoint.
  */
-final class OpenAIProvider implements ProviderInterface, SupportsWebSearchInterface
+final class OpenAIProvider implements ProviderInterface, SupportsStructuredOutputInterface, SupportsWebSearchInterface
 {
     use HasProviderTools;
 
@@ -62,6 +63,10 @@ final class OpenAIProvider implements ProviderInterface, SupportsWebSearchInterf
 
     private readonly string $authStyle;
 
+    private readonly bool $nativeStructuredOutput;
+
+    private ?array $responseSchema = null;
+
     /**
      * Create a new OpenAIProvider instance.
      *
@@ -74,6 +79,7 @@ final class OpenAIProvider implements ProviderInterface, SupportsWebSearchInterf
      * @param  string  $endpoint  API endpoint URL. Empty = OpenAI default. A host-only URL gains the standard chat-completions path.
      * @param  string  $name  Provider identifier returned by name(). Defaults to 'openai'.
      * @param  string  $authStyle  Auth style: OpenAIPresets::AUTH_BEARER or AUTH_NONE.
+     * @param  bool  $nativeStructuredOutput  Whether this instance may enforce a response schema natively via response_format. False for every non-OpenAI OpenAI-compatible preset.
      * @return void
      */
     public function __construct(
@@ -86,6 +92,7 @@ final class OpenAIProvider implements ProviderInterface, SupportsWebSearchInterf
         string $endpoint = '',
         string $name = self::DEFAULT_NAME,
         string $authStyle = OpenAIPresets::AUTH_BEARER,
+        bool $nativeStructuredOutput = false,
     ) {
         $this->apiKey = $apiKey;
         $this->http = $http ?? new RawHttpClient;
@@ -96,6 +103,7 @@ final class OpenAIProvider implements ProviderInterface, SupportsWebSearchInterf
         $this->endpoint = $endpoint === '' ? self::DEFAULT_ENDPOINT : self::normaliseEndpoint($endpoint);
         $this->name = $name;
         $this->authStyle = $authStyle;
+        $this->nativeStructuredOutput = $nativeStructuredOutput;
     }
 
     /**
@@ -118,6 +126,17 @@ final class OpenAIProvider implements ProviderInterface, SupportsWebSearchInterf
         if (! empty($tools)) {
             $body['tools'] = $tools;
             $body['tool_choice'] = 'auto';
+        }
+
+        if ($this->responseSchema !== null) {
+            $body['response_format'] = [
+                'type' => 'json_schema',
+                'json_schema' => [
+                    'name' => 'response',
+                    'schema' => $this->responseSchema,
+                    'strict' => false,
+                ],
+            ];
         }
 
         if ($this->providerTools !== [] && str_contains($this->model, self::SEARCH_PREVIEW_MODEL_SUFFIX)) {
@@ -188,6 +207,31 @@ final class OpenAIProvider implements ProviderInterface, SupportsWebSearchInterf
     public function model(): string
     {
         return $this->model;
+    }
+
+    /**
+     * Whether this instance was built with nativeStructuredOutput, so it may enforce a response schema
+     * via response_format instead of the single-tool mode.
+     *
+     * @return bool
+     */
+    public function supportsResponseSchema(): bool
+    {
+        return $this->nativeStructuredOutput;
+    }
+
+    /**
+     * Return a clone carrying the given schema, sent as response_format on every send() the clone makes.
+     *
+     * @param  array<string, mixed>  $schema  JSON Schema OpenAI should enforce on its reply.
+     * @return static
+     */
+    public function withResponseSchema(array $schema): static
+    {
+        $clone = clone $this;
+        $clone->responseSchema = $schema;
+
+        return $clone;
     }
 
     /**
