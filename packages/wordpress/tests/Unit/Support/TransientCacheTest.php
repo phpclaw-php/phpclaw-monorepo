@@ -136,7 +136,7 @@ final class TransientCacheTest extends TestCase
 
         self::assertSame(
             ['a' => '1', 'b' => '2', 'c' => 'none'],
-            iterator_to_array($cache->getMultiple(['a', 'b', 'c'], 'none')),
+            [...$cache->getMultiple(['a', 'b', 'c'], 'none')],
         );
     }
 
