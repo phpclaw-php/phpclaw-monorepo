@@ -8,8 +8,10 @@ use PhpClaw\Contracts\ClawInterface;
 use PhpClaw\Exceptions\GuardException;
 use PhpClaw\Exceptions\MaxIterationsException;
 use PhpClaw\Exceptions\ProviderException;
+use PhpClaw\Exceptions\TokenBudgetExceededException;
 use PhpClaw\Hooks\HookRegistry;
 use PhpClaw\Hooks\LifecycleEvent;
+use PhpClaw\OpenCart\Admin\AdminResponder;
 use PhpClaw\OpenCart\Plugin;
 use PhpClaw\OpenCart\Support\ToolHistorySplicer;
 
@@ -113,8 +115,8 @@ final class PhpClawCommand
         } catch (GuardException $e) {
             fwrite(STDERR, "phpClaw: prompt blocked. {$e->getMessage()}\n");
             $this->halt(1);
-        } catch (ProviderException $e) {
-            fwrite(STDERR, "phpClaw: provider error. {$e->getMessage()}\n");
+        } catch (ProviderException|TokenBudgetExceededException $e) {
+            fwrite(STDERR, 'phpClaw: '.(AdminResponder::limitMessage($e) ?? "provider error. {$e->getMessage()}")."\n");
             $this->halt(1);
         } catch (MaxIterationsException $e) {
             fwrite(STDERR, "phpClaw: max iterations reached. {$e->getMessage()}\n");
@@ -164,8 +166,8 @@ final class PhpClawCommand
         } catch (GuardException $e) {
             fwrite(STDERR, "\nphpClaw: prompt blocked. {$e->getMessage()}\n");
             $this->halt(1);
-        } catch (ProviderException $e) {
-            fwrite(STDERR, "\nphpClaw: provider error. {$e->getMessage()}\n");
+        } catch (ProviderException|TokenBudgetExceededException $e) {
+            fwrite(STDERR, "\nphpClaw: ".(AdminResponder::limitMessage($e) ?? "provider error. {$e->getMessage()}")."\n");
             $this->halt(1);
         } catch (MaxIterationsException $e) {
             fwrite(STDERR, "\nphpClaw: max iterations reached. {$e->getMessage()}\n");

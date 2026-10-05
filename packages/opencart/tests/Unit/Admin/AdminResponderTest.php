@@ -7,7 +7,9 @@ namespace PhpClaw\OpenCart\Tests\Unit\Admin;
 use PhpClaw\Exceptions\GuardException;
 use PhpClaw\Exceptions\MaxIterationsException;
 use PhpClaw\Exceptions\ProviderException;
+use PhpClaw\Exceptions\TokenBudgetExceededException;
 use PhpClaw\OpenCart\Admin\AdminResponder;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
 final class AdminResponderTest extends TestCase
@@ -73,5 +75,46 @@ final class AdminResponderTest extends TestCase
             'Agent reached max iterations. Try a simpler or more specific request.',
             AdminResponder::messageFor($wrapped),
         );
+    }
+
+    public function test_a_spent_token_budget_returns_the_budget_message(): void
+    {
+        self::assertSame('Token budget reached for this run.', AdminResponder::messageFor(new TokenBudgetExceededException(1200, 1000)));
+    }
+
+    public function test_a_provider_429_returns_the_rate_limit_message_direct_or_wrapped(): void
+    {
+        $limited = new ProviderException('slow down', statusCode: 429);
+
+        self::assertSame('Rate limit reached, try again shortly.', AdminResponder::messageFor($limited));
+        self::assertSame('Rate limit reached, try again shortly.', AdminResponder::messageFor(new \RuntimeException('AI provider error.', previous: $limited)));
+    }
+
+    public function test_a_provider_error_that_is_not_a_429_keeps_the_provider_message(): void
+    {
+        self::assertSame('AI provider error. Check your API key and provider settings.', AdminResponder::messageFor(new ProviderException('down', statusCode: 500)));
+    }
+
+    public static function statusCases(): array
+    {
+        return [
+            'token budget' => [new TokenBudgetExceededException(1200, 1000), 422],
+            'provider 429' => [new ProviderException('slow down', statusCode: 429), 429],
+            'wrapped provider 429' => [new \RuntimeException('AI provider error.', previous: new ProviderException('slow down', statusCode: 429)), 429],
+            'provider 500' => [new ProviderException('down', statusCode: 500), 200],
+            'anything else' => [new \RuntimeException('boom'), 200],
+        ];
+    }
+
+    #[DataProvider('statusCases')]
+    public function test_status_for_maps_limits_to_their_http_status(\Throwable $e, int $expected): void
+    {
+        self::assertSame($expected, AdminResponder::statusFor($e));
+    }
+
+    public function test_limit_message_is_null_for_a_failure_that_is_not_a_limit(): void
+    {
+        self::assertNull(AdminResponder::limitMessage(new GuardException('blocked')));
+        self::assertNull(AdminResponder::limitMessage(new ProviderException('down', statusCode: 500)));
     }
 }

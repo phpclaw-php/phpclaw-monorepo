@@ -7,6 +7,7 @@ namespace PhpClaw\OpenCart\Engine;
 use PhpClaw\Agent\CliApprovalGate;
 use PhpClaw\AutoDiscovery\Bootstrap;
 use PhpClaw\Claw;
+use PhpClaw\ClawBuilder;
 use PhpClaw\ClawConfig;
 use PhpClaw\Memory\MemoryRegistry;
 use PhpClaw\Memory\PrivacyAwareMemory;
@@ -34,12 +35,15 @@ use PhpClaw\Tools\FileWriteTool;
 use PhpClaw\Tools\ShellTool;
 use PhpClaw\Tools\ToolCatalogue;
 use PhpClaw\Tools\ToolProfileResolver;
+use PhpClaw\Tools\ToolRegistry;
 
 /**
  * Assembles the configured Claw engine for OpenCart 3/4.
  */
 final class OcEngineFactory
 {
+    private const PROVIDER_CUSTOM = 'custom';
+
     /**
      * Assemble and return a fully-configured Claw engine.
      *
@@ -98,7 +102,50 @@ final class OcEngineFactory
             $builder->withRemoteSkills($url);
         }
 
+        $this->applyAgentPrimitives($builder, $saved);
+
         return $builder->build();
+    }
+
+    /**
+     * Apply the fallback provider, outbound rate limit, response cache and token budget; each stays off unless set.
+     *
+     * @param  ClawBuilder  $builder  Builder for the engine being assembled.
+     * @param  array<string, mixed>  $saved  Admin-saved settings, already clamped by SettingsPage::validate().
+     * @return void
+     */
+    private function applyAgentPrimitives(ClawBuilder $builder, array $saved): void
+    {
+        $provider = (string) ($saved['provider'] ?? '');
+        $primary = $provider !== '' ? $provider : (new ClawConfig)->providerName;
+        $fallback = (string) ($saved['fallback_provider'] ?? '');
+        $fallbackCompatible = $fallback !== ''
+            && $fallback !== self::PROVIDER_CUSTOM
+            && ToolRegistry::toolFormat($fallback) === ToolRegistry::toolFormat($primary);
+
+        if ($fallbackCompatible) {
+            $builder->withFallback($fallback, (string) ($saved['fallback_model'] ?? ''), (string) ($saved['fallback_api_key'] ?? ''));
+        } elseif ($fallback !== '') {
+            error_log('phpClaw: fallback provider "'.$fallback.'" is custom or uses another tool format than the primary, skipping fallback.');
+        }
+
+        $rpm = (int) ($saved['rate_limit_rpm'] ?? 0);
+        $cacheOn = (string) ($saved['response_cache'] ?? '0') === '1';
+        $store = $rpm > 0 || $cacheOn ? new OcCache : null;
+
+        if ($store !== null && $rpm > 0) {
+            $builder->rateLimit($rpm, store: $store);
+        }
+
+        if ($store !== null && $cacheOn) {
+            $builder->responseCache($store, (int) ($saved['response_cache_ttl'] ?? 0));
+        }
+
+        $budget = (int) ($saved['max_token_budget'] ?? 0);
+
+        if ($budget > 0) {
+            $builder->maxTokenBudget($budget);
+        }
     }
 
     /**

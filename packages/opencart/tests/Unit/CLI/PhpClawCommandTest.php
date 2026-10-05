@@ -12,10 +12,12 @@ use PhpClaw\Exceptions\AdapterException;
 use PhpClaw\Exceptions\GuardException;
 use PhpClaw\Exceptions\MaxIterationsException;
 use PhpClaw\Exceptions\ProviderException;
+use PhpClaw\Exceptions\TokenBudgetExceededException;
 use PhpClaw\Hooks\HookRegistry;
 use PhpClaw\Hooks\LifecycleEvent;
 use PhpClaw\OpenCart\CLI\PhpClawCommand;
 use PhpClaw\OpenCart\Plugin;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
 final class PhpClawCommandTest extends TestCase
@@ -433,5 +435,92 @@ final class PhpClawCommandTest extends TestCase
         self::assertSame('tool', $capturedPayload['history'][1]['role']);
         self::assertSame('oc_product', $capturedPayload['history'][1]['tool_name']);
         self::assertSame('assistant', $capturedPayload['history'][2]['role']);
+    }
+
+    public static function runs(): array
+    {
+        return [
+            'sync' => ['runSync'],
+            'stream' => ['runStream'],
+        ];
+    }
+
+    #[DataProvider('runs')]
+    public function test_a_spent_token_budget_prints_the_budget_message_and_exits_1(string $method): void
+    {
+        $engine = $this->createMock(ClawInterface::class);
+        $engine->method('conversation')->willReturn($this->makeConversation());
+        $engine->method('streamInConversation')->willThrowException(new TokenBudgetExceededException(1200, 1000));
+
+        $exitCode = null;
+        $cmd = $this->makeCommand($exitCode);
+        $stderr = $this->captureStderr(static fn () => (new \ReflectionMethod($cmd, $method))->invoke($cmd, $engine, 'test prompt'));
+
+        self::assertStringContainsString('phpClaw: Token budget reached for this run.', $stderr);
+        self::assertSame(1, $exitCode);
+    }
+
+    #[DataProvider('runs')]
+    public function test_a_provider_429_prints_the_rate_limit_message_and_exits_1(string $method): void
+    {
+        $engine = $this->createMock(ClawInterface::class);
+        $engine->method('conversation')->willReturn($this->makeConversation());
+        $engine->method('streamInConversation')->willThrowException(new ProviderException('rate limit wait exceeded', statusCode: 429));
+
+        $exitCode = null;
+        $cmd = $this->makeCommand($exitCode);
+        $stderr = $this->captureStderr(static fn () => (new \ReflectionMethod($cmd, $method))->invoke($cmd, $engine, 'test prompt'));
+
+        self::assertStringContainsString('phpClaw: Rate limit reached, try again shortly.', $stderr);
+        self::assertStringNotContainsString('rate limit wait exceeded', $stderr);
+        self::assertSame(1, $exitCode);
+    }
+
+    public function test_a_provider_error_that_is_not_a_429_keeps_the_provider_message(): void
+    {
+        $engine = $this->createMock(ClawInterface::class);
+        $engine->method('conversation')->willReturn($this->makeConversation());
+        $engine->method('streamInConversation')->willThrowException(new ProviderException('provider down', statusCode: 500));
+
+        $cmd = $this->makeCommand();
+        $stderr = $this->captureStderr(static fn () => (new \ReflectionMethod($cmd, 'runSync'))->invoke($cmd, $engine, 'test prompt'));
+
+        self::assertStringContainsString('phpClaw: provider error. provider down', $stderr);
+    }
+
+    private function captureStderr(callable $run): string
+    {
+        StderrCapture::$buffer = '';
+
+        if (! in_array('phpclaw_oc_stderr_capture', stream_get_filters(), true)) {
+            stream_filter_register('phpclaw_oc_stderr_capture', StderrCapture::class);
+        }
+
+        $filter = stream_filter_append(STDERR, 'phpclaw_oc_stderr_capture', STREAM_FILTER_WRITE);
+
+        try {
+            ob_start();
+            $run();
+            ob_end_clean();
+        } finally {
+            stream_filter_remove($filter);
+        }
+
+        return StderrCapture::$buffer;
+    }
+}
+
+final class StderrCapture extends \php_user_filter
+{
+    public static string $buffer = '';
+
+    public function filter($in, $out, &$consumed, bool $closing): int
+    {
+        while ($bucket = stream_bucket_make_writeable($in)) {
+            self::$buffer .= $bucket->data;
+            $consumed += $bucket->datalen;
+        }
+
+        return PSFS_PASS_ON;
     }
 }

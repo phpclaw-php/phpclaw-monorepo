@@ -17,6 +17,50 @@
         toggle();
     }
 
+    function bindFallbackKeyToggle() {
+        var sel = document.getElementById('phpclaw-fallback-provider');
+        var row = document.getElementById('row-fallback-api-key');
+        if (!sel || !row) { return; }
+        function toggle() {
+            row.classList.toggle('is-hidden', sel.value === '' || sel.value === 'ollama');
+        }
+        sel.addEventListener('change', toggle);
+        toggle();
+    }
+
+    function bindFallbackRebuild() {
+        var prov = document.getElementById('phpclaw-provider');
+        var sel  = document.getElementById('phpclaw-fallback-provider');
+        if (!prov || !sel || !sel.getAttribute('data-fallback')) { return; }
+        var data = JSON.parse(sel.getAttribute('data-fallback'));
+        prov.addEventListener('change', function () {
+            var format  = prov.value === '' ? data.autoFormat : data.formats[prov.value];
+            var current = sel.value;
+            var keep    = false;
+            sel.options.length = 0;
+            sel.add(new Option(data.offLabel, ''));
+            Object.keys(data.providers).forEach(function (slug) {
+                if (data.formats[slug] === format) {
+                    sel.add(new Option(data.providers[slug], slug));
+                    keep = keep || slug === current;
+                }
+            });
+            sel.value = keep ? current : '';
+            sel.dispatchEvent(new Event('change'));
+        });
+    }
+
+    function bindCacheTtlToggle() {
+        var box = document.getElementById('phpclaw-response-cache');
+        var row = document.getElementById('row-response-cache-ttl');
+        if (!box || !row) { return; }
+        function toggle() {
+            row.classList.toggle('is-hidden', !box.checked);
+        }
+        box.addEventListener('change', toggle);
+        toggle();
+    }
+
     function bindCloudToggle() {
         var box = document.getElementById('phpclaw-store-messages');
         var ids = ['row-cloud-key', 'row-cloud-signing-secret', 'row-cloud-disable'];
@@ -103,6 +147,9 @@
     function init() {
         bindProviderToggle();
         bindCloudToggle();
+        bindFallbackKeyToggle();
+        bindFallbackRebuild();
+        bindCacheTtlToggle();
         bindMaxIterGuard();
         bindTestConnection();
         bindSaveButtonTabToggle();

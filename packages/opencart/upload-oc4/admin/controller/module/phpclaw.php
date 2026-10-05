@@ -114,6 +114,8 @@ final class Phpclaw extends Controller
             'url_send' => $this->url->link('extension/phpclaw/module/phpclaw.send', 'user_token='.$this->session->data['user_token'], true),
             'url_test_connection' => $this->url->link('extension/phpclaw/module/phpclaw.test_connection', 'user_token='.$this->session->data['user_token'], true),
             'providers' => SettingsPage::providers(),
+            'fallback_providers' => SettingsPage::fallbackProviders((string) $current['provider']),
+            'fallback_data' => SettingsPage::fallbackScriptData(),
             'settings' => $current,
             'tools' => $tools,
             'notice' => $notice,
@@ -519,6 +521,10 @@ final class Phpclaw extends Controller
             $this->emitSseFrame('error', ['error' => AdminResponder::messageFor($e)]);
         } catch (\Throwable $e) {
             error_log('phpClaw stream error: '.$e->getMessage());
+            $status = AdminResponder::statusFor($e);
+            if ($status !== 200 && ! headers_sent()) {
+                http_response_code($status);
+            }
             $this->emitSseFrame('error', ['error' => AdminResponder::messageFor($e)]);
         }
 
@@ -594,6 +600,11 @@ final class Phpclaw extends Controller
             $this->response->setOutput(json_encode(['error' => AdminResponder::messageFor($e)]));
         } catch (\Throwable $e) {
             error_log('phpClaw send error: '.$e->getMessage());
+            $reasons = [422 => 'Unprocessable Content', 429 => 'Too Many Requests'];
+            $status = AdminResponder::statusFor($e);
+            if (isset($reasons[$status])) {
+                $this->response->addHeader('HTTP/1.1 '.$status.' '.$reasons[$status]);
+            }
             $this->response->setOutput(json_encode(['error' => AdminResponder::messageFor($e)]));
         }
     }

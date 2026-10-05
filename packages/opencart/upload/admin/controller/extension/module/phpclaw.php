@@ -113,6 +113,8 @@ final class ControllerExtensionModulePhpclaw extends Controller
             'url_send' => $this->adminUrl('extension/module/phpclaw/send', 'user_token='.$this->session->data['user_token']),
             'url_test_connection' => $this->adminUrl('extension/module/phpclaw/test_connection', 'user_token='.$this->session->data['user_token']),
             'providers' => SettingsPage::providers(),
+            'fallback_providers' => SettingsPage::fallbackProviders((string) $current['provider']),
+            'fallback_data' => SettingsPage::fallbackScriptData(),
             'settings' => $current,
             'tools' => $tools,
             'notice' => $notice,
@@ -520,6 +522,10 @@ final class ControllerExtensionModulePhpclaw extends Controller
             $this->emitSseFrame('error', ['error' => AdminResponder::messageFor($e)]);
         } catch (\Throwable $e) {
             error_log('phpClaw stream error: '.$e->getMessage());
+            $status = AdminResponder::statusFor($e);
+            if ($status !== 200 && ! headers_sent()) {
+                http_response_code($status);
+            }
             $this->emitSseFrame('error', ['error' => AdminResponder::messageFor($e)]);
         }
 
@@ -562,7 +568,7 @@ final class ControllerExtensionModulePhpclaw extends Controller
             $this->jsonOut(['error' => AdminResponder::messageFor($e)], 403);
         } catch (\Throwable $e) {
             error_log('phpClaw send error: '.$e->getMessage());
-            $this->jsonOut(['error' => AdminResponder::messageFor($e)]);
+            $this->jsonOut(['error' => AdminResponder::messageFor($e)], AdminResponder::statusFor($e));
         }
     }
 
@@ -736,7 +742,7 @@ final class ControllerExtensionModulePhpclaw extends Controller
             ob_end_clean();
         }
         if ($status !== 200) {
-            $reasons = [400 => 'Bad Request', 403 => 'Forbidden', 404 => 'Not Found', 500 => 'Internal Server Error'];
+            $reasons = [400 => 'Bad Request', 403 => 'Forbidden', 404 => 'Not Found', 422 => 'Unprocessable Content', 429 => 'Too Many Requests', 500 => 'Internal Server Error'];
             $this->response->addHeader('HTTP/1.1 '.$status.' '.($reasons[$status] ?? 'Error'));
         }
         $this->response->addHeader('Content-Type: application/json');

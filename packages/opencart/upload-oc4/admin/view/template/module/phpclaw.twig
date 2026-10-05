@@ -139,6 +139,75 @@
               </div>
             </div>
 
+            <div class="row mb-3 {% if errors.fallback_provider %}has-error{% endif %}">
+              <label class="col-sm-2 col-form-label" for="phpclaw-fallback-provider">{{ entry_fallback_provider }}</label>
+              <div class="col-sm-10">
+                <select name="fallback_provider" id="phpclaw-fallback-provider" class="form-select" data-fallback="{{ fallback_data|json_encode|e('html_attr') }}">
+                  {% for value, label in fallback_providers %}
+                  <option value="{{ value }}" {% if settings.fallback_provider == value %}selected{% endif %}>{{ label }}</option>
+                  {% endfor %}
+                </select>
+                <small class="text-muted">{{ help_fallback_provider }}</small>
+                {% if errors.fallback_provider %}
+                  <div class="text-danger mt-1 pc-text-sm">{{ errors.fallback_provider }}</div>
+                {% endif %}
+              </div>
+            </div>
+
+            <div class="row mb-3">
+              <label class="col-sm-2 col-form-label" for="phpclaw-fallback-model">{{ entry_fallback_model }}</label>
+              <div class="col-sm-10">
+                <input type="text" name="fallback_model" id="phpclaw-fallback-model" value="{{ settings.fallback_model }}" class="form-control" />
+                <small class="text-muted">{{ help_fallback_model }}</small>
+              </div>
+            </div>
+
+            <div class="row mb-3{% if settings.fallback_provider in ['', 'ollama'] %} is-hidden{% endif %}" id="row-fallback-api-key">
+              <label class="col-sm-2 col-form-label" for="phpclaw-fallback-api-key">{{ entry_fallback_api_key }}</label>
+              <div class="col-sm-10">
+                <input type="password" name="fallback_api_key" id="phpclaw-fallback-api-key" value="" placeholder="{{ settings.fallback_api_key ? 'saved - leave blank to keep' : '' }}"
+                       class="form-control" autocomplete="new-password" />
+                <small class="text-muted">{{ help_fallback_api_key }}</small>
+              </div>
+            </div>
+
+            <div class="row mb-3">
+              <label class="col-sm-2 col-form-label" for="phpclaw-rate-limit-rpm">{{ entry_rate_limit_rpm }}</label>
+              <div class="col-sm-2">
+                <input type="number" name="rate_limit_rpm" id="phpclaw-rate-limit-rpm" value="{{ settings.rate_limit_rpm }}" min="0" max="600" class="form-control" />
+                <small class="text-muted">{{ help_rate_limit_rpm }}</small>
+              </div>
+            </div>
+
+            <div class="row mb-3">
+              <label class="col-sm-2 col-form-label" for="phpclaw-response-cache">{{ entry_response_cache }}</label>
+              <div class="col-sm-10">
+                <div class="form-check">
+                  <input type="hidden" name="response_cache" value="0" />
+                  <input type="checkbox" name="response_cache" id="phpclaw-response-cache" value="1" class="form-check-input"
+                         {% if settings.response_cache == '1' %}checked{% endif %} />
+                  <label class="form-check-label" for="phpclaw-response-cache">{{ text_response_cache }}</label>
+                </div>
+                <small class="text-muted">{{ help_response_cache }}</small>
+              </div>
+            </div>
+
+            <div class="row mb-3{% if settings.response_cache != '1' %} is-hidden{% endif %}" id="row-response-cache-ttl">
+              <label class="col-sm-2 col-form-label" for="phpclaw-response-cache-ttl">{{ entry_response_cache_ttl }}</label>
+              <div class="col-sm-2">
+                <input type="number" name="response_cache_ttl" id="phpclaw-response-cache-ttl" value="{{ settings.response_cache_ttl }}" min="60" max="86400" class="form-control" />
+                <small class="text-muted">{{ help_response_cache_ttl }}</small>
+              </div>
+            </div>
+
+            <div class="row mb-3">
+              <label class="col-sm-2 col-form-label" for="phpclaw-max-token-budget">{{ entry_max_token_budget }}</label>
+              <div class="col-sm-2">
+                <input type="number" name="max_token_budget" id="phpclaw-max-token-budget" value="{{ settings.max_token_budget }}" min="0" max="10000000" class="form-control" />
+                <small class="text-muted">{{ help_max_token_budget }}</small>
+              </div>
+            </div>
+
             {% if cloud_installed %}
             <div class="row mb-3 is-hidden" id="row-cloud-inactive">
               <div class="col-sm-10 offset-sm-2">
