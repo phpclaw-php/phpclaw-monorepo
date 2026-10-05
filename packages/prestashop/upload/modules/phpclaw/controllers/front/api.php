@@ -2,7 +2,6 @@
 
 declare(strict_types=1);
 
-use PhpClaw\Exceptions\AdapterException;
 use PhpClaw\Exceptions\GuardException;
 use PhpClaw\PrestaShop\Admin\DebugPanel;
 use PhpClaw\PrestaShop\Exceptions\ConversationAccessDeniedException;
@@ -121,14 +120,8 @@ final class PhpclawApiModuleFrontController extends ModuleFrontController
             $result = $handler->handle($message, $conversationId);
 
             echo json_encode(['success' => true] + $result);
-        } catch (ConversationAccessDeniedException $e) {
-            $this->jsonError('phpclaw_forbidden', 'You do not have permission to access this conversation.', 403);
-        } catch (GuardException $e) {
-            $this->jsonError('phpclaw_guard', 'Prompt injection detected. Request blocked.', 422);
-        } catch (AdapterException $e) {
-            $this->jsonError('phpclaw_not_configured', 'Agent error. Check your provider settings.', 503);
         } catch (Throwable $e) {
-            $this->jsonError('phpclaw_error', 'Agent error. Check your provider settings.', 500);
+            $this->jsonError(...ApiHandler::errorFor($e));
         }
 
         exit;

@@ -9,11 +9,16 @@ use PhpClaw\Agent\AgentResponse;
 use PhpClaw\Agent\Conversation;
 use PhpClaw\Agent\ConversationTurn;
 use PhpClaw\Contracts\ClawInterface;
+use PhpClaw\Exceptions\AdapterException;
 use PhpClaw\Exceptions\GuardException;
+use PhpClaw\Exceptions\ProviderException;
+use PhpClaw\Exceptions\TokenBudgetExceededException;
 use PhpClaw\Hooks\HookRegistry;
 use PhpClaw\Hooks\LifecycleEvent;
+use PhpClaw\PrestaShop\Exceptions\ConversationAccessDeniedException;
 use PhpClaw\PrestaShop\Rest\ApiHandler;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
 #[CoversClass(ApiHandler::class)]
@@ -219,5 +224,56 @@ final class ApiHandlerTest extends TestCase
                 'tool_result' => '{"orders":[]}',
             ],
         ], $result['tool_calls']);
+    }
+
+    public static function errorCases(): array
+    {
+        return [
+            'conversation denied' => [new ConversationAccessDeniedException('no'), ['phpclaw_forbidden', 'You do not have permission to access this conversation.', 403]],
+            'guard' => [new GuardException('blocked'), ['phpclaw_guard', 'Prompt injection detected. Request blocked.', 422]],
+            'adapter' => [new AdapterException('broken'), ['phpclaw_not_configured', 'Agent error. Check your provider settings.', 503]],
+            'token budget' => [new TokenBudgetExceededException(1200, 1000), ['phpclaw_budget_exceeded', 'Token budget reached for this run.', 422]],
+            'provider rate limit' => [new ProviderException('slow down', statusCode: 429), ['phpclaw_rate_limited', 'Rate limit reached, try again shortly.', 429]],
+            'provider server error' => [new ProviderException('down', statusCode: 500), ['phpclaw_error', 'Agent error. Check your provider settings.', 500]],
+            'anything else' => [new \RuntimeException('boom'), ['phpclaw_error', 'Agent error. Check your provider settings.', 500]],
+        ];
+    }
+
+    #[DataProvider('errorCases')]
+    public function test_error_for_maps_each_failure_to_its_rest_error(\Throwable $e, array $expected): void
+    {
+        self::assertSame($expected, ApiHandler::errorFor($e));
+    }
+
+    public function test_limit_message_reads_a_limit_wrapped_as_the_previous_exception(): void
+    {
+        $wrapped = new \RuntimeException('AI provider error', previous: new ProviderException('slow down', statusCode: 429));
+
+        self::assertSame('Rate limit reached, try again shortly.', ApiHandler::limitMessage($wrapped));
+        self::assertSame('Token budget reached for this run.', ApiHandler::limitMessage(new TokenBudgetExceededException(1200, 1000)));
+    }
+
+    public function test_limit_message_is_null_for_a_failure_that_is_not_a_limit(): void
+    {
+        self::assertNull(ApiHandler::limitMessage(new \RuntimeException('AI provider error', previous: new ProviderException('down', statusCode: 500))));
+        self::assertNull(ApiHandler::limitMessage(new GuardException('blocked')));
+    }
+
+    public static function limitStatuses(): array
+    {
+        return [
+            'token budget' => [new TokenBudgetExceededException(1200, 1000), 422],
+            'provider 429' => [new ProviderException('slow down', statusCode: 429), 429],
+            'provider 429 wrapped' => [new \RuntimeException('AI provider error', previous: new ProviderException('slow down', statusCode: 429)), 429],
+            'provider 500' => [new ProviderException('down', statusCode: 500), null],
+            'guard' => [new GuardException('blocked'), null],
+            'anything else' => [new \RuntimeException('boom'), null],
+        ];
+    }
+
+    #[DataProvider('limitStatuses')]
+    public function test_limit_status_is_422_for_a_spent_budget_429_for_a_rate_limit_and_none_otherwise(\Throwable $e, ?int $expected): void
+    {
+        self::assertSame($expected, ApiHandler::limitStatus($e));
     }
 }

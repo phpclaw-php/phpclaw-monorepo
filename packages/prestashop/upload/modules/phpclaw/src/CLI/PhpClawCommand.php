@@ -8,6 +8,7 @@ use PhpClaw\Contracts\ClawInterface;
 use PhpClaw\Exceptions\GuardException;
 use PhpClaw\Exceptions\MaxIterationsException;
 use PhpClaw\Exceptions\ProviderException;
+use PhpClaw\Exceptions\TokenBudgetExceededException;
 use PhpClaw\PrestaShop\Plugin;
 use PhpClaw\PrestaShop\Rest\ApiHandler;
 
@@ -94,8 +95,8 @@ final class PhpClawCommand
         } catch (GuardException $e) {
             fwrite(STDERR, "phpClaw: prompt blocked: {$e->getMessage()}\n");
             ($this->exitFn)(1);
-        } catch (ProviderException $e) {
-            fwrite(STDERR, "phpClaw: provider error: {$e->getMessage()}\n");
+        } catch (ProviderException|TokenBudgetExceededException $e) {
+            fwrite(STDERR, 'phpClaw: '.(ApiHandler::limitMessage($e) ?? "provider error: {$e->getMessage()}")."\n");
             ($this->exitFn)(1);
         } catch (MaxIterationsException $e) {
             fwrite(STDERR, "phpClaw: max iterations reached: {$e->getMessage()}\n");
@@ -131,8 +132,8 @@ final class PhpClawCommand
         } catch (GuardException $e) {
             fwrite(STDERR, "\nphpClaw: prompt blocked: {$e->getMessage()}\n");
             ($this->exitFn)(1);
-        } catch (ProviderException $e) {
-            fwrite(STDERR, "\nphpClaw: provider error: {$e->getMessage()}\n");
+        } catch (ProviderException|TokenBudgetExceededException $e) {
+            fwrite(STDERR, "\nphpClaw: ".(ApiHandler::limitMessage($e) ?? "provider error: {$e->getMessage()}")."\n");
             ($this->exitFn)(1);
         } catch (MaxIterationsException $e) {
             fwrite(STDERR, "\nphpClaw: max iterations reached: {$e->getMessage()}\n");

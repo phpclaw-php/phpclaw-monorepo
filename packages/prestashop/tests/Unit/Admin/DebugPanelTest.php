@@ -12,8 +12,10 @@ use PhpClaw\Contracts\ClawInterface;
 use PhpClaw\Exceptions\GuardException;
 use PhpClaw\Exceptions\MaxIterationsException;
 use PhpClaw\Exceptions\ProviderException;
+use PhpClaw\Exceptions\TokenBudgetExceededException;
 use PhpClaw\Memory\ArrayMemory;
 use PhpClaw\PrestaShop\Admin\DebugPanel;
+use PhpClaw\PrestaShop\Rest\ApiHandler;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
@@ -374,5 +376,66 @@ final class DebugPanelTest extends TestCase
         $result = (new DebugPanel($engine))->send('test', $conversationId);
 
         self::assertSame($conversationId, $result['conversation_id']);
+    }
+
+    public function test_stream_emits_the_budget_message_when_the_token_budget_is_spent(): void
+    {
+        $engine = $this->makeEngineThrowingOn('streamInConversation', new TokenBudgetExceededException(1200, 1000));
+
+        $emitted = [];
+        (new DebugPanel($engine))->stream('check stock', '', static function (string $event, array $data) use (&$emitted): void {
+            $emitted[] = [$event, $data];
+        });
+
+        self::assertContains(['error', ['message' => 'Token budget reached for this run.']], $emitted);
+    }
+
+    public function test_stream_emits_the_rate_limit_message_on_a_provider_429(): void
+    {
+        $engine = $this->makeEngineThrowingOn('streamInConversation', new ProviderException('slow down', statusCode: 429));
+
+        $emitted = [];
+        (new DebugPanel($engine))->stream('check stock', '', static function (string $event, array $data) use (&$emitted): void {
+            $emitted[] = [$event, $data];
+        });
+
+        self::assertContains(['error', ['message' => 'Rate limit reached, try again shortly.']], $emitted);
+    }
+
+    public function test_stream_keeps_the_provider_error_message_for_other_statuses(): void
+    {
+        $engine = $this->makeEngineThrowingOn('streamInConversation', new ProviderException('down', statusCode: 500));
+
+        $emitted = [];
+        (new DebugPanel($engine))->stream('check stock', '', static function (string $event, array $data) use (&$emitted): void {
+            $emitted[] = [$event, $data];
+        });
+
+        self::assertContains(['error', ['message' => 'AI provider error.']], $emitted);
+    }
+
+    public function test_send_lets_a_spent_token_budget_reach_the_caller(): void
+    {
+        $engine = $this->makeEngineThrowingOn('streamInConversation', new TokenBudgetExceededException(1200, 1000));
+
+        try {
+            (new DebugPanel($engine))->send('check stock');
+            self::fail('send() must not swallow a spent token budget.');
+        } catch (\Throwable $e) {
+            self::assertSame('Token budget reached for this run.', ApiHandler::limitMessage($e));
+        }
+    }
+
+    public function test_send_keeps_a_provider_429_readable_through_the_wrapper(): void
+    {
+        $engine = $this->makeEngineThrowingOn('streamInConversation', new ProviderException('slow down', statusCode: 429));
+
+        try {
+            (new DebugPanel($engine))->send('check stock');
+            self::fail('send() must throw on a provider failure.');
+        } catch (\RuntimeException $e) {
+            self::assertSame('AI provider error', $e->getMessage());
+            self::assertSame('Rate limit reached, try again shortly.', ApiHandler::limitMessage($e));
+        }
     }
 }

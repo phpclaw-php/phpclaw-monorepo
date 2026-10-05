@@ -50,7 +50,9 @@
         "laravel/pint": "^1.0",
         "phpstan/phpstan": "^1.0 || ^2.0",
         "mockery/mockery": "^1.5",
-        "phpbench/phpbench": "^1.6"
+        "phpbench/phpbench": "^1.6",
+        "symfony/cache": "^6.4",
+        "psr/simple-cache": "^1.0"
     },
     "scripts": {
         "test": "phpunit --no-coverage",

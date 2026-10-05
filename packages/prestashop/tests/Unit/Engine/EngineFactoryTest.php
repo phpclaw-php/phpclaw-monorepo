@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace PhpClaw\PrestaShop\Tests\Unit\Engine;
 
 use PhpClaw\Agent\CliApprovalGate;
+use PhpClaw\ClawConfig;
 use PhpClaw\Exceptions\ToolException;
 use PhpClaw\Memory\MemoryRegistry;
 use PhpClaw\PrestaShop\Contracts\PsDbInterface;
@@ -17,6 +18,7 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\PreserveGlobalState;
 use PHPUnit\Framework\Attributes\RunInSeparateProcess;
 use PHPUnit\Framework\TestCase;
+use Symfony\Component\Cache\Psr16Cache;
 
 #[CoversClass(EngineFactory::class)]
 final class EngineFactoryTest extends TestCase
@@ -265,5 +267,90 @@ final class EngineFactoryTest extends TestCase
         }
 
         self::fail("The tool list has no {$name} tool.");
+    }
+
+    public function test_agent_primitives_stay_off_by_default(): void
+    {
+        $config = $this->builtConfig(['provider' => 'ollama', 'model' => 'qwen2.5:7b']);
+
+        self::assertSame([], $config->fallbacks);
+        self::assertSame(0, $config->requestsPerMinute);
+        self::assertNull($config->responseCache);
+        self::assertSame(0, $config->maxTokenBudget);
+    }
+
+    public function test_a_fallback_with_the_primary_tool_format_is_applied(): void
+    {
+        $config = $this->builtConfig(['provider' => 'ollama', 'model' => 'qwen2.5:7b', 'fallback_provider' => 'groq', 'fallback_model' => 'llama-3.1-8b-instant', 'fallback_api_key' => 'gsk-key']);
+
+        self::assertSame([['provider' => 'groq', 'model' => 'llama-3.1-8b-instant', 'apiKey' => 'gsk-key']], $config->fallbacks);
+    }
+
+    public function test_a_fallback_with_another_tool_format_is_skipped(): void
+    {
+        $config = $this->builtConfig(['provider' => 'ollama', 'model' => 'qwen2.5:7b', 'fallback_provider' => 'anthropic', 'fallback_api_key' => 'sk-ant']);
+
+        self::assertSame([], $config->fallbacks);
+    }
+
+    public function test_a_custom_fallback_is_skipped(): void
+    {
+        $config = $this->builtConfig(['provider' => 'openai', 'model' => 'gpt-4o-mini', 'api_key' => 'sk', 'fallback_provider' => 'custom']);
+
+        self::assertSame([], $config->fallbacks);
+    }
+
+    public function test_an_empty_primary_resolves_to_the_auto_detected_provider(): void
+    {
+        $env = getenv('PHPCLAW_PROVIDER');
+        putenv('PHPCLAW_PROVIDER=openai');
+
+        try {
+            $applied = $this->builtConfig(['fallback_provider' => 'groq', 'fallback_api_key' => 'gsk-key']);
+            $skipped = $this->builtConfig(['fallback_provider' => 'anthropic', 'fallback_api_key' => 'sk-ant']);
+        } finally {
+            $env === false ? putenv('PHPCLAW_PROVIDER') : putenv("PHPCLAW_PROVIDER={$env}");
+        }
+
+        self::assertSame([['provider' => 'groq', 'model' => '', 'apiKey' => 'gsk-key']], $applied->fallbacks);
+        self::assertSame([], $skipped->fallbacks);
+    }
+
+    public function test_the_rate_limit_uses_the_prestashop_cache_store(): void
+    {
+        $config = $this->builtConfig(['provider' => 'ollama', 'model' => 'qwen2.5:7b', 'rate_limit_rpm' => '30']);
+
+        self::assertSame(30, $config->requestsPerMinute);
+        self::assertInstanceOf(Psr16Cache::class, $config->rateLimitStore);
+    }
+
+    public function test_the_response_cache_uses_the_prestashop_cache_store_and_ttl(): void
+    {
+        $config = $this->builtConfig(['provider' => 'ollama', 'model' => 'qwen2.5:7b', 'response_cache' => '1', 'response_cache_ttl' => '600']);
+
+        self::assertInstanceOf(Psr16Cache::class, $config->responseCache);
+        self::assertSame(600, $config->responseCacheTtl);
+    }
+
+    public function test_an_unticked_response_cache_stays_off(): void
+    {
+        $config = $this->builtConfig(['provider' => 'ollama', 'model' => 'qwen2.5:7b', 'response_cache' => '0', 'response_cache_ttl' => '600']);
+
+        self::assertNull($config->responseCache);
+    }
+
+    public function test_the_token_budget_is_applied(): void
+    {
+        $config = $this->builtConfig(['provider' => 'ollama', 'model' => 'qwen2.5:7b', 'max_token_budget' => '5000']);
+
+        self::assertSame(5000, $config->maxTokenBudget);
+    }
+
+    private function builtConfig(array $saved): ClawConfig
+    {
+        $factory = new EngineFactory($saved, [], $this->createMock(PsDbInterface::class), 'ps_');
+        $factory->bootRegistries();
+
+        return $factory->build()->config();
     }
 }

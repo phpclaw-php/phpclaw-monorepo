@@ -7,6 +7,7 @@ namespace PhpClaw\PrestaShop\Engine;
 use PhpClaw\Agent\CliApprovalGate;
 use PhpClaw\AutoDiscovery\Bootstrap;
 use PhpClaw\Claw;
+use PhpClaw\ClawBuilder;
 use PhpClaw\ClawConfig;
 use PhpClaw\Cloud\CloudManager;
 use PhpClaw\Guards\Contracts\GuardInterface;
@@ -49,6 +50,9 @@ use PhpClaw\Tools\FileWriteTool;
 use PhpClaw\Tools\ShellTool;
 use PhpClaw\Tools\ToolCatalogue;
 use PhpClaw\Tools\ToolProfileResolver;
+use PhpClaw\Tools\ToolRegistry;
+use Symfony\Component\Cache\Adapter\FilesystemAdapter;
+use Symfony\Component\Cache\Psr16Cache;
 
 /**
  * Builds a fully-configured phpClaw engine from saved settings and package config.
@@ -56,6 +60,10 @@ use PhpClaw\Tools\ToolProfileResolver;
 final class EngineFactory
 {
     private const DEFAULT_MEMORY_DRIVER = 'ps_router';
+
+    private const PROVIDER_CUSTOM = 'custom';
+
+    private const CACHE_NAMESPACE = 'phpclaw';
 
     /**
      * Create a new EngineFactory instance.
@@ -194,6 +202,8 @@ final class EngineFactory
             $builder->withRemoteSkills($url);
         }
 
+        $this->applyAgentPrimitives($builder, $provider);
+
         $engine = $builder->build();
 
         if ((bool) ($this->config['events_bridge'] ?? true)) {
@@ -214,6 +224,46 @@ final class EngineFactory
         }
 
         return $engine;
+    }
+
+    /**
+     * Apply the fallback provider, outbound rate limit, response cache and token budget; each stays off unless set.
+     *
+     * @param  ClawBuilder  $builder  Builder for the engine being assembled.
+     * @param  string  $provider  The saved primary provider slug, or '' when it is auto-detected.
+     * @return void
+     */
+    private function applyAgentPrimitives(ClawBuilder $builder, string $provider): void
+    {
+        $primary = $provider !== '' ? $provider : (new ClawConfig)->providerName;
+        $fallback = (string) ($this->saved['fallback_provider'] ?? '');
+        $fallbackCompatible = $fallback !== ''
+            && $fallback !== self::PROVIDER_CUSTOM
+            && ToolRegistry::toolFormat($fallback) === ToolRegistry::toolFormat($primary);
+
+        if ($fallbackCompatible) {
+            $builder->withFallback($fallback, (string) ($this->saved['fallback_model'] ?? ''), (string) ($this->saved['fallback_api_key'] ?? ''));
+        } elseif ($fallback !== '') {
+            error_log('phpClaw: fallback provider "'.$fallback.'" is custom or uses another tool format than the primary, skipping fallback.');
+        }
+
+        $rpm = (int) ($this->saved['rate_limit_rpm'] ?? 0);
+        $cacheOn = (string) ($this->saved['response_cache'] ?? '0') === '1';
+        $store = $rpm > 0 || $cacheOn ? new Psr16Cache(new FilesystemAdapter(self::CACHE_NAMESPACE, 0, _PS_CACHE_DIR_)) : null;
+
+        if ($store !== null && $rpm > 0) {
+            $builder->rateLimit($rpm, store: $store);
+        }
+
+        if ($store !== null && $cacheOn) {
+            $builder->responseCache($store, (int) ($this->saved['response_cache_ttl'] ?? 0));
+        }
+
+        $budget = (int) ($this->saved['max_token_budget'] ?? 0);
+
+        if ($budget > 0) {
+            $builder->maxTokenBudget($budget);
+        }
     }
 
     /**

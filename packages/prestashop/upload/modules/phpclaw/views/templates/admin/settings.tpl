@@ -73,7 +73,7 @@
               <div class="col-sm-6">
                 <textarea name="system_prompt" id="phpclaw-system-prompt" class="form-control" rows="4"
                           placeholder="e.g. You are a helpful assistant for my PrestaShop store. Always be concise.">{$phpclaw_settings.system_prompt|escape:'htmlall'}</textarea>
-                <small class="text-muted">Optional. Customise the AI's persona and behaviour for your store.</small>
+                <small class="text-muted">Optional. Customise the AI's persona and behaviour for your site.</small>
               </div>
             </div>
 
@@ -86,7 +86,7 @@
                          id="store_messages" {if $phpclaw_settings.store_messages}checked{/if} />
                   <label class="form-check-label" for="store_messages">Save prompt &amp; response text</label>
                 </div>
-                <small class="text-muted">When enabled: prompt and response text is persisted to your store database, required for multi-turn chat to remember previous messages. When disabled: no message content is ever saved. Each prompt is processed independently with no memory of previous turns.</small>
+                <small class="text-muted">When enabled: prompt and response text is saved, so a conversation remembers previous messages. When disabled: no message content is ever saved; each prompt is processed independently.</small>
               </div>
             </div>
 
@@ -110,6 +110,76 @@
               </div>
             </div>
 
+            {* Fallback provider, rate limit, response cache and token budget *}
+            <div class="mb-3 row">
+              <label for="phpclaw-fallback-provider" class="col-sm-3 col-form-label">Fallback Provider</label>
+              <div class="col-sm-6">
+                <select name="fallback_provider" id="phpclaw-fallback-provider" class="form-select">
+                  {foreach $phpclaw_fallback_providers as $value => $label}
+                  <option value="{$value|escape:'htmlall'}" {if $phpclaw_settings.fallback_provider == $value}selected{/if}>{$label|escape:'htmlall'}</option>
+                  {/foreach}
+                </select>
+                <small class="text-muted">Optional. Used only when the main provider fails with a connection error, a 429 or a 5xx. Lists only providers with the same tool format as the main provider. Off turns fallback off.</small>
+              </div>
+            </div>
+
+            <div class="mb-3 row">
+              <label for="phpclaw-fallback-model" class="col-sm-3 col-form-label">Fallback Model</label>
+              <div class="col-sm-6">
+                <input type="text" name="fallback_model" id="phpclaw-fallback-model" class="form-control"
+                       value="{$phpclaw_settings.fallback_model|escape:'htmlall'}" />
+                <small class="text-muted">Leave blank to use the fallback provider's default model.</small>
+              </div>
+            </div>
+
+            <div class="mb-3 row{if $phpclaw_settings.fallback_provider == 'ollama' || $phpclaw_settings.fallback_provider == ''} phpclaw-hidden{/if}" id="row-fallback-api-key">
+              <label for="phpclaw-fallback-api-key" class="col-sm-3 col-form-label">Fallback API Key</label>
+              <div class="col-sm-6">
+                <input type="password" name="fallback_api_key" id="phpclaw-fallback-api-key" class="form-control"
+                       value="{$phpclaw_settings.fallback_api_key|escape:'htmlall'}" autocomplete="new-password" />
+                <small class="text-muted">API key for the fallback provider.</small>
+              </div>
+            </div>
+
+            <div class="mb-3 row">
+              <label for="phpclaw-rate-limit-rpm" class="col-sm-3 col-form-label">Rate Limit (requests/min)</label>
+              <div class="col-sm-3">
+                <input type="number" name="rate_limit_rpm" id="phpclaw-rate-limit-rpm" class="form-control"
+                       value="{$phpclaw_settings.rate_limit_rpm|intval}" min="0" max="600" />
+                <small class="text-muted">Most calls to the AI provider per minute, shared by every request. 0 turns it off. Maximum 600.</small>
+              </div>
+            </div>
+
+            <div class="mb-3 row">
+              <label for="response_cache" class="col-sm-3 col-form-label">Response Cache</label>
+              <div class="col-sm-6">
+                <div class="form-check mt-2">
+                  <input type="checkbox" name="response_cache" value="1" class="form-check-input"
+                         id="response_cache" {if $phpclaw_settings.response_cache}checked{/if} />
+                  <label class="form-check-label" for="response_cache">Reuse the answer for an identical request</label>
+                </div>
+                <small class="text-muted">An identical request within the TTL is answered from the cache instead of calling the provider again.</small>
+              </div>
+            </div>
+
+            <div class="mb-3 row{if !$phpclaw_settings.response_cache} phpclaw-hidden{/if}" id="row-response-cache-ttl">
+              <label for="phpclaw-response-cache-ttl" class="col-sm-3 col-form-label">Response Cache TTL (seconds)</label>
+              <div class="col-sm-3">
+                <input type="number" name="response_cache_ttl" id="phpclaw-response-cache-ttl" class="form-control"
+                       value="{$phpclaw_settings.response_cache_ttl|intval}" min="60" max="86400" />
+                <small class="text-muted">How long a cached answer is kept, in seconds: 60 to 86400. Default 3600.</small>
+              </div>
+            </div>
+
+            <div class="mb-3 row">
+              <label for="phpclaw-max-token-budget" class="col-sm-3 col-form-label">Max Token Budget</label>
+              <div class="col-sm-3">
+                <input type="number" name="max_token_budget" id="phpclaw-max-token-budget" class="form-control"
+                       value="{$phpclaw_settings.max_token_budget|intval}" min="0" max="10000000" />
+                <small class="text-muted">Stops a run before a provider call would take its token spend over this number. 0 turns it off. Maximum 10000000.</small>
+              </div>
+            </div>
+
 
             {* 9. Cloud Key + Disable Cloud Features *}
             {if $phpclaw_cloud_available}
@@ -122,7 +192,7 @@
               <div class="col-sm-6">
                 <input type="password" name="cloud_key" id="phpclaw-cloud-key" class="form-control"
                        value="{$phpclaw_settings.cloud_key|escape:'htmlall'}" autocomplete="new-password" placeholder="pgc_..." />
-                <small class="text-muted">phpClaw Cloud API key. Enables cloud guards and webhook features.</small>
+                <small class="text-muted">phpClaw Cloud API key. Enables cloud guards and webhook features. Optional.</small>
               </div>
             </div>
 
@@ -140,7 +210,7 @@
               <div class="col-sm-6">
                 <input type="text" name="cloud_disable" id="phpclaw-cloud-disable" class="form-control"
                        value="{if is_array($phpclaw_settings.cloud_disable)}{foreach $phpclaw_settings.cloud_disable as $cd}{$cd|escape:'htmlall'}{if !$cd@last}, {/if}{/foreach}{else}{$phpclaw_settings.cloud_disable|escape:'htmlall'}{/if}" placeholder="e.g. webhooks,analytics" />
-                <small class="text-muted">Only applies when a Cloud Key is set above.</small>
+                <small class="text-muted">Comma-separated cloud feature names to turn off, or hide_inputs, hide_outputs and hide_metadata to keep that content on your server while tracing stays on. Leave empty to use every feature in your plan. Only applies when a Cloud Key is set above.</small>
               </div>
             </div>
             {/if}
@@ -228,6 +298,48 @@
     {rdelim}
     provSel.addEventListener('change', toggleProvider);
     toggleProvider();
+  {rdelim}
+
+  {* Fallback API Key: hidden when fallback is off or Ollama *}
+  var fallbackSel = document.getElementById('phpclaw-fallback-provider');
+  var fallbackKeyRow = document.getElementById('row-fallback-api-key');
+  if (fallbackSel && fallbackKeyRow) {ldelim}
+    function toggleFallbackKey() {ldelim}
+      fallbackKeyRow.classList.toggle('phpclaw-hidden', fallbackSel.value === '' || fallbackSel.value === 'ollama');
+    {rdelim}
+    fallbackSel.addEventListener('change', toggleFallbackKey);
+    toggleFallbackKey();
+  {rdelim}
+
+  {* Response Cache TTL: shown only while Response Cache is ticked *}
+  var cacheBox = document.getElementById('response_cache');
+  var ttlRow = document.getElementById('row-response-cache-ttl');
+  if (cacheBox && ttlRow) {ldelim}
+    function toggleCacheTtl() {ldelim}
+      ttlRow.classList.toggle('phpclaw-hidden', ! cacheBox.checked);
+    {rdelim}
+    cacheBox.addEventListener('change', toggleCacheTtl);
+    toggleCacheTtl();
+  {rdelim}
+
+  {* Fallback Provider: rebuilt from the main provider's tool format whenever it changes *}
+  var fallbackData = {$phpclaw_fallback_data|json_encode};
+  if (provSel && fallbackSel) {ldelim}
+    provSel.addEventListener('change', function () {ldelim}
+      var format  = provSel.value === '' ? fallbackData.autoFormat : fallbackData.formats[provSel.value];
+      var current = fallbackSel.value;
+      var keep    = false;
+      fallbackSel.options.length = 0;
+      fallbackSel.add(new Option(fallbackData.offLabel, ''));
+      Object.keys(fallbackData.providers).forEach(function (slug) {ldelim}
+        if (fallbackData.formats[slug] === format) {ldelim}
+          fallbackSel.add(new Option(fallbackData.providers[slug], slug));
+          keep = keep || slug === current;
+        {rdelim}
+      {rdelim});
+      fallbackSel.value = keep ? current : '';
+      fallbackSel.dispatchEvent(new Event('change'));
+    {rdelim});
   {rdelim}
 
   {* Cloud fields follow Store Messages: hidden when off, values always kept *}

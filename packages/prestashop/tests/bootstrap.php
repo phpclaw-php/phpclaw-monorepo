@@ -21,6 +21,10 @@ if (! defined('_MODULE_DIR_')) {
     define('_MODULE_DIR_', '/var/www/html/modules/');
 }
 
+if (! defined('_PS_CACHE_DIR_')) {
+    define('_PS_CACHE_DIR_', sys_get_temp_dir().'/phpclaw-ps-tests-cache/');
+}
+
 if (! class_exists('Configuration', false)) {
     class Configuration
     {

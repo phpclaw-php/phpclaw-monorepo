@@ -18,7 +18,8 @@ final class Plugin
     private const PERSISTED_FIELDS = [
         'provider', 'model', 'api_key', 'base_url', 'max_iterations',
         'store_messages', 'system_prompt', 'cloud_key', 'cloud_signing_secret', 'cloud_disable',
-        'remote_skill_urls',
+        'remote_skill_urls', 'fallback_provider', 'fallback_model', 'fallback_api_key', 'rate_limit_rpm',
+        'response_cache', 'response_cache_ttl', 'max_token_budget',
     ];
 
     private static ?self $instance = null;

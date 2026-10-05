@@ -13,6 +13,7 @@ define('_DB_PREFIX_', 'ps_');
 define('_PS_VERSION_', '8.2.0');
 define('_PS_ROOT_DIR_', '/var/www/html');
 define('_PS_MODULE_DIR_', '/var/www/html/modules/');
+define('_PS_CACHE_DIR_', '/var/www/html/var/cache/prod/');
 
 // ----- Classes -----
 

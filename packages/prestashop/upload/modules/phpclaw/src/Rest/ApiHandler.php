@@ -5,11 +5,14 @@ declare(strict_types=1);
 namespace PhpClaw\PrestaShop\Rest;
 
 use PhpClaw\Contracts\ClawInterface;
+use PhpClaw\Exceptions\AdapterException;
 use PhpClaw\Exceptions\GuardException;
 use PhpClaw\Exceptions\MaxIterationsException;
 use PhpClaw\Exceptions\ProviderException;
+use PhpClaw\Exceptions\TokenBudgetExceededException;
 use PhpClaw\Hooks\HookRegistry;
 use PhpClaw\Hooks\LifecycleEvent;
+use PhpClaw\PrestaShop\Exceptions\ConversationAccessDeniedException;
 
 /**
  * Pure PHP handler for the phpClaw REST API send endpoint: no PrestaShop dependencies.
@@ -19,6 +22,16 @@ final class ApiHandler
     public const MAX_MESSAGE_LENGTH = 50000;
 
     public const TEST_PROBE = 'Reply with the single word: ok';
+
+    private const HTTP_UNPROCESSABLE = 422;
+
+    private const HTTP_TOO_MANY_REQUESTS = 429;
+
+    private const BUDGET_MESSAGE = 'Token budget reached for this run.';
+
+    private const RATE_LIMIT_MESSAGE = 'Rate limit reached, try again shortly.';
+
+    private const AGENT_ERROR_MESSAGE = 'Agent error. Check your provider settings.';
 
     /**
      * Create a new ApiHandler instance.
@@ -95,6 +108,60 @@ final class ApiHandler
                 static fn (array $c): bool => $c['tool_name'] !== '',
             )),
         ];
+    }
+
+    /**
+     * The REST error for a failed send: error code, message and HTTP status.
+     *
+     * @param  \Throwable  $e  The failure raised while handling the request.
+     * @return array{0: string, 1: string, 2: int}
+     */
+    public static function errorFor(\Throwable $e): array
+    {
+        return match (true) {
+            $e instanceof ConversationAccessDeniedException => ['phpclaw_forbidden', 'You do not have permission to access this conversation.', 403],
+            $e instanceof GuardException => ['phpclaw_guard', 'Prompt injection detected. Request blocked.', 422],
+            $e instanceof AdapterException => ['phpclaw_not_configured', self::AGENT_ERROR_MESSAGE, 503],
+            $e instanceof TokenBudgetExceededException => ['phpclaw_budget_exceeded', self::BUDGET_MESSAGE, self::HTTP_UNPROCESSABLE],
+            $e instanceof ProviderException && $e->statusCode === self::HTTP_TOO_MANY_REQUESTS => ['phpclaw_rate_limited', self::RATE_LIMIT_MESSAGE, self::HTTP_TOO_MANY_REQUESTS],
+            default => ['phpclaw_error', self::AGENT_ERROR_MESSAGE, 500],
+        };
+    }
+
+    /**
+     * HTTP status for a limit failure: 422 for a spent token budget, 429 for a provider rate limit, null otherwise.
+     *
+     * @param  \Throwable  $e  The failure, possibly wrapping the original exception.
+     * @return int|null
+     */
+    public static function limitStatus(\Throwable $e): ?int
+    {
+        return match (self::limitMessage($e)) {
+            self::BUDGET_MESSAGE => self::HTTP_UNPROCESSABLE,
+            self::RATE_LIMIT_MESSAGE => self::HTTP_TOO_MANY_REQUESTS,
+            default => null,
+        };
+    }
+
+    /**
+     * The user-facing message when a failure, or any exception it wraps, is a spent token budget or a provider 429.
+     *
+     * @param  \Throwable  $e  The failure, possibly wrapping the original exception.
+     * @return string|null The limit message, or null when the failure is not a limit.
+     */
+    public static function limitMessage(\Throwable $e): ?string
+    {
+        for ($cause = $e; $cause !== null; $cause = $cause->getPrevious()) {
+            if ($cause instanceof TokenBudgetExceededException) {
+                return self::BUDGET_MESSAGE;
+            }
+
+            if ($cause instanceof ProviderException && $cause->statusCode === self::HTTP_TOO_MANY_REQUESTS) {
+                return self::RATE_LIMIT_MESSAGE;
+            }
+        }
+
+        return null;
     }
 
     /**

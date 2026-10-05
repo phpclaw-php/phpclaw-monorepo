@@ -5,6 +5,7 @@ use PhpClaw\PrestaShop\Admin\DebugPanel;
 use PhpClaw\PrestaShop\Exceptions\ConversationAccessDeniedException;
 use PhpClaw\PrestaShop\PsIdentityResolver;
 use PhpClaw\PrestaShop\PsSseHeadersTrait;
+use PhpClaw\PrestaShop\Rest\ApiHandler;
 
 if (! defined('_PS_VERSION_')) {
     exit;
@@ -88,8 +89,12 @@ final class AdminPhpClawDebugController extends AdminPhpClawBaseController
             $panel = new DebugPanel($this->getPlugin()->engine());
             $result = $panel->send($message, $conversationId);
             $this->respondJson(['success' => true] + $result);
-        } catch (Throwable) {
-            $this->respondJson(['error' => 'Agent error. Check your provider settings.']);
+        } catch (Throwable $e) {
+            $status = ApiHandler::limitStatus($e);
+            if ($status !== null && ! headers_sent()) {
+                http_response_code($status);
+            }
+            $this->respondJson(['error' => ApiHandler::limitMessage($e) ?? 'Agent error. Check your provider settings.']);
         }
     }
 

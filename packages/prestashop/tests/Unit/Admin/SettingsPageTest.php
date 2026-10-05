@@ -124,8 +124,10 @@ final class SettingsPageTest extends TestCase
 
         self::assertSame([
             'api_key', 'base_url', 'cloud_disable',
-            'cloud_key', 'cloud_signing_secret', 'max_iterations',
-            'model', 'provider', 'remote_skill_urls',
+            'cloud_key', 'cloud_signing_secret', 'fallback_api_key',
+            'fallback_model', 'fallback_provider', 'max_iterations',
+            'max_token_budget', 'model', 'provider', 'rate_limit_rpm',
+            'remote_skill_urls', 'response_cache', 'response_cache_ttl',
             'store_messages', 'system_prompt',
         ], $keys);
     }
@@ -235,5 +237,177 @@ final class SettingsPageTest extends TestCase
         $result = SettingsPage::validate(['cloud_key' => '']);
 
         self::assertSame('', $result['data']['cloud_key']);
+    }
+
+    public function test_merge_defaults_the_agent_primitives_to_off(): void
+    {
+        $merged = SettingsPage::merge([], []);
+
+        self::assertSame('', $merged['fallback_provider']);
+        self::assertSame('', $merged['fallback_model']);
+        self::assertSame('', $merged['fallback_api_key']);
+        self::assertSame(0, $merged['rate_limit_rpm']);
+        self::assertFalse($merged['response_cache']);
+        self::assertSame(3600, $merged['response_cache_ttl']);
+        self::assertSame(0, $merged['max_token_budget']);
+    }
+
+    public function test_validate_reads_the_agent_primitives(): void
+    {
+        $result = SettingsPage::validate([
+            'provider' => 'ollama',
+            'model' => 'qwen2.5:7b',
+            'max_iterations' => '20',
+            'fallback_provider' => 'groq',
+            'fallback_model' => ' llama-3.1-8b-instant ',
+            'fallback_api_key' => 'gsk-new',
+            'rate_limit_rpm' => '30',
+            'response_cache' => '1',
+            'response_cache_ttl' => '600',
+            'max_token_budget' => '50000',
+        ]);
+
+        self::assertSame([], $result['errors']);
+        self::assertSame('groq', $result['data']['fallback_provider']);
+        self::assertSame('llama-3.1-8b-instant', $result['data']['fallback_model']);
+        self::assertSame('gsk-new', $result['data']['fallback_api_key']);
+        self::assertSame(30, $result['data']['rate_limit_rpm']);
+        self::assertSame('1', $result['data']['response_cache']);
+        self::assertSame(600, $result['data']['response_cache_ttl']);
+        self::assertSame(50000, $result['data']['max_token_budget']);
+    }
+
+    public function test_validate_turns_the_response_cache_off_when_unticked(): void
+    {
+        $result = SettingsPage::validate(['provider' => 'ollama', 'max_iterations' => '20']);
+
+        self::assertSame('0', $result['data']['response_cache']);
+    }
+
+    public function test_validate_clamps_values_above_the_limits(): void
+    {
+        $result = SettingsPage::validate(['provider' => 'ollama', 'max_iterations' => '20', 'rate_limit_rpm' => '1000', 'response_cache_ttl' => '100000', 'max_token_budget' => '20000000']);
+
+        self::assertSame(600, $result['data']['rate_limit_rpm']);
+        self::assertSame(86400, $result['data']['response_cache_ttl']);
+        self::assertSame(10000000, $result['data']['max_token_budget']);
+    }
+
+    public function test_validate_clamps_values_below_the_limits(): void
+    {
+        $result = SettingsPage::validate(['provider' => 'ollama', 'max_iterations' => '20', 'rate_limit_rpm' => '-5', 'response_cache_ttl' => '30', 'max_token_budget' => '-1']);
+
+        self::assertSame(0, $result['data']['rate_limit_rpm']);
+        self::assertSame(60, $result['data']['response_cache_ttl']);
+        self::assertSame(0, $result['data']['max_token_budget']);
+    }
+
+    public function test_validate_reads_an_empty_ttl_as_one_hour(): void
+    {
+        $result = SettingsPage::validate(['provider' => 'ollama', 'max_iterations' => '20', 'response_cache_ttl' => '']);
+
+        self::assertSame(3600, $result['data']['response_cache_ttl']);
+    }
+
+    public function test_validate_keeps_the_stored_fallback_key_when_left_blank(): void
+    {
+        \Configuration::reset();
+        \Configuration::updateValue('PHPCLAW_FALLBACK_API_KEY', 'gsk-stored');
+
+        $result = SettingsPage::validate(['provider' => 'ollama', 'max_iterations' => '20', 'fallback_api_key' => '']);
+
+        self::assertSame('gsk-stored', $result['data']['fallback_api_key']);
+        \Configuration::reset();
+    }
+
+    public function test_validate_rejects_a_custom_fallback(): void
+    {
+        $result = SettingsPage::validate(['provider' => 'openai', 'max_iterations' => '20', 'fallback_provider' => 'custom']);
+
+        self::assertArrayHasKey('fallback_provider', $result['errors']);
+    }
+
+    public function test_validate_rejects_a_fallback_with_another_tool_format(): void
+    {
+        $result = SettingsPage::validate(['provider' => 'ollama', 'max_iterations' => '20', 'fallback_provider' => 'anthropic']);
+
+        self::assertSame('Fallback provider must use the same tool format as the primary provider, and cannot be Custom.', $result['errors']['fallback_provider']);
+    }
+
+    public function test_validate_checks_an_empty_primary_against_the_auto_detected_provider(): void
+    {
+        $accepted = $this->withOnlyEnv(['OPENAI_API_KEY' => 'sk-openai'], static fn (): array => SettingsPage::validate(['provider' => '', 'max_iterations' => '20', 'fallback_provider' => 'groq']));
+        $rejected = $this->withOnlyEnv(['OPENAI_API_KEY' => 'sk-openai'], static fn (): array => SettingsPage::validate(['provider' => '', 'max_iterations' => '20', 'fallback_provider' => 'anthropic']));
+
+        self::assertArrayNotHasKey('fallback_provider', $accepted['errors']);
+        self::assertArrayHasKey('fallback_provider', $rejected['errors']);
+    }
+
+    public function test_fallback_providers_match_the_primary_tool_format_and_never_list_custom(): void
+    {
+        $options = SettingsPage::fallbackProviders('ollama');
+
+        self::assertArrayHasKey('', $options);
+        self::assertArrayHasKey('groq', $options);
+        self::assertArrayNotHasKey('anthropic', $options);
+        self::assertArrayNotHasKey('custom', $options);
+    }
+
+    public function test_fallback_script_data_lists_every_provider_except_custom_with_its_tool_format(): void
+    {
+        $data = SettingsPage::fallbackScriptData();
+
+        self::assertSame('Off', $data['offLabel']);
+        self::assertArrayNotHasKey('custom', $data['providers']);
+        self::assertArrayNotHasKey('', $data['providers']);
+        self::assertSame(array_values(array_diff(array_keys(SettingsPage::providers()), ['', 'custom'])), array_keys($data['providers']));
+        self::assertSame('openai', $data['formats']['ollama']);
+        self::assertSame('openai', $data['formats']['groq']);
+        self::assertSame('anthropic', $data['formats']['anthropic']);
+        self::assertSame('openai', $data['formats']['deepseek']);
+        self::assertSame('openai', $data['formats']['custom']);
+    }
+
+    public function test_fallback_script_data_auto_format_follows_the_auto_detected_provider(): void
+    {
+        $openai = $this->withOnlyEnv(['OPENAI_API_KEY' => 'sk-openai'], static fn (): array => SettingsPage::fallbackScriptData());
+        $anthropic = $this->withOnlyEnv(['ANTHROPIC_API_KEY' => 'sk-ant'], static fn (): array => SettingsPage::fallbackScriptData());
+
+        self::assertSame('openai', $openai['autoFormat']);
+        self::assertSame('anthropic', $anthropic['autoFormat']);
+    }
+
+    private function withOnlyEnv(array $values, callable $callback): mixed
+    {
+        $names = ['PHPCLAW_PROVIDER', 'ANTHROPIC_API_KEY', 'OPENAI_API_KEY', 'GROQ_API_KEY', 'GEMINI_API_KEY', 'MISTRAL_API_KEY', 'DEEPSEEK_API_KEY', 'OLLAMA_HOST'];
+        $saved = [];
+
+        foreach ($names as $name) {
+            $saved[$name] = [getenv($name), $_ENV[$name] ?? null, $_SERVER[$name] ?? null];
+            putenv($name);
+            unset($_ENV[$name], $_SERVER[$name]);
+        }
+
+        foreach ($values as $name => $value) {
+            putenv("{$name}={$value}");
+            $_ENV[$name] = $value;
+        }
+
+        try {
+            return $callback();
+        } finally {
+            foreach ($saved as $name => [$env, $envArray, $server]) {
+                $env === false ? putenv($name) : putenv("{$name}={$env}");
+                unset($_ENV[$name], $_SERVER[$name]);
+
+                if ($envArray !== null) {
+                    $_ENV[$name] = $envArray;
+                }
+
+                if ($server !== null) {
+                    $_SERVER[$name] = $server;
+                }
+            }
+        }
     }
 }

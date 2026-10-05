@@ -8,8 +8,10 @@ use PhpClaw\Contracts\ClawInterface;
 use PhpClaw\Exceptions\GuardException;
 use PhpClaw\Exceptions\MaxIterationsException;
 use PhpClaw\Exceptions\ProviderException;
+use PhpClaw\Exceptions\TokenBudgetExceededException;
 use PhpClaw\Hooks\HookRegistry;
 use PhpClaw\Hooks\LifecycleEvent;
+use PhpClaw\PrestaShop\Rest\ApiHandler;
 
 /**
  * Debug panel: handles prompt send and conversation load for the admin playground.
@@ -150,8 +152,12 @@ final class DebugPanel
             ]);
         } catch (GuardException $e) {
             $emit('error', ['message' => 'Prompt blocked by security guard.']);
-        } catch (ProviderException $e) {
-            $emit('error', ['message' => 'AI provider error.']);
+        } catch (ProviderException|TokenBudgetExceededException $e) {
+            $status = ApiHandler::limitStatus($e);
+            if ($status !== null && ! headers_sent()) {
+                http_response_code($status);
+            }
+            $emit('error', ['message' => ApiHandler::limitMessage($e) ?? 'AI provider error.']);
         } catch (MaxIterationsException $e) {
             $emit('error', ['message' => 'Agent reached max iterations.']);
         }

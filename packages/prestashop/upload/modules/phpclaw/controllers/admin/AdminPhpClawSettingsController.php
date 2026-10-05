@@ -77,6 +77,8 @@ final class AdminPhpClawSettingsController extends AdminPhpClawBaseController
         $this->context->smarty->assign([
             'phpclaw_settings' => $current,
             'phpclaw_providers' => SettingsPage::providers(),
+            'phpclaw_fallback_providers' => SettingsPage::fallbackProviders((string) $current['provider']),
+            'phpclaw_fallback_data' => SettingsPage::fallbackScriptData(),
             'phpclaw_cloud_available' => class_exists(CloudManager::class),
             'url_debug' => $this->context->link->getAdminLink('AdminPhpClawDebug'),
             'url_about' => $this->context->link->getAdminLink('AdminPhpClawAbout'),

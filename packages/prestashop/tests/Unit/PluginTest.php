@@ -232,4 +232,30 @@ final class PluginTest extends TestCase
 
         self::assertSame($before, $plugin->saved(), 'buildEngineWithOverrides must be transient and never mutate saved settings.');
     }
+
+    public function test_save_settings_persists_the_agent_primitives_and_a_new_instance_reads_them_back(): void
+    {
+        $primitives = [
+            'fallback_provider' => 'groq',
+            'fallback_model' => 'llama-3.1-8b-instant',
+            'fallback_api_key' => 'gsk-fallback',
+            'rate_limit_rpm' => 30,
+            'response_cache' => '1',
+            'response_cache_ttl' => 600,
+            'max_token_budget' => 50000,
+        ];
+
+        Plugin::getInstance(null, 'ps_')->saveSettings($primitives);
+
+        self::assertSame('groq', \Configuration::get('PHPCLAW_FALLBACK_PROVIDER'));
+        self::assertSame('gsk-fallback', \Configuration::get('PHPCLAW_FALLBACK_API_KEY'));
+        self::assertSame('30', \Configuration::get('PHPCLAW_RATE_LIMIT_RPM'));
+        self::assertSame('50000', \Configuration::get('PHPCLAW_MAX_TOKEN_BUDGET'));
+
+        $ref = new \ReflectionProperty(Plugin::class, 'instance');
+        $ref->setValue(null, null);
+        $saved = (new \ReflectionProperty(Plugin::class, 'saved'))->getValue(Plugin::getInstance(null, 'ps_'));
+
+        self::assertSame(array_map('strval', $primitives), array_intersect_key($saved, $primitives));
+    }
 }
