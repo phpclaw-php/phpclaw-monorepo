@@ -2,7 +2,9 @@
 
 declare(strict_types=1);
 use Joomla\CMS\Application\ConsoleApplication;
+use Joomla\CMS\Cache\Cache;
 use Joomla\CMS\Factory;
+use Joomla\CMS\Form\Form;
 use Joomla\CMS\Installer\InstallerScriptInterface;
 use Joomla\CMS\Language\Text;
 use Joomla\CMS\MVC\Controller\BaseController;
@@ -51,6 +53,14 @@ if (! class_exists(Session::class, false)) {
 
 if (! class_exists(Route::class, false)) {
     require_once __DIR__.'/Support/Stubs/JoomlaApiRouting.php';
+}
+
+if (! class_exists(Cache::class, false)) {
+    require_once __DIR__.'/Support/Stubs/JoomlaCache.php';
+}
+
+if (! class_exists(Form::class, false)) {
+    require_once __DIR__.'/Support/Stubs/JoomlaForm.php';
 }
 
 if (! interface_exists(InstallerScriptInterface::class, false)) {

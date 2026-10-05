@@ -183,4 +183,74 @@ final class PhpClawConfigTest extends TestCase
     {
         $this->assertFalse(PhpClawConfig::isAllowedProviderUrl('ftp://example.com/x'));
     }
+
+    public function test_agent_primitives_are_off_by_default(): void
+    {
+        $config = PhpClawConfig::fromRegistry(new Registry([]));
+
+        $this->assertSame('', $config->fallbackProvider);
+        $this->assertSame('', $config->fallbackModel);
+        $this->assertSame('', $config->fallbackApiKey);
+        $this->assertSame(0, $config->rateLimitRpm);
+        $this->assertFalse($config->responseCache);
+        $this->assertSame(3600, $config->responseCacheTtl);
+        $this->assertSame(0, $config->maxTokenBudget);
+    }
+
+    public function test_agent_primitives_are_read_from_the_plugin_params(): void
+    {
+        $config = PhpClawConfig::fromRegistry(new Registry([
+            'fallback_provider' => 'groq',
+            'fallback_model' => 'llama-3.1-8b-instant',
+            'fallback_api_key' => 'gsk-test',
+            'rate_limit_rpm' => '30',
+            'response_cache' => '1',
+            'response_cache_ttl' => '600',
+            'max_token_budget' => '50000',
+        ]));
+
+        $this->assertSame('groq', $config->fallbackProvider);
+        $this->assertSame('llama-3.1-8b-instant', $config->fallbackModel);
+        $this->assertSame('gsk-test', $config->fallbackApiKey);
+        $this->assertSame(30, $config->rateLimitRpm);
+        $this->assertTrue($config->responseCache);
+        $this->assertSame(600, $config->responseCacheTtl);
+        $this->assertSame(50000, $config->maxTokenBudget);
+    }
+
+    public function test_response_cache_off_value_reads_as_false(): void
+    {
+        $this->assertFalse(PhpClawConfig::fromRegistry(new Registry(['response_cache' => '0']))->responseCache);
+    }
+
+    public function test_values_above_the_limits_are_clamped(): void
+    {
+        $config = PhpClawConfig::fromRegistry(new Registry([
+            'rate_limit_rpm' => '1000',
+            'response_cache_ttl' => '100000',
+            'max_token_budget' => '20000000',
+        ]));
+
+        $this->assertSame(600, $config->rateLimitRpm);
+        $this->assertSame(86400, $config->responseCacheTtl);
+        $this->assertSame(10000000, $config->maxTokenBudget);
+    }
+
+    public function test_values_below_the_limits_are_clamped(): void
+    {
+        $config = PhpClawConfig::fromRegistry(new Registry([
+            'rate_limit_rpm' => '-5',
+            'response_cache_ttl' => '30',
+            'max_token_budget' => '-1',
+        ]));
+
+        $this->assertSame(0, $config->rateLimitRpm);
+        $this->assertSame(60, $config->responseCacheTtl);
+        $this->assertSame(0, $config->maxTokenBudget);
+    }
+
+    public function test_an_empty_cache_ttl_reads_as_one_hour(): void
+    {
+        $this->assertSame(3600, PhpClawConfig::fromRegistry(new Registry(['response_cache_ttl' => '']))->responseCacheTtl);
+    }
 }

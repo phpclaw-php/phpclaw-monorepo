@@ -8,6 +8,8 @@ use Joomla\CMS\Plugin\PluginHelper;
 use Joomla\Registry\Registry;
 use PhpClaw\Agent\CliApprovalGate;
 use PhpClaw\Claw;
+use PhpClaw\ClawBuilder;
+use PhpClaw\ClawConfig;
 use PhpClaw\Memory\MemoryRegistry;
 use PhpClaw\Memory\PrivacyAwareMemory;
 use PhpClaw\Providers\Contracts\ProviderInterface;
@@ -15,6 +17,7 @@ use PhpClaw\Providers\OpenAIPresets;
 use PhpClaw\Providers\OpenAIProvider;
 use PhpClaw\Skills\SkillResolver;
 use PhpClaw\Tools\ToolProfileResolver;
+use PhpClaw\Tools\ToolRegistry;
 
 /**
  * Shared factory to build a PhpClaw engine from Joomla plugin params.
@@ -82,7 +85,44 @@ final class EngineFactory
             $builder->withRemoteSkills($url);
         }
 
+        self::applyAgentPrimitives($builder, $config);
+
         return $builder->build();
+    }
+
+    /**
+     * Apply the fallback provider, outbound rate limit, response cache and token budget; each stays off unless set.
+     *
+     * @param  ClawBuilder  $builder  Builder for the engine being assembled.
+     * @param  PhpClawConfig  $config  Plugin settings, already clamped by PhpClawConfig::fromRegistry().
+     * @return void
+     */
+    private static function applyAgentPrimitives(ClawBuilder $builder, PhpClawConfig $config): void
+    {
+        $primary = $config->provider !== '' ? $config->provider : (new ClawConfig)->providerName;
+        $fallbackCompatible = $config->fallbackProvider !== ''
+            && $config->fallbackProvider !== self::PROVIDER_CUSTOM
+            && ToolRegistry::toolFormat($config->fallbackProvider) === ToolRegistry::toolFormat($primary);
+
+        if ($fallbackCompatible) {
+            $builder->withFallback($config->fallbackProvider, $config->fallbackModel, $config->fallbackApiKey);
+        } elseif ($config->fallbackProvider !== '') {
+            error_log('phpClaw: fallback provider "'.$config->fallbackProvider.'" is custom or uses another tool format than the primary, skipping fallback.');
+        }
+
+        $store = $config->rateLimitRpm > 0 || $config->responseCache ? new JoomlaCache : null;
+
+        if ($store !== null && $config->rateLimitRpm > 0) {
+            $builder->rateLimit($config->rateLimitRpm, store: $store);
+        }
+
+        if ($store !== null && $config->responseCache) {
+            $builder->responseCache($store, $config->responseCacheTtl);
+        }
+
+        if ($config->maxTokenBudget > 0) {
+            $builder->maxTokenBudget($config->maxTokenBudget);
+        }
     }
 
     /**

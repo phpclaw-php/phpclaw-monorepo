@@ -11,6 +11,7 @@ use PhpClaw\Contracts\ClawInterface;
 use PhpClaw\Exceptions\GuardException;
 use PhpClaw\Exceptions\MaxIterationsException;
 use PhpClaw\Exceptions\ProviderException;
+use PhpClaw\Exceptions\TokenBudgetExceededException;
 use PhpClaw\Joomla\Component\Administrator\Console\PhpClawCommand;
 use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
@@ -201,5 +202,42 @@ final class PhpClawCommandTest extends TestCase
 
         self::assertSame(1, $code);
         self::assertStringContainsString('COM_PHPCLAW_CLI_ERROR_GUARD', $output->fetch());
+    }
+
+    public function test_it_reports_the_budget_message_when_the_token_budget_is_reached(): void
+    {
+        $conv = new Conversation(id: '01JQ', history: [], createdAt: new \DateTimeImmutable);
+        $this->agent->method('conversation')->willReturn($conv);
+        $this->agent->method('sendInConversation')->willThrowException(new TokenBudgetExceededException(500, 400));
+
+        [$code, $out] = $this->execute('write a long story');
+
+        self::assertSame(1, $code);
+        self::assertStringContainsString('COM_PHPCLAW_ERROR_BUDGET_EXCEEDED', $out);
+    }
+
+    public function test_it_reports_the_rate_limit_message_on_a_429_provider_exception(): void
+    {
+        $conv = new Conversation(id: '01JQ', history: [], createdAt: new \DateTimeImmutable);
+        $this->agent->method('conversation')->willReturn($conv);
+        $this->agent->method('sendInConversation')->willThrowException(new ProviderException('rate limit wait exceeded', 429));
+
+        [$code, $out] = $this->execute('hi');
+
+        self::assertSame(1, $code);
+        self::assertStringContainsString('COM_PHPCLAW_ERROR_RATE_LIMITED', $out);
+        self::assertStringNotContainsString('COM_PHPCLAW_CLI_ERROR_PROVIDER', $out);
+    }
+
+    public function test_it_keeps_the_provider_message_on_a_non_429_provider_exception(): void
+    {
+        $conv = new Conversation(id: '01JQ', history: [], createdAt: new \DateTimeImmutable);
+        $this->agent->method('conversation')->willReturn($conv);
+        $this->agent->method('sendInConversation')->willThrowException(new ProviderException('upstream failed', 500));
+
+        [$code, $out] = $this->execute('hi');
+
+        self::assertSame(1, $code);
+        self::assertStringContainsString('COM_PHPCLAW_CLI_ERROR_PROVIDER', $out);
     }
 }

@@ -8,6 +8,8 @@ use Joomla\CMS\Factory;
 use Joomla\CMS\Language\Text;
 use Joomla\CMS\MVC\Controller\BaseController;
 use PhpClaw\Exceptions\GuardException;
+use PhpClaw\Exceptions\ProviderException;
+use PhpClaw\Exceptions\TokenBudgetExceededException;
 use PhpClaw\Joomla\Component\Administrator\Admin\DebugPanel;
 use PhpClaw\Joomla\Component\Administrator\Engine\EngineFactory;
 use PhpClaw\Joomla\Component\Administrator\Exceptions\ConversationAccessDeniedException;
@@ -30,6 +32,10 @@ final class ChatController extends BaseController
     private const STATUS_BAD_REQUEST = 400;
 
     private const STATUS_FORBIDDEN = 403;
+
+    private const STATUS_UNPROCESSABLE = 422;
+
+    private const STATUS_TOO_MANY_REQUESTS = 429;
 
     private const STATUS_SERVER_ERROR = 500;
 
@@ -61,14 +67,9 @@ final class ChatController extends BaseController
             $result = $this->buildDebugPanel()->send($message, $this->requestString('conversation_id'));
 
             $this->emitJson(true, $result);
-        } catch (ConversationAccessDeniedException) {
-            $this->emitJson(false, ['message' => Text::_('JERROR_ALERTNOAUTHOR')], self::STATUS_FORBIDDEN);
-        } catch (GuardException $e) {
-            error_log('phpClaw guard blocked: '.$e->getMessage());
-            $this->emitJson(false, ['message' => Text::_('COM_PHPCLAW_ERROR_GUARD_BLOCKED')], self::STATUS_BAD_REQUEST);
         } catch (\Throwable $e) {
-            error_log('phpClaw chat error: '.$e->getMessage());
-            $this->emitJson(false, ['message' => Text::_('COM_PHPCLAW_ERROR_INTERNAL')], self::STATUS_SERVER_ERROR);
+            [$errorMessage, $status] = $this->chatError($e);
+            $this->emitJson(false, ['message' => $errorMessage], $status);
         }
     }
 
@@ -108,17 +109,60 @@ final class ChatController extends BaseController
 
         try {
             $this->buildDebugPanel()->stream($message, $conversationId, $emit);
-        } catch (ConversationAccessDeniedException) {
-            $emit('error', ['message' => Text::_('JERROR_ALERTNOAUTHOR')]);
-        } catch (GuardException $e) {
-            error_log('phpClaw stream guard: '.$e->getMessage());
-            $emit('error', ['message' => Text::_('COM_PHPCLAW_ERROR_GUARD_BLOCKED')]);
         } catch (\Throwable $e) {
-            error_log('phpClaw stream error: '.$e->getMessage());
-            $emit('error', ['message' => Text::_('COM_PHPCLAW_ERROR_INTERNAL')]);
+            [$message, $status] = $this->streamFailure($e);
+            if ($status !== null && ! headers_sent()) {
+                http_response_code($status);
+            }
+            $emit('error', ['message' => $message]);
         }
 
         Factory::getApplication()->close();
+    }
+
+    /**
+     * Message and HTTP status for a failed stream: a spent token budget sends 422 and a provider rate limit 429, other
+     * failures keep the stream's 200 and only emit the error event.
+     *
+     * @param  \Throwable  $e  The failure raised while streaming.
+     * @return array{0: string, 1: int|null}
+     */
+    private function streamFailure(\Throwable $e): array
+    {
+        [$message, $status] = $this->chatError($e);
+
+        return [$message, in_array($status, [self::STATUS_UNPROCESSABLE, self::STATUS_TOO_MANY_REQUESTS], true) ? $status : null];
+    }
+
+    /**
+     * Map an agent-turn failure to its user-facing message and HTTP status, logging guard blocks and internal errors.
+     *
+     * @param  \Throwable  $e  The failure raised while running the turn.
+     * @return array{0: string, 1: int} The localised message and the status for a JSON answer.
+     */
+    private function chatError(\Throwable $e): array
+    {
+        if ($e instanceof ConversationAccessDeniedException) {
+            return [Text::_('JERROR_ALERTNOAUTHOR'), self::STATUS_FORBIDDEN];
+        }
+
+        if ($e instanceof GuardException) {
+            error_log('phpClaw guard blocked: '.$e->getMessage());
+
+            return [Text::_('COM_PHPCLAW_ERROR_GUARD_BLOCKED'), self::STATUS_BAD_REQUEST];
+        }
+
+        if ($e instanceof TokenBudgetExceededException) {
+            return [Text::_('COM_PHPCLAW_ERROR_BUDGET_EXCEEDED'), self::STATUS_UNPROCESSABLE];
+        }
+
+        if ($e instanceof ProviderException && $e->statusCode === self::STATUS_TOO_MANY_REQUESTS) {
+            return [Text::_('COM_PHPCLAW_ERROR_RATE_LIMITED'), self::STATUS_TOO_MANY_REQUESTS];
+        }
+
+        error_log('phpClaw chat error: '.$e->getMessage());
+
+        return [Text::_('COM_PHPCLAW_ERROR_INTERNAL'), self::STATUS_SERVER_ERROR];
     }
 
     /**

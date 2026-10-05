@@ -13,6 +13,16 @@ use PhpClaw\Config\ToolConfig;
  */
 final class PhpClawConfig
 {
+    private const MAX_RATE_LIMIT_RPM = 600;
+
+    private const DEFAULT_RESPONSE_CACHE_TTL = 3600;
+
+    private const MIN_RESPONSE_CACHE_TTL = 60;
+
+    private const MAX_RESPONSE_CACHE_TTL = 86400;
+
+    private const MAX_TOKEN_BUDGET = 10_000_000;
+
     /**
      * Create a new PhpClawConfig instance.
      *
@@ -32,6 +42,13 @@ final class PhpClawConfig
      * @param  string  $hooks  JSON-encoded hook config list
      * @param  string  $skills  JSON-encoded inline skill config list
      * @param  string[]  $toolDeny  Tool names or group references to exclude from the registry (developer-only, no Settings-page field)
+     * @param  string  $fallbackProvider  Provider slug tried when the primary fails; empty turns fallback off
+     * @param  string  $fallbackModel  Fallback provider model (empty = the provider's default)
+     * @param  string  $fallbackApiKey  Fallback provider API key (empty = the provider's env key)
+     * @param  int  $rateLimitRpm  Outbound requests per minute, 0-600; 0 turns the limit off
+     * @param  bool  $responseCache  Whether identical requests are answered from the cache
+     * @param  int  $responseCacheTtl  Response cache lifetime in seconds, 60-86400
+     * @param  int  $maxTokenBudget  Token spend ceiling per run, 0-10000000; 0 turns the budget off
      */
     public function __construct(
         public readonly string $provider = '',
@@ -50,6 +67,13 @@ final class PhpClawConfig
         public readonly string $hooks = '[]',
         public readonly string $skills = '[]',
         public readonly array $toolDeny = [],
+        public readonly string $fallbackProvider = '',
+        public readonly string $fallbackModel = '',
+        public readonly string $fallbackApiKey = '',
+        public readonly int $rateLimitRpm = 0,
+        public readonly bool $responseCache = false,
+        public readonly int $responseCacheTtl = self::DEFAULT_RESPONSE_CACHE_TTL,
+        public readonly int $maxTokenBudget = 0,
     ) {}
 
     /**
@@ -87,6 +111,8 @@ final class PhpClawConfig
             ));
 
         $baseUrl = (string) $params->get('base_url', '');
+        $rawTtl = $params->get('response_cache_ttl', '');
+        $ttl = $rawTtl === '' || $rawTtl === null ? self::DEFAULT_RESPONSE_CACHE_TTL : (int) $rawTtl;
 
         return new self(
             provider: (string) $params->get('provider', ''),
@@ -105,6 +131,13 @@ final class PhpClawConfig
             hooks: (string) $params->get('hooks', '[]'),
             skills: (string) $params->get('skills', '[]'),
             toolDeny: $toolDeny,
+            fallbackProvider: (string) $params->get('fallback_provider', ''),
+            fallbackModel: (string) $params->get('fallback_model', ''),
+            fallbackApiKey: (string) $params->get('fallback_api_key', ''),
+            rateLimitRpm: max(0, min(self::MAX_RATE_LIMIT_RPM, (int) $params->get('rate_limit_rpm', 0))),
+            responseCache: (string) $params->get('response_cache', '0') === '1',
+            responseCacheTtl: max(self::MIN_RESPONSE_CACHE_TTL, min(self::MAX_RESPONSE_CACHE_TTL, $ttl)),
+            maxTokenBudget: max(0, min(self::MAX_TOKEN_BUDGET, (int) $params->get('max_token_budget', 0))),
         );
     }
 

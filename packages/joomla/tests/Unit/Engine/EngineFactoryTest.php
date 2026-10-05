@@ -4,9 +4,13 @@ declare(strict_types=1);
 
 namespace PhpClaw\Joomla\Tests\Unit\Engine;
 
+use Joomla\CMS\Factory;
 use Joomla\Registry\Registry;
+use PhpClaw\Claw;
+use PhpClaw\ClawConfig;
 use PhpClaw\Joomla\Component\Administrator\Engine\EngineBootstrapper;
 use PhpClaw\Joomla\Component\Administrator\Engine\EngineFactory;
+use PhpClaw\Joomla\Component\Administrator\Engine\JoomlaCache;
 use PhpClaw\Joomla\Component\Administrator\Engine\PhpClawConfig;
 use PhpClaw\Joomla\Component\Administrator\Engine\ToolBuilder;
 use PhpClaw\Providers\Contracts\ProviderInterface;
@@ -314,6 +318,135 @@ final class EngineFactoryTest extends TestCase
                 return '';
             }
         };
+    }
+
+    public function test_agent_primitives_stay_off_by_default(): void
+    {
+        $config = $this->configAfterPrimitives(new PhpClawConfig(provider: 'ollama'));
+
+        $this->assertSame([], $config->fallbacks);
+        $this->assertSame(0, $config->requestsPerMinute);
+        $this->assertNull($config->rateLimitStore);
+        $this->assertNull($config->responseCache);
+        $this->assertSame(0, $config->maxTokenBudget);
+    }
+
+    public function test_a_fallback_with_the_primary_tool_format_is_applied(): void
+    {
+        $config = $this->configAfterPrimitives(new PhpClawConfig(
+            provider: 'ollama',
+            fallbackProvider: 'groq',
+            fallbackModel: 'llama-3.1-8b-instant',
+            fallbackApiKey: 'gsk-key',
+        ));
+
+        $this->assertSame([['provider' => 'groq', 'model' => 'llama-3.1-8b-instant', 'apiKey' => 'gsk-key']], $config->fallbacks);
+    }
+
+    public function test_a_fallback_with_another_tool_format_is_skipped(): void
+    {
+        $config = $this->configAfterPrimitives(new PhpClawConfig(provider: 'ollama', fallbackProvider: 'anthropic', fallbackApiKey: 'sk-ant'));
+
+        $this->assertSame([], $config->fallbacks);
+    }
+
+    public function test_a_custom_fallback_is_skipped(): void
+    {
+        $config = $this->configAfterPrimitives(new PhpClawConfig(provider: 'openai', apiKey: 'sk', fallbackProvider: 'custom'));
+
+        $this->assertSame([], $config->fallbacks);
+    }
+
+    public function test_an_empty_primary_resolves_to_the_auto_detected_provider(): void
+    {
+        $applied = $this->withOnlyEnv(['OPENAI_API_KEY' => 'sk-openai'], fn (): ClawConfig => $this->configAfterPrimitives(
+            new PhpClawConfig(fallbackProvider: 'groq', fallbackApiKey: 'gsk-key'),
+        ));
+        $skipped = $this->withOnlyEnv(['OPENAI_API_KEY' => 'sk-openai'], fn (): ClawConfig => $this->configAfterPrimitives(
+            new PhpClawConfig(fallbackProvider: 'anthropic', fallbackApiKey: 'sk-ant'),
+        ));
+
+        $this->assertSame('openai', $applied->providerName);
+        $this->assertSame([['provider' => 'groq', 'model' => '', 'apiKey' => 'gsk-key']], $applied->fallbacks);
+        $this->assertSame([], $skipped->fallbacks);
+    }
+
+    public function test_the_rate_limit_uses_the_joomla_cache_store(): void
+    {
+        $config = $this->configAfterPrimitives(new PhpClawConfig(provider: 'ollama', rateLimitRpm: 30));
+
+        $this->assertSame(30, $config->requestsPerMinute);
+        $this->assertInstanceOf(JoomlaCache::class, $config->rateLimitStore);
+    }
+
+    public function test_the_response_cache_uses_the_joomla_cache_store_and_ttl(): void
+    {
+        $config = $this->configAfterPrimitives(new PhpClawConfig(provider: 'ollama', responseCache: true, responseCacheTtl: 600));
+
+        $this->assertInstanceOf(JoomlaCache::class, $config->responseCache);
+        $this->assertSame(600, $config->responseCacheTtl);
+    }
+
+    public function test_the_token_budget_is_applied(): void
+    {
+        $config = $this->configAfterPrimitives(new PhpClawConfig(provider: 'ollama', maxTokenBudget: 5000));
+
+        $this->assertSame(5000, $config->maxTokenBudget);
+    }
+
+    private function configAfterPrimitives(PhpClawConfig $config): ClawConfig
+    {
+        Factory::$application = new class
+        {
+            public function get(string $key, mixed $default = null): mixed
+            {
+                return $default;
+            }
+        };
+
+        $builder = Claw::builder()->provider($config->provider)->model('qwen2.5:7b')->apiKey('test-key');
+        $method = new \ReflectionMethod(EngineFactory::class, 'applyAgentPrimitives');
+        $method->invoke(null, $builder, $config);
+
+        try {
+            return $builder->build()->config();
+        } finally {
+            Factory::$application = null;
+        }
+    }
+
+    private function withOnlyEnv(array $values, callable $callback): mixed
+    {
+        $names = ['PHPCLAW_PROVIDER', 'ANTHROPIC_API_KEY', 'OPENAI_API_KEY', 'GROQ_API_KEY', 'GEMINI_API_KEY', 'MISTRAL_API_KEY', 'DEEPSEEK_API_KEY', 'OLLAMA_HOST'];
+        $saved = [];
+
+        foreach ($names as $name) {
+            $saved[$name] = [getenv($name), $_ENV[$name] ?? null, $_SERVER[$name] ?? null];
+            putenv($name);
+            unset($_ENV[$name], $_SERVER[$name]);
+        }
+
+        foreach ($values as $name => $value) {
+            putenv("{$name}={$value}");
+            $_ENV[$name] = $value;
+        }
+
+        try {
+            return $callback();
+        } finally {
+            foreach ($saved as $name => [$env, $envArray, $server]) {
+                $env === false ? putenv($name) : putenv("{$name}={$env}");
+                unset($_ENV[$name], $_SERVER[$name]);
+
+                if ($envArray !== null) {
+                    $_ENV[$name] = $envArray;
+                }
+
+                if ($server !== null) {
+                    $_SERVER[$name] = $server;
+                }
+            }
+        }
     }
 
     private function invokeCustomProviderOverride(PhpClawConfig $config): ?ProviderInterface

@@ -12,6 +12,7 @@ use PhpClaw\Contracts\ClawInterface;
 use PhpClaw\Exceptions\GuardException;
 use PhpClaw\Exceptions\MaxIterationsException;
 use PhpClaw\Exceptions\ProviderException;
+use PhpClaw\Exceptions\TokenBudgetExceededException;
 use Symfony\Component\Console\Input\InputArgument;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputOption;
@@ -25,6 +26,8 @@ final class PhpClawCommand extends AbstractCommand
     private const EXIT_SUCCESS = 0;
 
     private const EXIT_ERROR = 1;
+
+    private const HTTP_TOO_MANY_REQUESTS = 429;
 
     protected static $defaultName = 'phpclaw';
 
@@ -161,8 +164,10 @@ final class PhpClawCommand extends AbstractCommand
             return self::EXIT_SUCCESS;
         } catch (GuardException $e) {
             return $this->reportError($output, $e, 'COM_PHPCLAW_CLI_ERROR_GUARD');
+        } catch (TokenBudgetExceededException $e) {
+            return $this->reportError($output, $e, 'COM_PHPCLAW_ERROR_BUDGET_EXCEEDED');
         } catch (ProviderException $e) {
-            return $this->reportError($output, $e, 'COM_PHPCLAW_CLI_ERROR_PROVIDER');
+            return $this->reportError($output, $e, $e->statusCode === self::HTTP_TOO_MANY_REQUESTS ? 'COM_PHPCLAW_ERROR_RATE_LIMITED' : 'COM_PHPCLAW_CLI_ERROR_PROVIDER');
         } catch (MaxIterationsException $e) {
             return $this->reportError($output, $e, 'COM_PHPCLAW_CLI_ERROR_MAX_ITER');
         }

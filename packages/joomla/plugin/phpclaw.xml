@@ -105,6 +105,69 @@
                        hint="https://example.com/skills.json"/>
             </fieldset>
 
+            <fieldset name="limits" label="PLG_SYSTEM_PHPCLAW_FIELDSET_LIMITS">
+                <field name="fallback_provider"
+                       type="providers"
+                       exclude="custom"
+                       follow="provider"
+                       label="PLG_SYSTEM_PHPCLAW_FIELD_FALLBACK_PROVIDER_LABEL"
+                       description="PLG_SYSTEM_PHPCLAW_FIELD_FALLBACK_PROVIDER_DESC"
+                       default=""/>
+
+                <field name="fallback_model"
+                       type="text"
+                       label="PLG_SYSTEM_PHPCLAW_FIELD_FALLBACK_MODEL_LABEL"
+                       description="PLG_SYSTEM_PHPCLAW_FIELD_FALLBACK_MODEL_DESC"
+                       default=""
+                       size="40"/>
+
+                <field name="fallback_api_key"
+                       type="textarea"
+                       label="PLG_SYSTEM_PHPCLAW_FIELD_FALLBACK_API_KEY_LABEL"
+                       description="PLG_SYSTEM_PHPCLAW_FIELD_FALLBACK_API_KEY_DESC"
+                       default=""
+                       rows="2"
+                       cols="60"
+                       autocomplete="off"
+                       filter="raw"
+                       showon="fallback_provider!:ollama[AND]fallback_provider!:"/>
+
+                <field name="rate_limit_rpm"
+                       type="number"
+                       label="PLG_SYSTEM_PHPCLAW_FIELD_RATE_LIMIT_RPM_LABEL"
+                       description="PLG_SYSTEM_PHPCLAW_FIELD_RATE_LIMIT_RPM_DESC"
+                       default="0"
+                       min="0"
+                       max="600"/>
+
+                <field name="response_cache"
+                       type="radio"
+                       label="PLG_SYSTEM_PHPCLAW_FIELD_RESPONSE_CACHE_LABEL"
+                       description="PLG_SYSTEM_PHPCLAW_FIELD_RESPONSE_CACHE_DESC"
+                       default="0"
+                       class="btn-group">
+                    <option value="0">JNO</option>
+                    <option value="1">JYES</option>
+                </field>
+
+                <field name="response_cache_ttl"
+                       type="number"
+                       label="PLG_SYSTEM_PHPCLAW_FIELD_RESPONSE_CACHE_TTL_LABEL"
+                       description="PLG_SYSTEM_PHPCLAW_FIELD_RESPONSE_CACHE_TTL_DESC"
+                       default="3600"
+                       min="60"
+                       max="86400"
+                       showon="response_cache:1"/>
+
+                <field name="max_token_budget"
+                       type="number"
+                       label="PLG_SYSTEM_PHPCLAW_FIELD_MAX_TOKEN_BUDGET_LABEL"
+                       description="PLG_SYSTEM_PHPCLAW_FIELD_MAX_TOKEN_BUDGET_DESC"
+                       default="0"
+                       min="0"
+                       max="10000000"/>
+            </fieldset>
+
             <fieldset name="cloud" label="PLG_SYSTEM_PHPCLAW_FIELDSET_CLOUD">
                 <field name="cloud_inactive_note"
                        type="note"

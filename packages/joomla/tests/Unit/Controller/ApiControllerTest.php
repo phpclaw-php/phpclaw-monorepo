@@ -8,6 +8,9 @@ use Joomla\CMS\Factory;
 use Joomla\CMS\Session\Session;
 use Joomla\Database\DatabaseInterface;
 use Joomla\Database\DatabaseQuery;
+use PhpClaw\Exceptions\GuardException;
+use PhpClaw\Exceptions\ProviderException;
+use PhpClaw\Exceptions\TokenBudgetExceededException;
 use PhpClaw\Joomla\Component\Administrator\Controller\ApiController;
 use PhpClaw\Joomla\Component\Administrator\Exceptions\ConversationAccessDeniedException;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -454,5 +457,36 @@ final class ApiControllerTest extends TestCase
                 ob_start();
             }
         }
+    }
+
+    public static function chatErrors(): iterable
+    {
+        yield 'another user conversation' => [new ConversationAccessDeniedException('not yours'), 'JERROR_ALERTNOAUTHOR', 403];
+        yield 'guard block' => [new GuardException('blocked'), 'COM_PHPCLAW_ERROR_GUARD_BLOCKED', 400];
+        yield 'token budget' => [new TokenBudgetExceededException(500, 400), 'COM_PHPCLAW_ERROR_BUDGET_EXCEEDED', 422];
+        yield 'rate limited' => [new ProviderException('rate limit wait exceeded', 429), 'COM_PHPCLAW_ERROR_RATE_LIMITED', 429];
+        yield 'other provider error' => [new ProviderException('upstream failed', 500), 'COM_PHPCLAW_ERROR_INTERNAL', 500];
+        yield 'anything else' => [new \RuntimeException('secret internal detail'), 'COM_PHPCLAW_ERROR_INTERNAL', 500];
+    }
+
+    #[DataProvider('chatErrors')]
+    public function test_a_chat_failure_maps_to_its_message_and_status(\Throwable $error, string $message, int $status): void
+    {
+        self::assertSame([$message, $status], $this->invoke('chatError', $error));
+    }
+
+    public static function streamFailures(): iterable
+    {
+        yield 'token budget' => [new TokenBudgetExceededException(500, 400), 'COM_PHPCLAW_ERROR_BUDGET_EXCEEDED', 422];
+        yield 'rate limited' => [new ProviderException('rate limit wait exceeded', 429), 'COM_PHPCLAW_ERROR_RATE_LIMITED', 429];
+        yield 'guard block' => [new GuardException('blocked'), 'COM_PHPCLAW_ERROR_GUARD_BLOCKED', null];
+        yield 'other provider error' => [new ProviderException('upstream failed', 500), 'COM_PHPCLAW_ERROR_INTERNAL', null];
+        yield 'anything else' => [new \RuntimeException('secret internal detail'), 'COM_PHPCLAW_ERROR_INTERNAL', null];
+    }
+
+    #[DataProvider('streamFailures')]
+    public function test_a_stream_failure_sets_a_status_only_for_a_spent_budget_or_a_rate_limit(\Throwable $error, string $message, ?int $status): void
+    {
+        self::assertSame([$message, $status], $this->invoke('streamFailure', $error));
     }
 }
