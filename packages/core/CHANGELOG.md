@@ -5,6 +5,16 @@ DeepSeek, Ollama or any OpenAI-compatible endpoint, runs tools in a ReAct loop, 
 through guards, remembers conversations, and powers every phpClaw adapter. Zero framework
 dependencies, PHP 8.1 and later.
 
+## 0.1.3 (2026-10-07)
+
+### Added
+- Add agent primitives: prompt templates, structured output, fallback, rate limit, response cache, token budget (#52)
+- Memory search and configurable memory recall (#80)
+- Durable runs, pause-for-approval and run resumption (#82)
+
+### Fixed
+- OpenAI tool format for deepseek and custom, stable provider order (#62)
+
 ## 0.1.2 (2026-09-29)
 
 ### Added
