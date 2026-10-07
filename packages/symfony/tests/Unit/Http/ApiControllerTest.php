@@ -13,6 +13,7 @@ use PhpClaw\Exceptions\ProviderException;
 use PhpClaw\Exceptions\TokenBudgetExceededException;
 use PhpClaw\Hooks\LifecycleEvent;
 use PhpClaw\Symfony\Http\ApiController;
+use PhpClaw\Symfony\Http\RunsController;
 use PhpClaw\Symfony\Http\StreamEventBridge;
 use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
@@ -217,7 +218,7 @@ final class ApiControllerTest extends TestCase
         self::assertSame(['send', 'stream'], $actions);
     }
 
-    public function test_routes_declare_only_the_two_shipped_endpoints(): void
+    public function test_routes_declare_only_the_five_shipped_endpoints(): void
     {
         $configDir = dirname(__DIR__, 3).'/config';
         $loader = new YamlFileLoader(new FileLocator($configDir));
@@ -241,6 +242,21 @@ final class ApiControllerTest extends TestCase
             'phpclaw_chat_stream' => [
                 'path' => '/phpclaw/chat/stream',
                 'controller' => ApiController::class.'::stream',
+                'methods' => ['POST'],
+            ],
+            'phpclaw_runs' => [
+                'path' => '/phpclaw/runs',
+                'controller' => RunsController::class.'::index',
+                'methods' => ['GET'],
+            ],
+            'phpclaw_runs_approve' => [
+                'path' => '/phpclaw/runs/{runId}/approve',
+                'controller' => RunsController::class.'::approve',
+                'methods' => ['POST'],
+            ],
+            'phpclaw_runs_deny' => [
+                'path' => '/phpclaw/runs/{runId}/deny',
+                'controller' => RunsController::class.'::deny',
                 'methods' => ['POST'],
             ],
         ], $declared);

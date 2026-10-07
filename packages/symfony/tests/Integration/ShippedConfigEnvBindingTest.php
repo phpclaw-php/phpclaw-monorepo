@@ -30,6 +30,9 @@ final class ShippedConfigEnvBindingTest extends TestCase
         'PHPCLAW_RESPONSE_CACHE' => ['response_cache', 'true', false],
         'PHPCLAW_RESPONSE_CACHE_TTL' => ['response_cache_ttl', '120', 3600],
         'PHPCLAW_MAX_TOKEN_BUDGET' => ['max_token_budget', '5000', 0],
+        'PHPCLAW_DURABLE_RUNS' => ['durable_runs', 'true', false],
+        'PHPCLAW_DURABLE_STEP_BUDGET' => ['durable_step_budget', '2', 0],
+        'PHPCLAW_DURABLE_DEADLINE_SECONDS' => ['durable_deadline_seconds', '45', null],
     ];
 
     private const EXPECTED_WHEN_SET = [
@@ -52,6 +55,9 @@ final class ShippedConfigEnvBindingTest extends TestCase
         'response_cache' => true,
         'response_cache_ttl' => 120,
         'max_token_budget' => 5000,
+        'durable_runs' => true,
+        'durable_step_budget' => 2,
+        'durable_deadline_seconds' => 45,
     ];
 
     #[RunInSeparateProcess]

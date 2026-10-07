@@ -4,12 +4,15 @@ declare(strict_types=1);
 
 namespace PhpClaw\Symfony\Command;
 
+use PhpClaw\Agent\RunStatus;
 use PhpClaw\Contracts\ClawInterface as PhpClawInterface;
 use PhpClaw\Exceptions\GuardException;
 use PhpClaw\Exceptions\MaxIterationsException;
 use PhpClaw\Exceptions\ProviderException;
+use PhpClaw\Exceptions\RunSuspendedException;
 use PhpClaw\Exceptions\TokenBudgetExceededException;
 use PhpClaw\Exceptions\ToolException;
+use PhpClaw\Symfony\PhpClawFactory;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputArgument;
@@ -17,6 +20,7 @@ use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Console\Style\SymfonyStyle;
+use Symfony\Component\DependencyInjection\Attribute\Autowire;
 
 /**
  * Console command that sends a message to the phpClaw AI agent and prints the response.
@@ -30,9 +34,10 @@ final class PhpClawCommand extends Command
     /**
      * Constructs the command with the resolved phpClaw engine.
      *
-     * @param  PhpClawInterface  $phpClaw  The resolved phpClaw engine instance.
+     * @param  PhpClawInterface  $phpClaw  The terminal engine, which keeps the Y/n prompt.
      */
     public function __construct(
+        #[Autowire(service: PhpClawFactory::TERMINAL_ENGINE)]
         private readonly PhpClawInterface $phpClaw,
     ) {
         parent::__construct();
@@ -100,6 +105,8 @@ final class PhpClawCommand extends Command
             ));
 
             return Command::SUCCESS;
+        } catch (RunSuspendedException $e) {
+            return $this->reportStoppedRun($io, $e);
         } catch (GuardException $e) {
             $io->error('Blocked: '.$e->getMessage());
 
@@ -127,5 +134,22 @@ final class PhpClawCommand extends Command
 
             return Command::FAILURE;
         }
+    }
+
+    /**
+     * Name the run that stopped and the command that finishes it.
+     *
+     * @param  SymfonyStyle  $io  Console style.
+     * @param  RunSuspendedException  $e  The pause.
+     * @return int Command exit code.
+     */
+    private function reportStoppedRun(SymfonyStyle $io, RunSuspendedException $e): int
+    {
+        $io->warning(sprintf('Run %s stopped: %s. Next: %s', $e->runId, $e->status->value, match ($e->status) {
+            RunStatus::Suspended => "bin/console phpclaw:runs resume {$e->runId}",
+            default => 'bin/console phpclaw:runs list, then approve or deny the paused call',
+        }));
+
+        return Command::SUCCESS;
     }
 }

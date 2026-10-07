@@ -344,12 +344,17 @@ final class GuideCommand extends Command
         $io->writeln('                                      {text,tool_calls,provider,model,iterations,tokens,conversation_id}');
         $io->writeln('  POST /phpclaw/chat/stream         : SSE stream, events');
         $io->writeln('                                      tool_before / tool_after / chunk / done / error');
+        $io->writeln('With PHPCLAW_DURABLE_RUNS on, a paused run answers 202 (stream: approval_required or');
+        $io->writeln('run_suspended), and three more routes decide it as its owner or a manage-all user:');
+        $io->writeln('  GET  /phpclaw/runs                : runs waiting for your decision');
+        $io->writeln('  POST /phpclaw/runs/{runId}/approve: body call_id, then the finished run');
+        $io->writeln('  POST /phpclaw/runs/{runId}/deny   : body call_id and reason, then the finished run');
         $io->newLine();
         $io->writeln('Authentication: your application\'s own security firewall. A request must resolve');
         $io->writeln('to a logged-in user, or it is refused with 401 Unauthenticated. phpClaw issues no');
         $io->writeln('token of its own.');
         $io->newLine();
-        $io->writeln('TokenAuthListener guards both routes, in order:');
+        $io->writeln('TokenAuthListener guards every route, in order:');
         $io->writeln('  api.enabled false      : 403 on every REST route');
         $io->writeln('  rate limit             : 429 past 60 requests per 60s window (fixed, per client IP)');
         $io->writeln('  unauthenticated caller : 401');
@@ -378,6 +383,7 @@ final class GuideCommand extends Command
         $io->writeln('  phpclaw:mcp-server [--transport]  : start the MCP server, stdio (default) or http');
         $io->writeln('  phpclaw:jobs:list                 : list stored queue job results');
         $io->writeln('  phpclaw:jobs:status {jobId}       : show a queued job\'s status and result');
+        $io->writeln('  phpclaw:runs {action}             : durable runs: list, approve, deny, resume, resume-due (cron)');
     }
 
     /**
@@ -443,6 +449,9 @@ final class GuideCommand extends Command
         $io->writeln('  PHPCLAW_RESPONSE_CACHE    : cache provider responses on the cache.app pool (default: false)');
         $io->writeln('  PHPCLAW_RESPONSE_CACHE_TTL: response cache lifetime in seconds (default: 3600)');
         $io->writeln('  PHPCLAW_MAX_TOKEN_BUDGET  : total token spend ceiling per run, 0 disables (default: 0)');
+        $io->writeln('  PHPCLAW_DURABLE_RUNS      : save runs after each step; web runs pause for approval (default: false)');
+        $io->writeln('  PHPCLAW_DURABLE_STEP_BUDGET: steps per process before a run is suspended, 0 = no limit (default: 0)');
+        $io->writeln('  PHPCLAW_DURABLE_DEADLINE_SECONDS: seconds per process; blank = half of max_execution_time');
         $io->newLine();
         $io->writeln('tool_deny has no env var: Symfony cannot feed one into a list. Set it in phpclaw.yaml.');
     }

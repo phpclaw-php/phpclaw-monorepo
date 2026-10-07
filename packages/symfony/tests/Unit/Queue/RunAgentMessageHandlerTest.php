@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace PhpClaw\Symfony\Tests\Unit\Queue;
 
 use PhpClaw\Agent\AgentResponse;
+use PhpClaw\Agent\RunStatus;
 use PhpClaw\Contracts\ClawInterface;
+use PhpClaw\Exceptions\RunSuspendedException;
 use PhpClaw\Memory\ArrayMemory;
 use PhpClaw\Symfony\Queue\RunAgentMessage;
 use PhpClaw\Symfony\Queue\RunAgentMessageHandler;
@@ -143,5 +145,20 @@ final class RunAgentMessageHandlerTest extends TestCase
         } finally {
             self::assertSame('failed', $this->memory->get('job_4', RunAgentMessage::NAMESPACE)['status']);
         }
+    }
+
+    public function test_a_run_that_pauses_is_stored_suspended_and_not_retried(): void
+    {
+        $agent = $this->createMock(ClawInterface::class);
+        $agent->method('send')->willThrowException(new RunSuspendedException('01RUNPAUSED000000000000000', RunStatus::AwaitingApproval));
+        $handler = new RunAgentMessageHandler($agent, $this->memory);
+
+        $handler(new RunAgentMessage('job_9', 'refund order 7', userId: 'alice'));
+
+        $stored = $this->memory->get('job_9', RunAgentMessage::NAMESPACE);
+        self::assertSame('suspended', $stored['status']);
+        self::assertSame('01RUNPAUSED000000000000000', $stored['run_id']);
+        self::assertSame('awaiting_approval', $stored['run_status']);
+        self::assertSame('alice', $stored[RunAgentMessage::OWNER_KEY]);
     }
 }

@@ -7,10 +7,12 @@ namespace PhpClaw\Symfony\Tests\Unit\Command;
 use PhpClaw\Agent\AgentResponse;
 use PhpClaw\Agent\Conversation;
 use PhpClaw\Agent\ConversationTurn;
+use PhpClaw\Agent\RunStatus;
 use PhpClaw\Contracts\ClawInterface as PhpClawInterface;
 use PhpClaw\Exceptions\GuardException;
 use PhpClaw\Exceptions\MaxIterationsException;
 use PhpClaw\Exceptions\ProviderException;
+use PhpClaw\Exceptions\RunSuspendedException;
 use PhpClaw\Exceptions\TokenBudgetExceededException;
 use PhpClaw\Symfony\Command\PhpClawCommand;
 use PHPUnit\Framework\MockObject\MockObject;
@@ -205,5 +207,31 @@ final class PhpClawCommandTest extends TestCase
 
         $this->assertSame(0, $exitCode);
         $this->assertStringContainsString('?', $this->tester->getDisplay());
+    }
+
+    public function test_a_run_that_spends_its_budget_names_the_run_and_the_command_that_finishes_it(): void
+    {
+        $this->phpClaw->method('sendInConversation')
+            ->willThrowException(new RunSuspendedException('01M48WBW23FP47FCWFBXN67JK4', RunStatus::Suspended));
+
+        $this->tester->execute(['message' => 'two tools']);
+
+        self::assertSame(0, $this->tester->getStatusCode());
+        $display = preg_replace('/\s+/', ' ', $this->tester->getDisplay());
+        self::assertStringContainsString('Run 01M48WBW23FP47FCWFBXN67JK4 stopped: suspended.', $display);
+        self::assertStringContainsString('bin/console phpclaw:runs resume 01M48WBW23FP47FCWFBXN67JK4', $display);
+        self::assertStringNotContainsString('internal error', $display);
+    }
+
+    public function test_a_run_paused_for_approval_points_to_the_runs_list(): void
+    {
+        $this->phpClaw->method('sendInConversation')
+            ->willThrowException(new RunSuspendedException('01M48WBW23FP47FCWFBXN67JK4', RunStatus::AwaitingApproval));
+
+        $this->tester->execute(['message' => 'refund']);
+
+        self::assertSame(0, $this->tester->getStatusCode());
+        $display = preg_replace('/\s+/', ' ', $this->tester->getDisplay());
+        self::assertStringContainsString('stopped: awaiting_approval. Next: bin/console phpclaw:runs list, then approve or deny the paused call', $display);
     }
 }

@@ -115,6 +115,9 @@ final class PhpClawBundle extends AbstractBundle
             ->booleanNode('response_cache')->defaultFalse()->end()
             ->integerNode('response_cache_ttl')->defaultValue(3600)->end()
             ->integerNode('max_token_budget')->defaultValue(0)->end()
+            ->booleanNode('durable_runs')->defaultFalse()->end()
+            ->integerNode('durable_step_budget')->defaultValue(0)->end()
+            ->scalarNode('durable_deadline_seconds')->defaultNull()->end()
             ->booleanNode('event_bridge')->defaultTrue()->end()
             ->scalarNode('cloud_key')->defaultValue('')->end()
             ->scalarNode('cloud_signing_secret')->defaultValue('')->end()
@@ -190,6 +193,9 @@ final class PhpClawBundle extends AbstractBundle
         $container->setParameter('phpclaw.response_cache', $config['response_cache']);
         $container->setParameter('phpclaw.response_cache_ttl', $config['response_cache_ttl']);
         $container->setParameter('phpclaw.max_token_budget', $config['max_token_budget']);
+        $container->setParameter('phpclaw.durable_runs', $config['durable_runs']);
+        $container->setParameter('phpclaw.durable_step_budget', $config['durable_step_budget']);
+        $container->setParameter('phpclaw.durable_deadline_seconds', $config['durable_deadline_seconds']);
         $container->setParameter('phpclaw.event_bridge', $config['event_bridge']);
         $container->setParameter('phpclaw.cloud_key', $config['cloud_key']);
         $container->setParameter('phpclaw.cloud_signing_secret', $config['cloud_signing_secret']);

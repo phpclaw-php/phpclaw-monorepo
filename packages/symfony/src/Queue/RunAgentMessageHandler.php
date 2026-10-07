@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace PhpClaw\Symfony\Queue;
 
 use PhpClaw\Contracts\ClawInterface as PhpClawInterface;
+use PhpClaw\Exceptions\RunSuspendedException;
 use PhpClaw\Hooks\HookDispatcher;
 use PhpClaw\Memory\Contracts\MemoryInterface;
 use PhpClaw\Symfony\SymfonyIdentityResolver;
@@ -33,7 +34,7 @@ final class RunAgentMessageHandler
     ) {}
 
     /**
-     * Handles a RunAgentMessage by running the agent and persisting the result.
+     * Run the agent and store the result; a run that pauses is stored as suspended and not retried.
      *
      * @param  RunAgentMessage  $msg
      * @return void
@@ -59,23 +60,24 @@ final class RunAgentMessageHandler
                 runId: $response->runId,
             );
 
-            $this->memory->set(
-                key: $msg->jobId,
-                value: [
-                    'status' => 'done',
-                    'text' => $response->text,
-                    'provider' => $response->provider,
-                    'model' => $response->model,
-                    'tokens' => $totalTokens,
-                    'iterations' => $response->iterations,
-                    'duration_ms' => $response->durationMs,
-                    'at' => gmdate('c'),
-                    'run_id' => $response->runId,
-                    RunAgentMessage::OWNER_KEY => $msg->userId,
-                ],
-                namespace: RunAgentMessage::NAMESPACE,
-                ttl: $msg->ttl,
-            );
+            $this->storeResult($msg, [
+                'status' => 'done',
+                'text' => $response->text,
+                'provider' => $response->provider,
+                'model' => $response->model,
+                'tokens' => $totalTokens,
+                'iterations' => $response->iterations,
+                'duration_ms' => $response->durationMs,
+                'at' => gmdate('c'),
+                'run_id' => $response->runId,
+            ]);
+        } catch (RunSuspendedException $e) {
+            $this->storeResult($msg, [
+                'status' => 'suspended',
+                'run_id' => $e->runId,
+                'run_status' => $e->status->value,
+                'at' => gmdate('c'),
+            ]);
         } catch (\Throwable $e) {
             $this->logger?->error('RunAgentMessageHandler failed.', [
                 'job_id' => $msg->jobId,
@@ -84,21 +86,32 @@ final class RunAgentMessageHandler
 
             HookDispatcher::jobFailed($msg->jobId, $msg->message, $e->getMessage(), $e::class);
 
-            $this->memory->set(
-                key: $msg->jobId,
-                value: [
-                    'status' => 'failed',
-                    'error' => 'Job failed, see application log.',
-                    'at' => gmdate('c'),
-                    RunAgentMessage::OWNER_KEY => $msg->userId,
-                ],
-                namespace: RunAgentMessage::NAMESPACE,
-                ttl: $msg->ttl,
-            );
+            $this->storeResult($msg, [
+                'status' => 'failed',
+                'error' => 'Job failed, see application log.',
+                'at' => gmdate('c'),
+            ]);
 
             throw $e;
         } finally {
             $this->identity?->stopActing();
         }
+    }
+
+    /**
+     * Store the job's result under its id, with the owner, for as long as the job asked.
+     *
+     * @param  RunAgentMessage  $msg  The job.
+     * @param  array<string, mixed>  $result  Result fields.
+     * @return void
+     */
+    private function storeResult(RunAgentMessage $msg, array $result): void
+    {
+        $this->memory->set(
+            key: $msg->jobId,
+            value: [...$result, RunAgentMessage::OWNER_KEY => $msg->userId],
+            namespace: RunAgentMessage::NAMESPACE,
+            ttl: $msg->ttl,
+        );
     }
 }

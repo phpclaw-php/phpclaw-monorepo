@@ -7,3 +7,22 @@ phpclaw_chat_stream:
     path: /phpclaw/chat/stream
     controller: PhpClaw\Symfony\Http\ApiController::stream
     methods: [POST]
+
+phpclaw_runs:
+    path: /phpclaw/runs
+    controller: PhpClaw\Symfony\Http\RunsController::index
+    methods: [GET]
+
+phpclaw_runs_approve:
+    path: /phpclaw/runs/{runId}/approve
+    controller: PhpClaw\Symfony\Http\RunsController::approve
+    methods: [POST]
+    requirements:
+        runId: '[A-Za-z0-9]{26}'
+
+phpclaw_runs_deny:
+    path: /phpclaw/runs/{runId}/deny
+    controller: PhpClaw\Symfony\Http\RunsController::deny
+    methods: [POST]
+    requirements:
+        runId: '[A-Za-z0-9]{26}'

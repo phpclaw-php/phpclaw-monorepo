@@ -22,6 +22,9 @@ final class TokenAuthListener implements EventSubscriberInterface
     private const CORE_ROUTES = [
         'phpclaw_send',
         'phpclaw_chat_stream',
+        'phpclaw_runs',
+        'phpclaw_runs_approve',
+        'phpclaw_runs_deny',
     ];
 
     /**

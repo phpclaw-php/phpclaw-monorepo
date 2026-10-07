@@ -81,6 +81,7 @@ final class GuideCommandTest extends TestCase
             'phpclaw:jobs:list',
             'phpclaw:jobs:status',
             'phpclaw:mcp-server',
+            'phpclaw:runs',
             'phpclaw:stats',
         ], $shipped);
 

@@ -50,6 +50,9 @@ services:
             $responseCacheTtl:  '%phpclaw.response_cache_ttl%'
             $maxTokenBudget:    '%phpclaw.max_token_budget%'
             $cachePool:         '@?cache.app'
+            $durableRuns:       '%phpclaw.durable_runs%'
+            $durableStepBudget: '%phpclaw.durable_step_budget%'
+            $durableDeadlineSeconds: '%phpclaw.durable_deadline_seconds%'
 
     # Stream bridge: the controller and the boot-time hook registration must share one instance,
     # so the per-stream emitter set by the controller is the one the hook listener reads.
@@ -71,6 +74,29 @@ services:
     # Engine singleton, built by the factory
     PhpClaw\Claw:
         factory: ['@PhpClaw\Symfony\PhpClawFactory', 'create']
+        public: true
+
+    # Durable engine: always pauses for approval, used to decide and resume saved runs from any process
+    phpclaw.durable_engine:
+        class: PhpClaw\Claw
+        factory: ['@PhpClaw\Symfony\PhpClawFactory', 'createDurable']
+        public: true
+
+    # Terminal engine: keeps the Y/n prompt, used by the interactive phpclaw chat command
+    phpclaw.terminal_engine:
+        class: PhpClaw\Claw
+        factory: ['@PhpClaw\Symfony\PhpClawFactory', 'createForTerminal']
+        public: true
+
+    PhpClaw\Symfony\RunApprovals:
+        arguments:
+            $identity:      '@PhpClaw\Symfony\SymfonyIdentityResolver'
+            $conversations: '@?PhpClaw\Symfony\Memory\DoctrineConversationMemory'
+        public: true
+
+    PhpClaw\Symfony\Http\RunsController:
+        arguments:
+            $durableRuns: '%phpclaw.durable_runs%'
         public: true
 
     # Interface alias, autowire ClawInterface into any service/controller

@@ -76,6 +76,20 @@ final class JobsCommandsTest extends TestCase
         self::assertSame(3, JobsStatusCommand::STATUS_NOT_FOUND);
     }
 
+    public function test_status_of_a_job_whose_run_paused_returns_suspended_and_names_the_run(): void
+    {
+        $mem = new ArrayMemory;
+        $mem->set('j1', ['status' => 'suspended', 'run_id' => '01RUNPAUSED000000000000000', 'run_status' => 'awaiting_approval'], RunAgentMessage::NAMESPACE);
+
+        $tester = new CommandTester(new JobsStatusCommand(new QueueManager($mem)));
+        $tester->execute(['jobId' => 'j1']);
+
+        self::assertSame(5, JobsStatusCommand::STATUS_SUSPENDED);
+        self::assertSame(JobsStatusCommand::STATUS_SUSPENDED, $tester->getStatusCode());
+        self::assertStringContainsString('01RUNPAUSED000000000000000', $tester->getDisplay());
+        self::assertStringContainsString('phpclaw:runs', $tester->getDisplay());
+    }
+
     public function test_status_unexpected_status_returns_unknown(): void
     {
         $mem = new ArrayMemory;

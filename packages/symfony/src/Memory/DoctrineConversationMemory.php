@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace PhpClaw\Symfony\Memory;
 
 use Doctrine\DBAL\Connection;
+use PhpClaw\Agent\Conversation;
 use PhpClaw\Exceptions\MemoryException;
 use PhpClaw\Support\Ulid;
 use PhpClaw\Symfony\Contracts\AssertsConversationAccess;
@@ -78,6 +79,22 @@ final class DoctrineConversationMemory extends AbstractDoctrineMemory implements
     public function assertAccess(string $key, string $namespace = 'conversations'): void
     {
         $this->assertWritable($key, $namespace);
+    }
+
+    /**
+     * The user id stored as the owner of a conversation, whoever is acting, or null when no such conversation exists.
+     *
+     * @param  string  $conversationId  Conversation id.
+     * @return string|null Owner's user identifier; empty for a console-created conversation.
+     */
+    public function ownerOf(string $conversationId): ?string
+    {
+        $owner = $this->connection->fetchOne(
+            'SELECT user_id FROM '.self::CONVERSATIONS.' WHERE id = ? AND namespace = ?',
+            [$conversationId, Conversation::MEMORY_NAMESPACE],
+        );
+
+        return $owner === false ? null : (string) $owner;
     }
 
     /**
@@ -244,8 +261,7 @@ final class DoctrineConversationMemory extends AbstractDoctrineMemory implements
     }
 
     /**
-     * Deletes the acting user's conversations and their messages in the given namespace, or
-     * every user's for the manage-all tier.
+     * Delete the acting user's conversations and messages in the namespace, or everyone's for manage-all.
      *
      * @param  string  $namespace
      * @return void
@@ -279,8 +295,7 @@ final class DoctrineConversationMemory extends AbstractDoctrineMemory implements
     }
 
     /**
-     * Returns a summary map of the acting user's conversations in the namespace, or every
-     * user's for the manage-all tier, without history.
+     * Summaries of the acting user's conversations in the namespace, without history; everyone's for manage-all.
      *
      * @param  string  $namespace
      * @return array<string, mixed>

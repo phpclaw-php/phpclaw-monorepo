@@ -18,6 +18,8 @@ parameters:
     env(PHPCLAW_RESPONSE_CACHE): 'false'
     env(PHPCLAW_RESPONSE_CACHE_TTL): 3600
     env(PHPCLAW_MAX_TOKEN_BUDGET): 0
+    env(PHPCLAW_DURABLE_RUNS): 'false'
+    env(PHPCLAW_DURABLE_STEP_BUDGET): 0
 
 phpclaw:
     # api_key: '%env(ANTHROPIC_API_KEY)%'  # Auto-detected from env if not set
@@ -62,3 +64,6 @@ phpclaw:
     response_cache: '%env(bool:PHPCLAW_RESPONSE_CACHE)%'           # answers an identical request from the cache.app pool instead of calling the provider again
     response_cache_ttl: '%env(int:PHPCLAW_RESPONSE_CACHE_TTL)%'    # seconds a cached answer is kept, 60 to 86400, used only when response_cache is true
     max_token_budget: '%env(int:PHPCLAW_MAX_TOKEN_BUDGET)%'        # stops a run before a provider call would take its token spend over this number, 0 turns it off
+    durable_runs: '%env(bool:PHPCLAW_DURABLE_RUNS)%'               # save every run after each step; web and worker runs pause for approval at a tool that changes data; needs store_messages
+    durable_step_budget: '%env(int:PHPCLAW_DURABLE_STEP_BUDGET)%'  # steps one process runs before the run is suspended for phpclaw:runs resume-due, 0 = no limit
+    durable_deadline_seconds: '%env(default::int:PHPCLAW_DURABLE_DEADLINE_SECONDS)%' # seconds one process runs before suspending; blank = half of max_execution_time, 0 = no limit

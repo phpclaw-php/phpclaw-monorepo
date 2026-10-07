@@ -17,6 +17,7 @@ use PhpClaw\Providers\OpenAIPresets;
 use PhpClaw\Providers\OpenAIProvider;
 use PhpClaw\Skills\Contracts\SkillInterface;
 use PhpClaw\Skills\SkillResolver;
+use PhpClaw\Support\Log;
 use PhpClaw\Symfony\Console\ConsoleContext;
 use PhpClaw\Symfony\Extension\PhpClawExtensions;
 use PhpClaw\Symfony\Support\ArgumentFreeConstructor;
@@ -37,6 +38,10 @@ use Symfony\Component\Cache\Psr16Cache;
  */
 final class PhpClawFactory
 {
+    public const DURABLE_ENGINE = 'phpclaw.durable_engine';
+
+    public const TERMINAL_ENGINE = 'phpclaw.terminal_engine';
+
     public const TOOL_GROUPS = [
         'group:system' => ['db_query', 'read_log', 'http_request', 'file_read', 'file_write', 'shell_exec'],
     ];
@@ -76,6 +81,9 @@ final class PhpClawFactory
      * @param  int  $responseCacheTtl  Response cache lifetime in seconds, clamped 60-86400.
      * @param  int  $maxTokenBudget  Total token spend ceiling per run; 0 disables the budget.
      * @param  CacheItemPoolInterface|null  $cachePool  Shared PSR-6 cache pool backing the rate limit and response cache; null disables both.
+     * @param  bool  $durableRuns  Save every run after each step and let web and worker runs pause for approval; needs store_messages.
+     * @param  int  $durableStepBudget  Steps one process runs before the run is suspended; 0 = no limit.
+     * @param  int|null  $durableDeadlineSeconds  Seconds one process runs before the run is suspended; null = half of max_execution_time.
      */
     public function __construct(
         private readonly string $apiKey,
@@ -110,6 +118,9 @@ final class PhpClawFactory
         private readonly int $responseCacheTtl = 3600,
         private readonly int $maxTokenBudget = 0,
         private readonly ?CacheItemPoolInterface $cachePool = null,
+        private readonly bool $durableRuns = false,
+        private readonly int $durableStepBudget = 0,
+        private readonly ?int $durableDeadlineSeconds = null,
     ) {}
 
     /**
@@ -119,9 +130,40 @@ final class PhpClawFactory
      */
     public function create(): PhpClawInterface
     {
+        return $this->build(terminalApproval: null);
+    }
+
+    /**
+     * Build the engine that always pauses for approval, for resuming and deciding saved runs from any process.
+     *
+     * @return PhpClawInterface
+     */
+    public function createDurable(): PhpClawInterface
+    {
+        return $this->build(terminalApproval: false);
+    }
+
+    /**
+     * Build the engine for the interactive chat command, which keeps the Y/n prompt.
+     *
+     * @return PhpClawInterface
+     */
+    public function createForTerminal(): PhpClawInterface
+    {
+        return $this->build(terminalApproval: true);
+    }
+
+    /**
+     * Build the engine; a null $terminalApproval keeps the Y/n prompt only in an interactive console.
+     *
+     * @param  bool|null  $terminalApproval  True keeps the Y/n prompt and the console tool rights, false pauses runs for a later decision.
+     * @return PhpClawInterface
+     */
+    private function build(?bool $terminalApproval): PhpClawInterface
+    {
         $memory = new PrivacyAwareMemory($this->memory, $this->storeMessages);
 
-        $isConsole = $this->console ?? ($this->consoleContext?->isConsole() ?? false);
+        $isConsole = $terminalApproval === true || ($this->console ?? ($this->consoleContext?->isConsole() ?? false));
 
         $builder = PhpClaw::builder()
             ->apiKey($this->apiKey)
@@ -149,11 +191,44 @@ final class PhpClawFactory
             $builder->providerOverride($override);
         }
 
-        $builder->approvalGate(new CliApprovalGate);
+        $this->applyApprovalMode($builder, $terminalApproval ?? $isConsole);
 
         $this->applyAgentPrimitives($builder);
 
         return $builder->build();
+    }
+
+    /**
+     * Keep the Y/n terminal gate, or with durable_runs and store_messages on, let web and worker runs pause.
+     *
+     * @param  ClawBuilder  $builder
+     * @param  bool  $terminalApproval  True for an interactive console, which keeps the Y/n prompt.
+     * @return void
+     */
+    private function applyApprovalMode(ClawBuilder $builder, bool $terminalApproval): void
+    {
+        if (! $this->durableRuns) {
+            $builder->approvalGate(new CliApprovalGate);
+
+            return;
+        }
+
+        if (! $this->storeMessages) {
+            Log::warning('phpClaw: durable_runs needs store_messages, so durable runs stay off.');
+            $builder->approvalGate(new CliApprovalGate);
+
+            return;
+        }
+
+        $builder->durableRuns(max(0, $this->durableStepBudget), $this->durableDeadlineSeconds);
+
+        if ($terminalApproval) {
+            $builder->approvalGate(new CliApprovalGate);
+
+            return;
+        }
+
+        $builder->withSuspendableApproval();
     }
 
     /**
@@ -194,8 +269,7 @@ final class PhpClawFactory
     }
 
     /**
-     * Build a ToolRegistry populated with the resolved tools, for the MCP server. PHP-write is
-     * force-denied because MCP installs no approval gate; resolveTools() already applies tool_deny.
+     * Build the MCP server's ToolRegistry from the resolved tools, with PHP writes off since MCP has no approval gate.
      *
      * @return ToolRegistry
      */

@@ -258,4 +258,15 @@ final class TokenAuthListenerTest extends TestCase
         self::assertSame('application/json', $response->headers->get('Content-Type'));
         self::assertArrayHasKey('error', json_decode((string) $response->getContent(), true));
     }
+
+    public function test_the_run_routes_are_gated_like_send(): void
+    {
+        foreach (['phpclaw_runs', 'phpclaw_runs_approve', 'phpclaw_runs_deny'] as $route) {
+            $event = $this->makeEvent(Request::create('/phpclaw/runs'), $route);
+
+            $this->listener('')->onKernelRequest($event);
+
+            self::assertSame(401, $event->getResponse()?->getStatusCode(), $route);
+        }
+    }
 }

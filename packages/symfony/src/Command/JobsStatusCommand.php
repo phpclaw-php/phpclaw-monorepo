@@ -31,6 +31,8 @@ final class JobsStatusCommand extends Command
 
     public const STATUS_UNRECOGNISED_STATE = 4;
 
+    public const STATUS_SUSPENDED = 5;
+
     /**
      * Constructs the command with the queue manager.
      *
@@ -86,6 +88,10 @@ final class JobsStatusCommand extends Command
             return self::STATUS_FAILED;
         }
 
+        if ($status === 'suspended') {
+            return $this->reportSuspended($io, $jobId, $result);
+        }
+
         if ($status !== 'done') {
             $io->warning("Job '{$jobId}' has unexpected status '{$status}'.");
 
@@ -98,5 +104,22 @@ final class JobsStatusCommand extends Command
         }
 
         return self::STATUS_DONE;
+    }
+
+    /**
+     * Print a paused job's run and the command that finishes it.
+     *
+     * @param  SymfonyStyle  $io  Console style.
+     * @param  string  $jobId  Job id.
+     * @param  array<string, mixed>  $result  Stored job result.
+     * @return int
+     */
+    private function reportSuspended(SymfonyStyle $io, string $jobId, array $result): int
+    {
+        $io->warning("Job '{$jobId}' is paused (".(string) ($result['run_status'] ?? '?').').');
+        $io->writeln('Run:  '.(string) ($result['run_id'] ?? '?'));
+        $io->writeln('Next: bin/console phpclaw:runs list, then approve, deny or resume the run');
+
+        return self::STATUS_SUSPENDED;
     }
 }

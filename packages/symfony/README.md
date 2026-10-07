@@ -72,6 +72,26 @@ POST /phpclaw/send                          synchronous agent run
 POST /phpclaw/chat/stream                   streamed response
 ```
 
+### Pause for approval and finish later
+
+Off by default. Set `PHPCLAW_DURABLE_RUNS=true` (needs `PHPCLAW_STORE_MESSAGES` on) and every run is
+saved after each step. A tool that changes data then pauses the run instead of being refused: `send`
+answers `202` with the run id and the paused call, and the stream sends an `approval_required` event.
+A run that uses up `PHPCLAW_DURABLE_STEP_BUDGET` steps or `PHPCLAW_DURABLE_DEADLINE_SECONDS` seconds
+answers `202` with status `suspended` (stream event `run_suspended`) and is finished later.
+
+```
+GET  /phpclaw/runs                          runs waiting for the caller's decision
+POST /phpclaw/runs/{runId}/approve          {"call_id": "..."} approve, then finish the run
+POST /phpclaw/runs/{runId}/deny             {"call_id": "...", "reason": "..."} deny, then finish
+```
+
+These three routes answer `404` while durable runs are off. Only the user who started the run's
+conversation, or a `ROLE_PHPCLAW_MANAGE_ALL` holder, may decide it. The finished answer is added to
+that conversation. From the shell, `bin/console phpclaw:runs list|approve|deny|resume|resume-due` does
+the same as the run's owner; add `bin/console phpclaw:runs resume-due` to cron every minute. An
+interactive `bin/console phpclaw` keeps its Y/n prompt.
+
 **The REST API needs `symfony/security-bundle`, which this package only suggests.** Install it and
 put a firewall over `/phpclaw`, or every call answers 401. That is correct behaviour, not a
 misconfiguration: every conversation is stored against the acting user identifier, so there has to
@@ -99,7 +119,7 @@ Full setup, configuration, and provider options are documented at [phpclaw.ai/do
 
 ## Key features
 
-✅ **Native console commands**: `phpclaw`, `phpclaw:mcp-server`, `phpclaw:about`, `phpclaw:guide`, `phpclaw:stats`, `phpclaw:jobs:list`, `phpclaw:jobs:status`
+✅ **Native console commands**: `phpclaw`, `phpclaw:mcp-server`, `phpclaw:about`, `phpclaw:guide`, `phpclaw:stats`, `phpclaw:jobs:list`, `phpclaw:jobs:status`, `phpclaw:runs`
 
 ✅ **Doctrine-backed memory**: conversation + key-value drivers via DBAL, plus a cache-store driver
 

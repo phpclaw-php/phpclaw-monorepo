@@ -4,11 +4,15 @@ declare(strict_types=1);
 
 namespace PhpClaw\Symfony\Http;
 
+use PhpClaw\Agent\RunStatus;
+use PhpClaw\Claw;
 use PhpClaw\Contracts\ClawInterface as PhpClawInterface;
 use PhpClaw\Exceptions\GuardException;
 use PhpClaw\Exceptions\ProviderException;
+use PhpClaw\Exceptions\RunSuspendedException;
 use PhpClaw\Exceptions\TokenBudgetExceededException;
 use PhpClaw\Symfony\Exceptions\ConversationAccessDeniedException;
+use PhpClaw\Symfony\RunApprovals;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\StreamedResponse;
@@ -25,10 +29,12 @@ final class ApiController
      *
      * @param  PhpClawInterface  $agent  The resolved phpClaw engine.
      * @param  StreamEventBridge  $streamBridge  Shared bridge instance, the same one registered as a hook listener at boot.
+     * @param  RunApprovals|null  $approvals  Describes a paused or suspended durable run; null reports only its id and status.
      */
     public function __construct(
         private readonly PhpClawInterface $agent,
         private readonly StreamEventBridge $streamBridge,
+        private readonly ?RunApprovals $approvals = null,
     ) {}
 
     /**
@@ -63,6 +69,8 @@ final class ApiController
                 'tokens' => ($response->inputTokens ?? 0) + ($response->outputTokens ?? 0),
                 'conversation_id' => $turn->conversation->id,
             ]);
+        } catch (RunSuspendedException $e) {
+            return new JsonResponse($this->describeSuspension($e), 202);
         } catch (ConversationAccessDeniedException) {
             return new JsonResponse(['error' => 'You do not have permission to access this conversation.'], 403);
         } catch (GuardException) {
@@ -135,6 +143,8 @@ final class ApiController
                     'tool_calls' => $this->streamBridge->toolCalls(),
                     'conversation_id' => $turn->conversation->id,
                 ]);
+            } catch (RunSuspendedException $e) {
+                $emit($e->status === RunStatus::AwaitingApproval ? 'approval_required' : 'run_suspended', $this->describeSuspension($e));
             } catch (ConversationAccessDeniedException) {
                 $emit('error', ['message' => 'You do not have permission to access this conversation.']);
             } catch (GuardException) {
@@ -175,5 +185,20 @@ final class ApiController
             'tool_input' => [],
             'tool_result' => '',
         ], array_values($toolsCalled));
+    }
+
+    /**
+     * The paused or suspended run as the client sees it; only its id and status when the engine cannot describe it.
+     *
+     * @param  RunSuspendedException  $e  The pause or suspension.
+     * @return array<string, mixed>
+     */
+    private function describeSuspension(RunSuspendedException $e): array
+    {
+        if (! $this->agent instanceof Claw || $this->approvals === null) {
+            return ['run_id' => $e->runId, 'status' => $e->status->value, 'conversation_id' => null, 'pending' => null];
+        }
+
+        return $this->approvals->describe($this->approvals->load($this->agent, $e->runId));
     }
 }
