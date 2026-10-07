@@ -5,6 +5,20 @@ media, menus, taxonomies, options, plugins, cron events and the debug log, and, 
 installed, about products, orders, customers, coupons, reviews, shipping, tax and stock. It answers
 from your own site data. Works on WordPress 6.2 and later.
 
+## 0.1.3 (2026-10-07)
+
+### Added
+- Add agent primitives: prompt templates, structured output, fallback, rate limit, response cache, token budget (#52)
+- Send payloads for the 4 new agent primitive events (#54)
+- Settings for fallback, rate limit, response cache and token budget (#56)
+- Memory search and configurable memory recall (#80)
+- Durable runs, pause-for-approval and run resumption (#82)
+- Mark tools that change data with destructiveHint (#84)
+
+### Fixed
+- OpenAI tool format for deepseek and custom, stable provider order (#62)
+- Settings page parity for the agent primitives (#64)
+
 ## 0.1.2 (2026-09-29)
 
 ### Added
