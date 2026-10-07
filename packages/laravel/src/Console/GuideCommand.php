@@ -365,6 +365,7 @@ final class GuideCommand extends Command
         $this->line('  phpclaw:mcp-server              : start the MCP server over stdio');
         $this->line('  phpclaw:jobs:list               : list stored queue job results');
         $this->line('  phpclaw:jobs:status {jobId}     : show a queued job\'s status and result');
+        $this->line('  phpclaw:runs {action}           : list, approve, deny or resume durable runs (resume-due every minute)');
     }
 
     /**

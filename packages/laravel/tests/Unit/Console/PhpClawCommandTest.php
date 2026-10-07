@@ -9,10 +9,12 @@ use Orchestra\Testbench\TestCase;
 use PhpClaw\Agent\AgentResponse;
 use PhpClaw\Agent\Conversation;
 use PhpClaw\Agent\ConversationTurn;
+use PhpClaw\Agent\RunStatus;
 use PhpClaw\Contracts\ClawInterface as PhpClawInterface;
 use PhpClaw\Exceptions\GuardException;
 use PhpClaw\Exceptions\MaxIterationsException;
 use PhpClaw\Exceptions\ProviderException;
+use PhpClaw\Exceptions\RunSuspendedException;
 use PhpClaw\Exceptions\TokenBudgetExceededException;
 use PhpClaw\Laravel\PhpClawServiceProvider;
 use PHPUnit\Framework\MockObject\MockObject;
@@ -269,5 +271,31 @@ final class PhpClawCommandTest extends TestCase
             config('phpclaw.model'),
             'the --model flag must override the configured model before the engine resolves',
         );
+    }
+
+    public function test_a_run_that_spends_its_budget_names_the_run_and_the_command_that_finishes_it(): void
+    {
+        $mock = $this->mockAgent();
+        $mock->method('sendInConversation')
+            ->willThrowException(new RunSuspendedException('01M48WD2K5DFAFF6S81VFX0V2E', RunStatus::Suspended));
+
+        $this->app->instance(PhpClawInterface::class, $mock);
+
+        $this->artisan('phpclaw', ['message' => 'two tools'])
+            ->assertExitCode(0)
+            ->expectsOutputToContain('Run 01M48WD2K5DFAFF6S81VFX0V2E stopped: suspended. Next: php artisan phpclaw:runs resume 01M48WD2K5DFAFF6S81VFX0V2E');
+    }
+
+    public function test_a_run_paused_for_approval_points_to_the_runs_list(): void
+    {
+        $mock = $this->mockAgent();
+        $mock->method('sendInConversation')
+            ->willThrowException(new RunSuspendedException('01M48WD2K5DFAFF6S81VFX0V2E', RunStatus::AwaitingApproval));
+
+        $this->app->instance(PhpClawInterface::class, $mock);
+
+        $this->artisan('phpclaw', ['message' => 'refund'])
+            ->assertExitCode(0)
+            ->expectsOutputToContain('stopped: awaiting_approval. Next: php artisan phpclaw:runs list, then approve or deny the paused call');
     }
 }

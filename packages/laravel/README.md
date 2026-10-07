@@ -81,6 +81,25 @@ default: the `phpclaw.manage-all` Gate ability, which denies unless your app def
 driver that keeps conversations per user (`database`, the default); with any other driver both
 routes answer `503`.
 
+### Pause for approval and finish later
+
+Off by default. Set `PHPCLAW_DURABLE_RUNS=true` (needs `PHPCLAW_STORE_MESSAGES` on) and every chat run is
+saved after each step. A tool that changes data then pauses the run instead of being refused: `send`
+answers `202` with the run id and the paused call, and the stream sends an `approval_required` event.
+A run that uses up `PHPCLAW_DURABLE_STEP_BUDGET` steps or `PHPCLAW_DURABLE_DEADLINE_SECONDS` seconds
+answers `202` with status `suspended` (stream event `run_suspended`) and is finished later.
+
+```
+GET  /phpclaw/runs                          runs waiting for the caller's decision
+POST /phpclaw/runs/{runId}/approve          {"call_id": "..."} approve, then finish the run
+POST /phpclaw/runs/{runId}/deny             {"call_id": "...", "reason": "..."} deny, then finish
+```
+
+Only the user who started the run's conversation, or a manage-all user, may decide it. The finished
+answer is added to that conversation. From the shell, `php artisan phpclaw:runs list|approve|deny|resume|resume-due`
+does the same as the run's owner, and the scheduler runs `phpclaw:runs resume-due` every minute, so add
+Laravel's `schedule:run` to cron. An interactive `php artisan phpclaw` keeps its Y/n prompt.
+
 ## Installation
 
 ```bash
@@ -97,13 +116,13 @@ Full setup, configuration, and provider options are documented at [phpclaw.ai/do
 
 ## Key features
 
-✅ **Native Artisan CLI**: `phpclaw`, `phpclaw:mcp-server`, `phpclaw:about`, `phpclaw:guide`, `phpclaw:stats`, `phpclaw:jobs:list`, `phpclaw:jobs:status`
+✅ **Native Artisan CLI**: `phpclaw`, `phpclaw:mcp-server`, `phpclaw:about`, `phpclaw:guide`, `phpclaw:stats`, `phpclaw:jobs:list`, `phpclaw:jobs:status`, `phpclaw:runs`
 
 ✅ **Database-backed memory**: conversation + key-value drivers via the query builder, plus a cache-store driver
 
 ✅ **6 Laravel-native tools**: database (read-only SELECT), log tail, route list, config read, cache inspect, queue status. Opt-in: list their classes in `config('phpclaw.tools')`, the same way as shell, HTTP, file write and file edit
 
-✅ **Telescope integration**: every agent run, tool call, and guard block recorded for local debugging (auto-detected, off if Telescope isn't installed)
+✅ **Telescope integration**: every agent run, model call with its token counts, tool call, and guard block recorded on Telescope's Events tab for local debugging, while the raw `phpclaw.*` events, which carry message text, are kept out of Telescope (auto-detected, off if Telescope isn't installed)
 
 ✅ **REST API**: on by default behind your API middleware, two endpoints: `send` and `chat/stream`. Set `PHPCLAW_API_ENABLED=false` to close them
 

@@ -5,10 +5,12 @@ declare(strict_types=1);
 namespace PhpClaw\Laravel\Console;
 
 use Illuminate\Console\Command;
+use PhpClaw\Agent\RunStatus;
 use PhpClaw\Contracts\ClawInterface as PhpClawInterface;
 use PhpClaw\Exceptions\GuardException;
 use PhpClaw\Exceptions\MaxIterationsException;
 use PhpClaw\Exceptions\ProviderException;
+use PhpClaw\Exceptions\RunSuspendedException;
 use PhpClaw\Exceptions\TokenBudgetExceededException;
 use PhpClaw\Exceptions\ToolException;
 
@@ -70,6 +72,8 @@ final class PhpClawCommand extends Command
             );
 
             return self::SUCCESS;
+        } catch (RunSuspendedException $e) {
+            return $this->reportStoppedRun($e);
         } catch (GuardException $e) {
             report($e);
             $this->error("Blocked: {$e->getMessage()}");
@@ -98,5 +102,21 @@ final class PhpClawCommand extends Command
 
             return self::FAILURE;
         }
+    }
+
+    /**
+     * Name the run that stopped and the command that finishes it.
+     *
+     * @param  RunSuspendedException  $e  The pause.
+     * @return int Artisan exit code.
+     */
+    private function reportStoppedRun(RunSuspendedException $e): int
+    {
+        $this->warn(sprintf('Run %s stopped: %s. Next: %s', $e->runId, $e->status->value, match ($e->status) {
+            RunStatus::Suspended => "php artisan phpclaw:runs resume {$e->runId}",
+            default => 'php artisan phpclaw:runs list, then approve or deny the paused call',
+        }));
+
+        return self::SUCCESS;
     }
 }

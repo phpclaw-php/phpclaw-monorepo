@@ -7,12 +7,16 @@ namespace PhpClaw\Laravel\Http\Controllers;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
+use PhpClaw\Agent\RunStatus;
+use PhpClaw\Claw;
 use PhpClaw\Contracts\ClawInterface as PhpClawInterface;
 use PhpClaw\Exceptions\GuardException;
 use PhpClaw\Exceptions\ProviderException;
+use PhpClaw\Exceptions\RunSuspendedException;
 use PhpClaw\Exceptions\TokenBudgetExceededException;
 use PhpClaw\Laravel\Exceptions\ConversationAccessDeniedException;
 use PhpClaw\Laravel\Http\StreamEventBridge;
+use PhpClaw\Laravel\RunApprovals;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 /**
@@ -82,6 +86,8 @@ final class PhpClawController extends Controller
                 'tokens' => ($response->inputTokens ?? 0) + ($response->outputTokens ?? 0),
                 'conversation_id' => $turn->conversation->id,
             ]);
+        } catch (RunSuspendedException $e) {
+            return response()->json($this->describeSuspension($e), 202);
         } catch (ConversationAccessDeniedException) {
             return response()->json(['error' => self::FORBIDDEN], 403);
         } catch (GuardException $e) {
@@ -110,8 +116,7 @@ final class PhpClawController extends Controller
     }
 
     /**
-     * Tool calls with real input and result when the lifecycle hooks captured them, falling
-     * back to the response's tool names when they did not fire.
+     * Tool calls with input and result from the hooks, or only the tool names when the hooks did not fire.
      *
      * @param  string[]  $toolsCalled  Tool names reported by the agent response.
      * @return array<int, array{tool_name: string, tool_input: array<mixed>, tool_result: string}>
@@ -197,6 +202,8 @@ final class PhpClawController extends Controller
                     'tool_calls' => StreamEventBridge::toolCalls(),
                     'conversation_id' => $turn->conversation->id,
                 ]);
+            } catch (RunSuspendedException $e) {
+                $emit($e->status === RunStatus::AwaitingApproval ? 'approval_required' : 'run_suspended', $this->describeSuspension($e));
             } catch (ConversationAccessDeniedException) {
                 $emit('error', ['message' => self::FORBIDDEN]);
             } catch (GuardException $e) {
@@ -219,5 +226,20 @@ final class PhpClawController extends Controller
             'Cache-Control' => 'no-cache',
             'X-Accel-Buffering' => 'no',
         ]);
+    }
+
+    /**
+     * Describe a run that paused for approval or spent its budget, so the caller can approve, deny or wait.
+     *
+     * @param  RunSuspendedException  $e  The pause.
+     * @return array<string, mixed>
+     */
+    private function describeSuspension(RunSuspendedException $e): array
+    {
+        if (! $this->agent instanceof Claw) {
+            return ['run_id' => $e->runId, 'status' => $e->status->value, 'conversation_id' => null, 'pending' => null];
+        }
+
+        return RunApprovals::describe(RunApprovals::load($this->agent, $e->runId));
     }
 }

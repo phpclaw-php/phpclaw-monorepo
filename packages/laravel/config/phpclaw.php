@@ -60,6 +60,13 @@ return [
     // Stops a run before a provider call would take its token spend over this number. 0 turns it off.
     'max_token_budget' => (int) env('PHPCLAW_MAX_TOKEN_BUDGET', 0),
 
+    // Saves every chat run after each step so it can pause for approval and be finished later. Needs store_messages.
+    'durable_runs' => (bool) env('PHPCLAW_DURABLE_RUNS', false),
+    // Steps one request may run before the run is left for the scheduler. 0 means no step limit.
+    'durable_step_budget' => (int) env('PHPCLAW_DURABLE_STEP_BUDGET', 0),
+    // Seconds one request may spend before the run is left for the scheduler. Blank uses half of max_execution_time.
+    'durable_deadline_seconds' => env('PHPCLAW_DURABLE_DEADLINE_SECONDS'),
+
     'tool_deny' => array_values(array_filter(array_map(
         'trim',
         explode(',', (string) env('PHPCLAW_TOOL_DENY', ''))

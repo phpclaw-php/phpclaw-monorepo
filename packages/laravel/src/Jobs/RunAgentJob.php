@@ -11,6 +11,7 @@ use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Auth;
 use PhpClaw\Contracts\ClawInterface as PhpClawInterface;
+use PhpClaw\Exceptions\RunSuspendedException;
 use PhpClaw\Hooks\HookDispatcher;
 use PhpClaw\Laravel\Enums\JobStatus;
 use PhpClaw\Memory\Contracts\MemoryInterface;
@@ -72,39 +73,31 @@ final class RunAgentJob implements ShouldQueue
                 runId: $response->runId,
             );
 
-            $memory->set(
-                key: $this->jobId,
-                value: [
-                    'status' => JobStatus::Done->value,
-                    'text' => $response->text,
-                    'provider' => $response->provider,
-                    'model' => $response->model,
-                    'tokens' => ($response->inputTokens ?? 0) + ($response->outputTokens ?? 0),
-                    'iterations' => $response->iterations,
-                    'duration_ms' => $response->durationMs,
-                    'at' => date('c'),
-                    'run_id' => $response->runId,
-                    self::OWNER_KEY => $this->userId,
-                ],
-                namespace: self::NAMESPACE,
-                ttl: $this->ttl,
-            );
+            $this->storeResult($memory, [
+                'status' => JobStatus::Done->value,
+                'text' => $response->text,
+                'provider' => $response->provider,
+                'model' => $response->model,
+                'tokens' => ($response->inputTokens ?? 0) + ($response->outputTokens ?? 0),
+                'iterations' => $response->iterations,
+                'duration_ms' => $response->durationMs,
+                'run_id' => $response->runId,
+            ]);
+        } catch (RunSuspendedException $e) {
+            $this->storeResult($memory, [
+                'status' => JobStatus::Suspended->value,
+                'run_id' => $e->runId,
+                'run_status' => $e->status->value,
+            ]);
         } catch (\Throwable $e) {
             report($e);
 
             HookDispatcher::jobFailed($this->jobId, $this->message, $e->getMessage(), get_class($e));
 
-            $memory->set(
-                key: $this->jobId,
-                value: [
-                    'status' => JobStatus::Failed->value,
-                    'error' => 'Job failed, see application log',
-                    'at' => date('c'),
-                    self::OWNER_KEY => $this->userId,
-                ],
-                namespace: self::NAMESPACE,
-                ttl: $this->ttl,
-            );
+            $this->storeResult($memory, [
+                'status' => JobStatus::Failed->value,
+                'error' => 'Job failed, see application log',
+            ]);
 
             throw $e;
         } finally {
@@ -113,8 +106,24 @@ final class RunAgentJob implements ShouldQueue
     }
 
     /**
-     * Authenticate the worker as the user who queued this job, so every capability check the
-     * run makes answers for that user rather than for nobody.
+     * Store the job's result for phpclaw:jobs:status, stamped with the time and the queueing user.
+     *
+     * @param  MemoryInterface  $memory  Memory the results are kept in.
+     * @param  array<string, mixed>  $result  Status and its details.
+     * @return void
+     */
+    private function storeResult(MemoryInterface $memory, array $result): void
+    {
+        $memory->set(
+            key: $this->jobId,
+            value: [...$result, 'at' => date('c'), self::OWNER_KEY => $this->userId],
+            namespace: self::NAMESPACE,
+            ttl: $this->ttl,
+        );
+    }
+
+    /**
+     * Authenticate the worker as the user who queued this job, so capability checks answer for that user.
      *
      * @return void
      */
@@ -132,8 +141,7 @@ final class RunAgentJob implements ShouldQueue
     }
 
     /**
-     * Drop the acting user again so a long-lived worker never carries one job's identity
-     * into the next job it picks up.
+     * Drop the acting user so a long-lived worker never carries one job's identity into the next.
      *
      * @return void
      */

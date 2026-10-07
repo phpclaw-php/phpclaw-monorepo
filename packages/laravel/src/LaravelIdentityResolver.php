@@ -37,8 +37,30 @@ final class LaravelIdentityResolver
     }
 
     /**
-     * Whether the acting user may reach every user's conversations, either by being listed
-     * in phpclaw.admin_ids or by passing the manage-all gate.
+     * Run $work as the given user, then put back whoever was acting before (or nobody); an empty id runs it unchanged.
+     *
+     * @param  string  $userId  User to act as; empty means no user.
+     * @param  callable(): mixed  $work  Work to run.
+     * @return mixed What $work returns.
+     */
+    public static function actingAs(string $userId, callable $work): mixed
+    {
+        if ($userId === '') {
+            return $work();
+        }
+
+        $previous = Auth::user();
+        Auth::onceUsingId($userId);
+
+        try {
+            return $work();
+        } finally {
+            $previous === null ? Auth::forgetUser() : Auth::setUser($previous);
+        }
+    }
+
+    /**
+     * Whether the acting user may reach every user's conversations, through phpclaw.admin_ids or the manage-all gate.
      *
      * @return bool
      */

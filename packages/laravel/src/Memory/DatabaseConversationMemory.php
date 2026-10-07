@@ -7,6 +7,7 @@ namespace PhpClaw\Laravel\Memory;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use PhpClaw\Agent\Conversation;
 use PhpClaw\Exceptions\MemoryException;
 use PhpClaw\Laravel\Exceptions\ConversationAccessDeniedException;
 use PhpClaw\Laravel\LaravelIdentityResolver;
@@ -171,8 +172,7 @@ final class DatabaseConversationMemory extends AbstractDatabaseMemory
     }
 
     /**
-     * Delete the acting user's conversation records in the given namespace with their
-     * messages, or every user's when the caller may reach every conversation.
+     * Delete the acting user's conversations in the namespace with their messages, or everyone's for a manage-all caller.
      *
      * @param  string  $namespace
      * @return void
@@ -197,8 +197,7 @@ final class DatabaseConversationMemory extends AbstractDatabaseMemory
     }
 
     /**
-     * Return the acting user's conversation records in the given namespace as an id-keyed
-     * array, or every user's when the caller may reach every conversation.
+     * Return the acting user's conversations in the namespace keyed by id, or everyone's for a manage-all caller.
      *
      * @param  string  $namespace
      * @return array<string, mixed>
@@ -275,8 +274,7 @@ final class DatabaseConversationMemory extends AbstractDatabaseMemory
     }
 
     /**
-     * Throw when the conversation exists and belongs to a different user, before any
-     * response is committed.
+     * Throw when the conversation exists and belongs to another user, before any response is committed.
      *
      * @param  string  $key  Conversation ULID.
      * @param  string  $namespace  Scoping namespace.
@@ -285,6 +283,22 @@ final class DatabaseConversationMemory extends AbstractDatabaseMemory
     public static function assertAccess(string $key, string $namespace = 'conversations'): void
     {
         self::assertWritable($key, $namespace);
+    }
+
+    /**
+     * The user id a conversation belongs to (empty for one started from the console), or null when it is not stored.
+     *
+     * @param  string  $key  Conversation id.
+     * @return string|null
+     */
+    public static function ownerOf(string $key): ?string
+    {
+        $owner = DB::table(self::CONVERSATIONS_TABLE)
+            ->where('id', $key)
+            ->where('namespace', Conversation::MEMORY_NAMESPACE)
+            ->value('user_id');
+
+        return $owner === null ? null : (string) $owner;
     }
 
     /**
@@ -311,8 +325,7 @@ final class DatabaseConversationMemory extends AbstractDatabaseMemory
     }
 
     /**
-     * Delete every conversation owned by a user, together with its messages. Deliberately
-     * not ownership-scoped: a server-side erasure hook, unreachable from agent, REST or CLI.
+     * Delete every conversation a user owns with its messages, for server-side erasure; not ownership-scoped.
      *
      * @param  string  $userId  Owner identifier as stored in phpclaw_conversations.user_id.
      * @param  string  $namespace  Scoping namespace.

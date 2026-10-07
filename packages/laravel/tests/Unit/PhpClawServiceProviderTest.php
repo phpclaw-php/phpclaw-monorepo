@@ -191,7 +191,7 @@ final class PhpClawServiceProviderTest extends TestCase
         $this->assertSame(2048, $config->thinkingBudget);
     }
 
-    public function test_console_registers_exactly_the_seven_shipped_commands(): void
+    public function test_console_registers_exactly_the_eight_shipped_commands(): void
     {
         $commands = $this->app[Kernel::class]->all();
 
@@ -208,6 +208,7 @@ final class PhpClawServiceProviderTest extends TestCase
             'phpclaw:jobs:list',
             'phpclaw:jobs:status',
             'phpclaw:mcp-server',
+            'phpclaw:runs',
             'phpclaw:stats',
         ], $ours);
     }

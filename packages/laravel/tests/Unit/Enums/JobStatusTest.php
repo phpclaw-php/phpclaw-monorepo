@@ -9,10 +9,10 @@ use PHPUnit\Framework\TestCase;
 
 final class JobStatusTest extends TestCase
 {
-    public function test_it_declares_exactly_three_statuses(): void
+    public function test_it_declares_exactly_four_statuses(): void
     {
         self::assertSame(
-            ['pending', 'done', 'failed'],
+            ['pending', 'done', 'failed', 'suspended'],
             array_column(JobStatus::cases(), 'value'),
         );
     }

@@ -4,11 +4,14 @@ declare(strict_types=1);
 
 namespace PhpClaw\Laravel;
 
+use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Contracts\Events\Dispatcher;
 use Illuminate\Contracts\Foundation\Application;
 use Illuminate\Foundation\Console\AboutCommand as LaravelAboutCommand;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\ServiceProvider;
+use Laravel\Telescope\EntryType;
+use Laravel\Telescope\IncomingEntry;
 use Laravel\Telescope\Telescope;
 use PhpClaw\AutoDiscovery\Bootstrap;
 use PhpClaw\Claw as PhpClaw;
@@ -24,6 +27,7 @@ use PhpClaw\Laravel\Console\JobsListCommand;
 use PhpClaw\Laravel\Console\JobsStatusCommand;
 use PhpClaw\Laravel\Console\McpServerCommand;
 use PhpClaw\Laravel\Console\PhpClawCommand;
+use PhpClaw\Laravel\Console\RunsCommand;
 use PhpClaw\Laravel\Console\StatsCommand;
 use PhpClaw\Laravel\Engine\EngineFactory;
 use PhpClaw\Laravel\Events\HookEventBridge;
@@ -51,6 +55,8 @@ use PhpClaw\Tools\ToolRegistry;
  */
 final class PhpClawServiceProvider extends ServiceProvider
 {
+    public const DURABLE_ENGINE = 'phpclaw.durable-engine';
+
     private static bool $eventBridgeRegistered = false;
 
     /**
@@ -85,6 +91,8 @@ final class PhpClawServiceProvider extends ServiceProvider
         $this->app->singleton(PhpClawInterface::class, fn (): PhpClawInterface => EngineFactory::build($this->app));
 
         $this->app->alias(PhpClawInterface::class, PhpClaw::class);
+
+        $this->app->singleton(self::DURABLE_ENGINE, fn (): PhpClawInterface => EngineFactory::build($this->app, terminalApproval: false));
 
         $this->app->singleton(ToolRegistry::class, function (): ToolRegistry {
             $registry = new ToolRegistry;
@@ -148,14 +156,32 @@ final class PhpClawServiceProvider extends ServiceProvider
                 GuideCommand::class,
                 JobsListCommand::class,
                 JobsStatusCommand::class,
+                RunsCommand::class,
             ]);
 
             $this->bootAboutCommand();
         }
 
-        $this->bootAgentState($this->app);
+        $this->bootDurableRunSchedule();
         $this->bootTelescopeWatcher();
+        $this->bootAgentState($this->app);
         $this->bootOctaneStateReset();
+    }
+
+    /**
+     * With durable_runs on, finish due runs every minute through the host's scheduler (`schedule:run` in cron).
+     *
+     * @return void
+     */
+    private function bootDurableRunSchedule(): void
+    {
+        if (! (bool) config('phpclaw.durable_runs', false)) {
+            return;
+        }
+
+        $this->callAfterResolving(Schedule::class, static function (Schedule $schedule): void {
+            $schedule->command('phpclaw:runs resume-due')->everyMinute()->withoutOverlapping();
+        });
     }
 
     /**
@@ -290,7 +316,7 @@ final class PhpClawServiceProvider extends ServiceProvider
     }
 
     /**
-     * Register the Telescope watcher when laravel/telescope is installed and enabled.
+     * Keep raw phpclaw.* events, which carry message text, out of Telescope, then register the watcher when enabled.
      *
      * @return void
      */
@@ -299,6 +325,9 @@ final class PhpClawServiceProvider extends ServiceProvider
         if (! class_exists(Telescope::class)) {
             return;
         }
+
+        Telescope::filter(static fn (IncomingEntry $entry): bool => $entry->type !== EntryType::EVENT
+            || ! str_starts_with((string) ($entry->content['name'] ?? ''), HookEventBridge::EVENT_PREFIX));
 
         if (! (bool) config('phpclaw.telescope', true)) {
             return;

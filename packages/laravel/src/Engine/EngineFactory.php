@@ -46,9 +46,10 @@ final class EngineFactory
      * Build a fully-configured engine from the application container and config.
      *
      * @param  Application  $app
+     * @param  bool|null  $terminalApproval  True keeps the Y/n terminal prompt, false pauses runs for a later decision; null follows the console.
      * @return PhpClawInterface
      */
-    public static function build(Application $app): PhpClawInterface
+    public static function build(Application $app, ?bool $terminalApproval = null): PhpClawInterface
     {
         $memory = new PrivacyAwareMemory(
             $app->make(MemoryInterface::class),
@@ -89,7 +90,7 @@ final class EngineFactory
             $builder->providerOverride($override);
         }
 
-        $builder->approvalGate(new CliApprovalGate);
+        self::applyApprovalMode($builder, $terminalApproval ?? LaravelConsole::isInteractive($app));
 
         self::applyAgentPrimitives($builder, $app, $providerSlug);
 
@@ -97,8 +98,41 @@ final class EngineFactory
     }
 
     /**
-     * Apply the fallback provider, outbound rate limit, response cache, and token budget
-     * primitives from config; each stays off unless the site owner set it.
+     * Keep the Y/n terminal gate, or with durable_runs and store_messages on, let web and worker runs pause.
+     *
+     * @param  ClawBuilder  $builder
+     * @param  bool  $terminalApproval  True for an interactive terminal, which keeps the Y/n prompt.
+     * @return void
+     */
+    private static function applyApprovalMode(ClawBuilder $builder, bool $terminalApproval): void
+    {
+        if (! (bool) config('phpclaw.durable_runs', false)) {
+            $builder->approvalGate(new CliApprovalGate);
+
+            return;
+        }
+
+        if (! (bool) config('phpclaw.store_messages', true)) {
+            Log::warning('phpClaw: durable_runs needs store_messages, so durable runs stay off.');
+            $builder->approvalGate(new CliApprovalGate);
+
+            return;
+        }
+
+        $deadline = config('phpclaw.durable_deadline_seconds');
+        $builder->durableRuns(max(0, (int) config('phpclaw.durable_step_budget', 0)), is_numeric($deadline) ? (int) $deadline : null);
+
+        if ($terminalApproval) {
+            $builder->approvalGate(new CliApprovalGate);
+
+            return;
+        }
+
+        $builder->withSuspendableApproval();
+    }
+
+    /**
+     * Apply the fallback, rate limit, response cache and token budget from config; each stays off unless set.
      *
      * @param  ClawBuilder  $builder
      * @param  Application  $app

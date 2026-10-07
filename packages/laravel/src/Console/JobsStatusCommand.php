@@ -9,10 +9,12 @@ use PhpClaw\Laravel\Enums\JobStatus;
 use PhpClaw\Laravel\QueueManager;
 
 /**
- * Artisan command `php artisan phpclaw:jobs:status {jobId}`, prints a queued job's status (exit 0 done, 2 failed, 1/3 pending/unknown).
+ * Artisan command `php artisan phpclaw:jobs:status {jobId}`: print a queued job's status and exit with its code.
  */
 final class JobsStatusCommand extends Command
 {
+    private const EXIT_SUSPENDED = 4;
+
     protected $signature = 'phpclaw:jobs:status
         {jobId : ULID returned by QueueManager::dispatchSend()}';
 
@@ -41,12 +43,14 @@ final class JobsStatusCommand extends Command
         match ($status) {
             JobStatus::Done->value => $this->printDoneResult($result),
             JobStatus::Failed->value => $this->printFailureResult($result),
+            JobStatus::Suspended->value => $this->printSuspendedResult($result),
             default => $this->error("Unknown status '{$status}' for job '{$jobId}'."),
         };
 
         return match ($status) {
             JobStatus::Done->value => self::SUCCESS,
             JobStatus::Failed->value => 2,
+            JobStatus::Suspended->value => self::EXIT_SUSPENDED,
             default => 3,
         };
     }
@@ -81,5 +85,18 @@ final class JobsStatusCommand extends Command
         $this->error('Status:    failed');
         $this->line('Error:     '.(string) ($result['error'] ?? '?'));
         $this->line('At:        '.(string) ($result['at'] ?? '?'));
+    }
+
+    /**
+     * Print a job whose run paused for approval or spent its budget, and where to continue it.
+     *
+     * @param  array<string, mixed>  $result  The stored job result payload.
+     * @return void
+     */
+    private function printSuspendedResult(array $result): void
+    {
+        $this->warn('Status:    paused ('.(string) ($result['run_status'] ?? '?').')');
+        $this->line('Run:       '.(string) ($result['run_id'] ?? '?'));
+        $this->line('Next:      php artisan phpclaw:runs list, then approve, deny or resume the run');
     }
 }

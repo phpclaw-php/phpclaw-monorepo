@@ -12,6 +12,8 @@ use PhpClaw\Hooks\HookEventBridge as CoreHookEventBridge;
  */
 final class HookEventBridge
 {
+    public const EVENT_PREFIX = 'phpclaw.';
+
     private bool $registered = false;
 
     /**
@@ -36,7 +38,7 @@ final class HookEventBridge
         }
 
         (new CoreHookEventBridge(
-            dispatcher: fn (string $event, array $ctx): mixed => $this->events->dispatch('phpclaw.'.$event, [$ctx]),
+            dispatcher: fn (string $event, array $ctx): mixed => $this->events->dispatch(self::EVENT_PREFIX.$event, [$ctx]),
         ))->register();
 
         $this->registered = true;
