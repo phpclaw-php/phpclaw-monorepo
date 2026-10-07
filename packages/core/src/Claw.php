@@ -11,6 +11,13 @@ use PhpClaw\Agent\ConversationTurn;
 use PhpClaw\Agent\InvocationPipeline;
 use PhpClaw\Agent\MessageAugmenter;
 use PhpClaw\Agent\OutputSanitiser;
+use PhpClaw\Agent\PausedBatch;
+use PhpClaw\Agent\ResumeReport;
+use PhpClaw\Agent\RunBudget;
+use PhpClaw\Agent\RunCheckpoint;
+use PhpClaw\Agent\RunState;
+use PhpClaw\Agent\RunStatus;
+use PhpClaw\Agent\RunStore;
 use PhpClaw\Agent\StructuredOutputRunner;
 use PhpClaw\Agent\StructuredResponse;
 use PhpClaw\Cloud\CloudManager;
@@ -18,10 +25,15 @@ use PhpClaw\Contracts\ClawInterface;
 use PhpClaw\Exceptions\GuardException;
 use PhpClaw\Exceptions\MaxIterationsException;
 use PhpClaw\Exceptions\ProviderException;
+use PhpClaw\Exceptions\RunConflictException;
+use PhpClaw\Exceptions\RunStateException;
+use PhpClaw\Exceptions\RunSuspendedException;
 use PhpClaw\Exceptions\StructuredOutputException;
+use PhpClaw\Exceptions\TokenBudgetExceededException;
 use PhpClaw\Exceptions\ToolException;
 use PhpClaw\Exceptions\UnsupportedSchemaException;
 use PhpClaw\Guards\GuardRegistry;
+use PhpClaw\Hooks\Dispatchers\AgentEventDispatcher;
 use PhpClaw\Memory\Contracts\MemoryInterface;
 use PhpClaw\Memory\PrivacyAwareMemory;
 use PhpClaw\Providers\CachedProvider;
@@ -33,6 +45,7 @@ use PhpClaw\Providers\Tools\WebSearch;
 use PhpClaw\Skills\RemoteSkillLoader;
 use PhpClaw\Skills\SkillRegistry;
 use PhpClaw\Support\JsonSchemaValidator;
+use PhpClaw\Support\Log;
 use PhpClaw\Tools\LoadSkillTool;
 use PhpClaw\Tools\ToolProfileResolver;
 use PhpClaw\Tools\ToolRegistry;
@@ -53,6 +66,12 @@ final class Claw implements ClawInterface
         If a tool returns an error or partial result, adjust and try again. Read current state before acting on it.
         Only write your final plain-text answer when the goal is fully achieved and no step remains. Then summarise what you did.
         DOCTRINE;
+
+    private const DEFAULT_PENDING_APPROVALS = 50;
+
+    private const DEFAULT_RESUME_LIMIT = 5;
+
+    private const DEFAULT_RESUME_SECONDS = 20;
 
     private readonly ClawConfig $config;
 
@@ -118,6 +137,9 @@ final class Claw implements ClawInterface
      * @throws MaxIterationsException If the ReAct loop cap is hit.
      * @throws ProviderException If the LLM API call fails.
      * @throws ToolException If the model calls an unregistered tool after the no-tools retry.
+     * @throws TokenBudgetExceededException If the run's token spend would pass maxTokenBudget.
+     * @throws RunSuspendedException With durable runs on, when the run pauses for approval or spends its step or time budget.
+     * @throws RunConflictException With durable runs on, when another process saved the run meanwhile.
      */
     public function send(string $message): AgentResponse
     {
@@ -126,7 +148,9 @@ final class Claw implements ClawInterface
         return $this->pipeline->execute(
             message: $message,
             streaming: false,
-            invoke: fn (string $augmented, string $runId, string $original): AgentResponse => $this->agent->run($augmented, runId: $runId, originalMessage: $original),
+            invoke: fn (string $augmented, string $runId, string $original): AgentResponse => $this->isDurable()
+                ? $this->durableInvoke(RunState::start($runId, $augmented, $original))
+                : $this->agent->run($augmented, runId: $runId, originalMessage: $original),
         );
     }
 
@@ -186,7 +210,9 @@ final class Claw implements ClawInterface
         return $this->pipeline->execute(
             message: $message,
             streaming: true,
-            invoke: fn (string $augmented, string $runId, string $original): AgentResponse => $this->agent->stream($augmented, $onToken, runId: $runId, originalMessage: $original),
+            invoke: fn (string $augmented, string $runId, string $original): AgentResponse => $this->isDurable()
+                ? $this->durableInvoke(RunState::start($runId, $augmented, $original), $onToken)
+                : $this->agent->stream($augmented, $onToken, runId: $runId, originalMessage: $original),
         );
     }
 
@@ -238,8 +264,144 @@ final class Claw implements ClawInterface
             message: $message,
             streaming: false,
             beforePersist: null,
-            invoke: fn (string $augmented, array $history, string $runId, string $original): AgentResponse => $this->agent->run($augmented, $history, runId: $runId, originalMessage: $original),
+            invoke: fn (string $augmented, array $history, string $runId, string $original): AgentResponse => $this->isDurable()
+                ? $this->durableInvoke(RunState::start($runId, $augmented, $original, $history, $conversation->id))
+                : $this->agent->run($augmented, $history, runId: $runId, originalMessage: $original),
         );
+    }
+
+    /**
+     * Continue a saved durable run, claiming it first so a second process cannot repeat its work.
+     *
+     * @param  string  $runId  Id from RunSuspendedException.
+     * @return AgentResponse The run's final answer.
+     *
+     * @throws RunStateException When the run is missing, malformed, finished, cancelled, already running elsewhere, or still waiting for a decision.
+     * @throws RunSuspendedException When the run pauses again or spends this process's budget.
+     * @throws RunConflictException When another process saved the run meanwhile.
+     */
+    public function resume(string $runId): AgentResponse
+    {
+        $this->ensureCloudBooted();
+        $store = $this->requireRunStore();
+        $state = $store->load($runId);
+        $state->assertResumable();
+
+        $claimed = $state->withStatus(RunStatus::Running);
+        $store->save($claimed);
+        $claimed = $claimed->withVersion($claimed->version + 1);
+
+        AgentEventDispatcher::runResumed($runId, $state->status->value, $state->progress->iteration);
+
+        return $this->pipeline->resume(
+            $runId,
+            $state->task->routingMessage,
+            fn (): AgentResponse => $this->durableInvoke($claimed),
+            $this->loadConversation($state->task->conversationId),
+        );
+    }
+
+    /**
+     * Saved runs waiting for a human decision on a paused call.
+     *
+     * @param  int  $limit  Most runs to return.
+     * @return list<RunState>
+     *
+     * @throws RunStateException When no memory driver is configured.
+     */
+    public function pendingApprovals(int $limit = self::DEFAULT_PENDING_APPROVALS): array
+    {
+        return $this->requireRunStore()->findPending($limit);
+    }
+
+    /**
+     * Approve the call a saved run is paused on; resume() then runs it.
+     *
+     * @param  string  $runId  Saved run id.
+     * @param  string  $callId  Id of the paused call.
+     * @return void
+     *
+     * @throws RunStateException When the run has no undecided paused call with that id.
+     * @throws RunConflictException When another process saved the run meanwhile.
+     */
+    public function approve(string $runId, string $callId): void
+    {
+        $this->decide($runId, $callId, PausedBatch::APPROVED, '');
+    }
+
+    /**
+     * Deny the call a saved run is paused on; resume() then hands the model the denial instead of running it.
+     *
+     * @param  string  $runId  Saved run id.
+     * @param  string  $callId  Id of the paused call.
+     * @param  string  $reason  Reason given with the decision, carried on the run.approved event.
+     * @return void
+     *
+     * @throws RunStateException When the run has no undecided paused call with that id.
+     * @throws RunConflictException When another process saved the run meanwhile.
+     */
+    public function deny(string $runId, string $callId, string $reason = ''): void
+    {
+        $this->decide($runId, $callId, PausedBatch::DENIED, $reason);
+    }
+
+    /**
+     * Cancel a saved run; a running one stops at its next step and a finished one is left as it is.
+     *
+     * @param  string  $runId  Saved run id.
+     * @param  string  $reason  Reason recorded on the event.
+     * @return void
+     *
+     * @throws RunStateException When the run is missing or malformed.
+     * @throws RunConflictException When another process saved the run meanwhile.
+     */
+    public function cancel(string $runId, string $reason = ''): void
+    {
+        $store = $this->requireRunStore();
+        $state = $store->load($runId);
+
+        if ($state->status->isTerminal()) {
+            return;
+        }
+
+        $store->save($state->withStatus(RunStatus::Cancelled));
+        AgentEventDispatcher::runCancelled($runId, $reason);
+    }
+
+    /**
+     * Resume the saved runs that are due: suspended, decided, or left running by a stopped process.
+     *
+     * @param  int  $limit  Most runs to resume in this call.
+     * @param  int  $timeBudgetSeconds  Seconds after which no further run is started; 0 = no limit.
+     * @param  (callable(RunState, \Closure(): AgentResponse): mixed)|null  $around  Wraps each resume, for example to act as the run's owner; it must call the closure.
+     * @return ResumeReport Counts of the runs resumed, by outcome.
+     *
+     * @throws RunStateException When no memory driver is configured.
+     */
+    public function resumeDue(int $limit = self::DEFAULT_RESUME_LIMIT, int $timeBudgetSeconds = self::DEFAULT_RESUME_SECONDS, ?callable $around = null): ResumeReport
+    {
+        $store = $this->requireRunStore();
+
+        try {
+            $due = $store->findDue($limit);
+        } catch (\Throwable $e) {
+            Log::warning('[phpClaw] Saved runs could not be listed: '.$e::class);
+
+            return new ResumeReport;
+        }
+
+        $startedAt = microtime(as_float: true);
+        $counts = [ResumeReport::COMPLETED => 0, ResumeReport::SUSPENDED => 0, ResumeReport::FAILED => 0, ResumeReport::SKIPPED => 0];
+
+        foreach ($due as $state) {
+            if ($timeBudgetSeconds > 0 && microtime(as_float: true) - $startedAt >= $timeBudgetSeconds) {
+                break;
+            }
+
+            $counts[$this->resumeSavedRun($store, $state, $around)]++;
+        }
+
+        return new ResumeReport(...$counts);
     }
 
     /**
@@ -269,7 +431,9 @@ final class Claw implements ClawInterface
             message: $message,
             streaming: true,
             beforePersist: $beforePersist,
-            invoke: fn (string $augmented, array $history, string $runId, string $original): AgentResponse => $this->agent->stream($augmented, $onToken, $history, runId: $runId, originalMessage: $original),
+            invoke: fn (string $augmented, array $history, string $runId, string $original): AgentResponse => $this->isDurable()
+                ? $this->durableInvoke(RunState::start($runId, $augmented, $original, $history, $conversation->id), $onToken)
+                : $this->agent->stream($augmented, $onToken, $history, runId: $runId, originalMessage: $original),
         );
     }
 
@@ -362,8 +526,7 @@ final class Claw implements ClawInterface
     }
 
     /**
-     * Wrap the provider (or chain) in the configured decorators: throttle first, then the response cache
-     * outermost, so a cache hit never reaches the throttle and takes no token.
+     * Wrap the provider in the throttle, then the response cache outermost, so a cache hit takes no token.
      *
      * @param  ProviderInterface  $provider  Primary provider, or the ProviderChain built from it and its fallbacks.
      * @param  ClawConfig  $config  Configuration used to build the response-cache fingerprint (may carry the skills-augmented system prompt).
@@ -391,8 +554,7 @@ final class Claw implements ClawInterface
     }
 
     /**
-     * Build the CachedProvider fingerprint from every value that changes what a request means: the provider
-     * chain identity, the system prompt actually used, and the generation settings.
+     * Build the response-cache fingerprint from the provider chain, the system prompt used and the generation settings.
      *
      * @param  ClawConfig  $config  Configuration carrying the system prompt actually used (with the skills section when present).
      * @param  ProviderInterface  $primary  Primary provider.
@@ -416,8 +578,7 @@ final class Claw implements ClawInterface
     }
 
     /**
-     * Class names of the provider-native tools attached by applyWebSearchTools(), or an empty list when no
-     * provider in the chain supports web search.
+     * Class names of the provider-native tools applyWebSearchTools() attached, or none without web search support.
      *
      * @param  ProviderInterface  $primary  Primary provider.
      * @param  ProviderInterface[]  $fallbacks  Fallback providers, in order.
@@ -476,6 +637,154 @@ final class Claw implements ClawInterface
         }
 
         return $config->withProvider($fallback['provider'], $fallback['model'], $fallback['apiKey'])->buildProvider();
+    }
+
+    /**
+     * Whether runs are saved as they go (durable runs or suspendable approval switched on at build time).
+     *
+     * @return bool
+     */
+    private function isDurable(): bool
+    {
+        return $this->config->durableRuns !== null;
+    }
+
+    /**
+     * Run or continue a durable run in this process, from the version it was read at.
+     *
+     * @param  RunState  $state  A new run from RunState::start(), or a saved run ready to continue.
+     * @param  (callable(string): void)|null  $onToken  Receives the final answer's chunks; null for a plain run.
+     * @return AgentResponse
+     *
+     * @throws RunSuspendedException When the run pauses, spends its budget, or is cancelled.
+     * @throws RunConflictException When another process saved the run meanwhile.
+     */
+    private function durableInvoke(RunState $state, ?callable $onToken = null): AgentResponse
+    {
+        return $this->runDurably(
+            $state->runId(),
+            fn (RunCheckpoint $checkpoint): AgentResponse => $this->agent->runDurable($state, $checkpoint, $onToken),
+            $state->version,
+        );
+    }
+
+    /**
+     * The stored conversation a run belongs to, or null for a send() run or a conversation deleted meanwhile.
+     *
+     * @param  string|null  $conversationId  Conversation id carried on the run.
+     * @return Conversation|null
+     */
+    private function loadConversation(?string $conversationId): ?Conversation
+    {
+        if ($conversationId === null || $this->memory === null) {
+            return null;
+        }
+
+        $stored = $this->memory->get($conversationId, Conversation::MEMORY_NAMESPACE);
+
+        return is_array($stored) ? Conversation::fromArray($stored) : null;
+    }
+
+    /**
+     * Run a durable invocation in this process and record whether it completed or failed.
+     *
+     * @param  string  $runId  Run id.
+     * @param  \Closure(RunCheckpoint): AgentResponse  $start  Runs the agent with the checkpoint.
+     * @param  int  $version  Version of the saved run this process starts from; 0 for a new run.
+     * @return AgentResponse
+     *
+     * @throws RunSuspendedException When the run pauses, spends its budget, or is cancelled.
+     * @throws RunConflictException When another process saved the run meanwhile.
+     * @throws RunStateException When no memory driver is configured.
+     */
+    private function runDurably(string $runId, \Closure $start, int $version = 0): AgentResponse
+    {
+        $store = $this->requireRunStore();
+
+        try {
+            $response = $start(new RunCheckpoint($store, $this->config->durableRuns ?? new RunBudget, $version));
+        } catch (RunSuspendedException|RunConflictException $e) {
+            throw $e;
+        } catch (\Throwable $e) {
+            $store->finish($runId, RunStatus::Failed);
+            throw $e;
+        }
+
+        $store->finish($runId, RunStatus::Completed);
+
+        return $response;
+    }
+
+    /**
+     * Record a decision on the call a saved run is paused on.
+     *
+     * @param  string  $runId  Saved run id.
+     * @param  string  $callId  Id of the paused call.
+     * @param  string  $decision  PausedBatch::APPROVED or DENIED.
+     * @param  string  $reason  Reason given with the decision, carried on the run.approved event.
+     * @return void
+     *
+     * @throws RunStateException When the run has no undecided paused call with that id.
+     * @throws RunConflictException When another process saved the run meanwhile.
+     */
+    private function decide(string $runId, string $callId, string $decision, string $reason): void
+    {
+        $store = $this->requireRunStore();
+        $state = $store->load($runId);
+        $paused = $state->paused;
+
+        if (! $state->isAwaitingDecision() || $paused === null || $paused->callId() !== $callId) {
+            throw new RunStateException("Run {$runId} has no undecided paused call {$callId}.");
+        }
+
+        $store->save($state->withStatus(RunStatus::AwaitingApproval, $paused->withDecision($decision)));
+        AgentEventDispatcher::runApproved($runId, $callId, $paused->toolName(), $decision, $reason);
+    }
+
+    /**
+     * Resume one due run and return its outcome, skipping a run another process still owns.
+     *
+     * @param  RunStore  $store  Store the run was listed from.
+     * @param  RunState  $state  Due run, as listed.
+     * @param  (callable(RunState, \Closure(): AgentResponse): mixed)|null  $around  Wraps the resume when given.
+     * @return string One of the ResumeReport outcome constants.
+     */
+    private function resumeSavedRun(RunStore $store, RunState $state, ?callable $around): string
+    {
+        try {
+            if ($state->status === RunStatus::Running) {
+                $store->save($state->withStatus(RunStatus::Suspended));
+            }
+
+            $resume = fn (): AgentResponse => $this->resume($state->runId());
+            $around === null ? $resume() : $around($state, $resume);
+
+            return ResumeReport::COMPLETED;
+        } catch (RunSuspendedException) {
+            return ResumeReport::SUSPENDED;
+        } catch (RunConflictException|RunStateException) {
+            return ResumeReport::SKIPPED;
+        } catch (\Throwable $e) {
+            Log::warning("[phpClaw] Saved run {$state->runId()} failed on resume: ".$e::class);
+
+            return ResumeReport::FAILED;
+        }
+    }
+
+    /**
+     * Return the store durable runs are saved in, or refuse when no memory driver is configured.
+     *
+     * @return RunStore
+     *
+     * @throws RunStateException When no memory driver is configured.
+     */
+    private function requireRunStore(): RunStore
+    {
+        if ($this->memory === null) {
+            throw new RunStateException('Durable runs need a memory driver: none is configured.');
+        }
+
+        return new RunStore($this->memory);
     }
 
     /**

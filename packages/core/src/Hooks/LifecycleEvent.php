@@ -63,6 +63,11 @@ enum LifecycleEvent: string
     case JobCompleted = 'job.completed';
     case JobFailed = 'job.failed';
 
+    case RunSuspended = 'run.suspended';
+    case RunResumed = 'run.resumed';
+    case RunApproved = 'run.approved';
+    case RunCancelled = 'run.cancelled';
+
     case SkillRegistered = 'skill.registered';
     case SkillLoaded = 'skill.loaded';
     case SkillMatched = 'skill.matched';

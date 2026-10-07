@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace PhpClaw\Agent;
 
 use PhpClaw\Exceptions\GuardException;
+use PhpClaw\Exceptions\RunSuspendedException;
 use PhpClaw\Guards\GuardRegistry;
 use PhpClaw\Hooks\HookDispatcher;
 use PhpClaw\Memory\Contracts\MemoryInterface;
@@ -42,18 +43,55 @@ final class InvocationPipeline
             $augmented = $this->augmenter->augment($message);
             $this->scanOrThrow($augmented, $message);
 
-            HookDispatcher::agentBefore($message, streaming: $streaming, runId: $runId);
+            return $this->invokeWithHooks(static fn (): AgentResponse => $invoke($augmented, $runId, $message), $message, $streaming, $runId);
+        });
+    }
 
-            try {
-                $response = $invoke($augmented, $runId, $message);
-            } catch (\Throwable $e) {
-                $this->reportErrorAndRethrow($e, $message, $streaming, $runId);
+    /**
+     * Continue a saved run under its own run id, firing the agent hooks without re-augmenting the message.
+     *
+     * @param  string  $runId  Persisted run id.
+     * @param  string  $message  Original user message, for the hook payloads and the appended turn.
+     * @param  callable  $invoke  Callable that resumes the agent and returns AgentResponse.
+     * @param  Conversation|null  $conversation  Stored conversation the run belongs to; null for a send() run.
+     * @return AgentResponse The result.
+     */
+    public function resume(string $runId, string $message, callable $invoke, ?Conversation $conversation = null): AgentResponse
+    {
+        return HookDispatcher::withRun($runId, function () use ($runId, $message, $invoke, $conversation): AgentResponse {
+            $response = $this->invokeWithHooks($invoke, $message, streaming: false, runId: $runId, conversationId: $conversation->id ?? '');
+
+            if ($conversation !== null) {
+                $this->fireConversationEnd($this->appendTurn($conversation, $message, $response, beforePersist: null), $message, $response);
             }
-
-            $this->fireAgentAfter($message, $response, $streaming, conversationId: '', runId: $runId);
 
             return $response;
         });
+    }
+
+    /**
+     * Fire agent.before, run the invocation, report a failure through agent.error, and fire agent.after.
+     *
+     * @param  callable(): AgentResponse  $invoke  Runs the agent.
+     * @param  string  $message  Original user message, for the hook payloads.
+     * @param  bool  $streaming  Whether the request is streaming.
+     * @param  string  $runId  Active run id.
+     * @param  string  $conversationId  Conversation the run belongs to; empty for a send() run.
+     * @return AgentResponse The result.
+     */
+    private function invokeWithHooks(callable $invoke, string $message, bool $streaming, string $runId, string $conversationId = ''): AgentResponse
+    {
+        HookDispatcher::agentBefore($message, conversationId: $conversationId, streaming: $streaming, runId: $runId);
+
+        try {
+            $response = $invoke();
+        } catch (\Throwable $e) {
+            $this->reportErrorAndRethrow($e, $message, $streaming, $runId, $conversationId);
+        }
+
+        $this->fireAgentAfter($message, $response, $streaming, conversationId: $conversationId, runId: $runId);
+
+        return $response;
     }
 
     /**
@@ -91,21 +129,10 @@ final class InvocationPipeline
                 $this->reportErrorAndRethrow($e, $message, $streaming, $runId, $conversation->id);
             }
 
-            $updated = $conversation
-                ->withMessage(Message::user($message))
-                ->withMessage(Message::assistant($response->text));
-
-            $this->persistConversation($updated, $beforePersist);
+            $updated = $this->appendTurn($conversation, $message, $response, $beforePersist);
 
             $this->fireAgentAfter($message, $response, $streaming, conversationId: $updated->id, runId: $runId);
-
-            HookDispatcher::conversationEnd(
-                conversationId: $updated->id,
-                turnCount: count($updated->history),
-                message: $message,
-                response: $response->text,
-                durationMs: $response->durationMs,
-            );
+            $this->fireConversationEnd($updated, $message, $response);
 
             return new ConversationTurn(
                 response: $response,
@@ -115,7 +142,7 @@ final class InvocationPipeline
     }
 
     /**
-     * Fire the agent.error hook and rethrow the caught exception.
+     * Fire the agent.error hook and rethrow the caught exception; a durable run that paused is rethrown without it.
      *
      * @param  \Throwable  $e  Exception caught during the agent invocation.
      * @param  string  $message  Original user message reported in the hook payload.
@@ -128,6 +155,10 @@ final class InvocationPipeline
      */
     private function reportErrorAndRethrow(\Throwable $e, string $message, bool $streaming, string $runId, string $conversationId = ''): never
     {
+        if ($e instanceof RunSuspendedException) {
+            throw $e;
+        }
+
         HookDispatcher::agentError($message, $e->getMessage(), get_class($e), conversationId: $conversationId, streaming: $streaming, runId: $runId);
         throw $e;
     }
@@ -162,6 +193,45 @@ final class InvocationPipeline
         $fqcn = $e->guardClass();
 
         return $fqcn !== null ? basename(str_replace('\\', '/', $fqcn)) : null;
+    }
+
+    /**
+     * Append the user message and the answer to the conversation and save it.
+     *
+     * @param  Conversation  $conversation  Conversation the turn belongs to.
+     * @param  string  $message  User message.
+     * @param  AgentResponse  $response  Final response.
+     * @param  (callable(array<string, mixed>): (array<string, mixed>|mixed))|null  $beforePersist  Optional mutator applied to the payload before writing to memory.
+     * @return Conversation The conversation with the turn appended.
+     */
+    private function appendTurn(Conversation $conversation, string $message, AgentResponse $response, ?callable $beforePersist): Conversation
+    {
+        $updated = $conversation
+            ->withMessage(Message::user($message))
+            ->withMessage(Message::assistant($response->text));
+
+        $this->persistConversation($updated, $beforePersist);
+
+        return $updated;
+    }
+
+    /**
+     * Fire conversation.end for a finished turn.
+     *
+     * @param  Conversation  $updated  Conversation with the turn appended.
+     * @param  string  $message  User message.
+     * @param  AgentResponse  $response  Final response.
+     * @return void
+     */
+    private function fireConversationEnd(Conversation $updated, string $message, AgentResponse $response): void
+    {
+        HookDispatcher::conversationEnd(
+            conversationId: $updated->id,
+            turnCount: count($updated->history),
+            message: $message,
+            response: $response->text,
+            durationMs: $response->durationMs,
+        );
     }
 
     /**

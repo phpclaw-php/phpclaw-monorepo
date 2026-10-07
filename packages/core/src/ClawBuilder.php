@@ -7,12 +7,15 @@ namespace PhpClaw;
 use PhpClaw\Agent\CliApprovalGate;
 use PhpClaw\Agent\Contracts\ApprovalGateInterface;
 use PhpClaw\Agent\MessageAugmenter;
+use PhpClaw\Agent\RunBudget;
+use PhpClaw\Agent\SuspendableApprovalGate;
 use PhpClaw\Config\CloudSettings;
 use PhpClaw\Config\LoopConfig;
 use PhpClaw\Config\ProviderConfig;
 use PhpClaw\Config\RuntimeConfig;
 use PhpClaw\Config\SkillConfig;
 use PhpClaw\Config\ToolConfig;
+use PhpClaw\Exceptions\AdapterException;
 use PhpClaw\Memory\Contracts\MemoryInterface;
 use PhpClaw\Providers\Contracts\ProviderInterface;
 use PhpClaw\Providers\Tools\WebSearch;
@@ -60,6 +63,8 @@ final class ClawBuilder
     private int $maxTokenBudget = 0;
 
     private int $maxParseRetries = 2;
+
+    private ?RunBudget $durableRuns = null;
 
     private string $apiKey = '';
 
@@ -637,11 +642,56 @@ final class ClawBuilder
     }
 
     /**
+     * Save every send(), stream() and conversation run after each step so another process can resume it, and suspend it on a budget.
+     *
+     * @param  int  $stepBudget  Steps one process may run before the run suspends; 0 = no limit.
+     * @param  int|null  $deadlineSeconds  Seconds one process may spend before the run suspends; null = half of max_execution_time when it is set, else no limit; 0 = no limit.
+     * @return static Builder instance for fluent chaining.
+     */
+    public function durableRuns(int $stepBudget = 0, ?int $deadlineSeconds = null): static
+    {
+        $this->durableRuns = new RunBudget(max(0, $stepBudget), $deadlineSeconds);
+
+        return $this;
+    }
+
+    /**
+     * Pause send(), stream() and conversation runs at a mutating tool for a later decision; switches on durable runs.
+     *
+     * @return static Builder instance for fluent chaining.
+     */
+    public function withSuspendableApproval(): static
+    {
+        $this->approvalGate = new SuspendableApprovalGate;
+        $this->durableRuns ??= new RunBudget;
+
+        return $this;
+    }
+
+    /**
      * Assemble the final ClawConfig and return a new Claw instance.
      *
      * @return Claw Fully wired engine; default guards, skills, and cloud boot have all run.
+     *
+     * @throws AdapterException When durable runs are on without a memory driver or with storeMessages off.
      */
     public function build(): Claw
+    {
+        if ($this->durableRuns !== null && ($this->memory === null || ! $this->storeMessages)) {
+            throw new AdapterException('Durable runs need a memory driver with storeMessages on: the run is saved through it.');
+        }
+
+        [$tools, $maxToolsPerTurn] = $this->applyRemoteToolProfiles();
+
+        return new Claw($this->buildConfig($tools, $maxToolsPerTurn));
+    }
+
+    /**
+     * Narrow the tools by each remote tool profile and take a profile's per-turn cap when none was set.
+     *
+     * @return array{0: ToolInterface[], 1: int} The tools and the per-turn tool cap.
+     */
+    private function applyRemoteToolProfiles(): array
     {
         $tools = $this->tools;
         $maxToolsPerTurn = $this->maxToolsPerTurn;
@@ -656,9 +706,21 @@ final class ClawBuilder
             }
         }
 
+        return [$tools, $maxToolsPerTurn];
+    }
+
+    /**
+     * Map every builder setting onto its config group; a flat argument list, one line per setting.
+     *
+     * @param  ToolInterface[]  $tools  Tools after the remote profiles.
+     * @param  int  $maxToolsPerTurn  Per-turn tool cap after the remote profiles.
+     * @return ClawConfig
+     */
+    private function buildConfig(array $tools, int $maxToolsPerTurn): ClawConfig
+    {
         $composedSystemPrompt = $this->composeSystemPrompt($tools);
 
-        $config = new ClawConfig(
+        return new ClawConfig(
             provider: new ProviderConfig(
                 apiKey: $this->apiKey,
                 provider: $this->provider,
@@ -685,6 +747,7 @@ final class ClawBuilder
                 maxToolResultTokens: $this->maxToolResultTokens,
                 maxTokenBudget: $this->maxTokenBudget,
                 maxParseRetries: $this->maxParseRetries,
+                durableRuns: $this->durableRuns,
             ),
             tools: new ToolConfig(
                 tools: $tools,
@@ -712,8 +775,6 @@ final class ClawBuilder
                 longTermMemoryTopK: $this->longTermMemoryTopK,
             ),
         );
-
-        return new Claw($config);
     }
 
     /**

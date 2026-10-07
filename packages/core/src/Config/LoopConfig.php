@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace PhpClaw\Config;
 
+use PhpClaw\Agent\RunBudget;
+
 /**
  * ReAct loop, retry, and history-window limits for ClawConfig.
  */
@@ -29,6 +31,8 @@ final class LoopConfig
 
     public readonly int $maxParseRetries;
 
+    public readonly ?RunBudget $durableRuns;
+
     /**
      * Group and validate the runtime limits.
      *
@@ -40,6 +44,7 @@ final class LoopConfig
      * @param  int  $maxToolResultTokens  Estimated-token ceiling on a single tool result before it is cut; 0 disables the cut.
      * @param  int  $maxTokenBudget  Total input+output token spend ceiling across the run, checked between provider calls only (one reply can overshoot) and excluding compaction summaries; 0 = unlimited; clamped to >=0.
      * @param  int  $maxParseRetries  Structured-output repair-retry attempts before StructuredOutputException; clamped to >=0.
+     * @param  RunBudget|null  $durableRuns  Save send(), stream() and conversation runs after every step within this per-process budget; null = durable runs off.
      * @return void
      */
     public function __construct(
@@ -51,6 +56,7 @@ final class LoopConfig
         int $maxToolResultTokens = self::DEFAULT_MAX_TOOL_RESULT_TOKENS,
         int $maxTokenBudget = 0,
         int $maxParseRetries = 2,
+        ?RunBudget $durableRuns = null,
     ) {
         $this->maxIterations = $maxIterations > 0 ? $maxIterations : self::DEFAULT_MAX_ITERATIONS;
         $this->maxRetries = max(0, $maxRetries);
@@ -60,5 +66,6 @@ final class LoopConfig
         $this->maxToolResultTokens = max(0, $maxToolResultTokens);
         $this->maxTokenBudget = max(0, $maxTokenBudget);
         $this->maxParseRetries = max(0, $maxParseRetries);
+        $this->durableRuns = $durableRuns;
     }
 }

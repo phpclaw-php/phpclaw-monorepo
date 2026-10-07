@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace PhpClaw;
 
 use PhpClaw\Agent\Contracts\ApprovalGateInterface;
+use PhpClaw\Agent\RunBudget;
 use PhpClaw\AutoDiscovery\Bootstrap;
 use PhpClaw\Config\CloudSettings;
 use PhpClaw\Config\EnvVars;
@@ -124,6 +125,8 @@ final class ClawConfig
 
     public readonly int $maxParseRetries;
 
+    public readonly ?RunBudget $durableRuns;
+
     /**
      * Build the immutable configuration from six grouped setting objects.
      *
@@ -180,6 +183,7 @@ final class ClawConfig
         $this->maxToolsPerTurn = $limits->maxToolsPerTurn;
         $this->maxTokenBudget = $limits->maxTokenBudget;
         $this->maxParseRetries = $limits->maxParseRetries;
+        $this->durableRuns = $limits->durableRuns;
 
         $this->tools = $tools->tools;
         $this->shellAllowlist = $tools->shellAllowlist;

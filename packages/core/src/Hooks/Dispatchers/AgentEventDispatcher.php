@@ -320,4 +320,75 @@ final class AgentEventDispatcher
             parentRunId: $parentRunId,
         );
     }
+
+    /**
+     * Fires when a durable run is saved and stops before its answer: paused for approval, or paused on a step or time budget.
+     *
+     * @param  string  $runId  Saved run id.
+     * @param  string  $status  Status the run was saved with.
+     * @param  int  $iteration  Iterations completed.
+     * @param  string  $toolName  Tool waiting for approval, or '' for a budget pause.
+     * @param  string  $callId  Tool call id waiting for approval, or ''.
+     * @return void
+     */
+    public static function runSuspended(string $runId, string $status, int $iteration, string $toolName = '', string $callId = ''): void
+    {
+        EventPayload::fire(
+            LifecycleEvent::RunSuspended->value,
+            ['status' => $status, 'iteration' => $iteration, 'tool_name' => $toolName, 'call_id' => $callId],
+            runId: $runId,
+        );
+    }
+
+    /**
+     * Fires when a saved run is resumed.
+     *
+     * @param  string  $runId  Resumed run id.
+     * @param  string  $status  Status the run was resumed from.
+     * @param  int  $iteration  Iterations completed before the resume.
+     * @return void
+     */
+    public static function runResumed(string $runId, string $status, int $iteration): void
+    {
+        EventPayload::fire(
+            LifecycleEvent::RunResumed->value,
+            ['status' => $status, 'iteration' => $iteration],
+            runId: $runId,
+        );
+    }
+
+    /**
+     * Fires when a human decision is recorded on a paused call: approved or denied.
+     *
+     * @param  string  $runId  Run id.
+     * @param  string  $callId  Decided tool call id.
+     * @param  string  $toolName  Decided tool name.
+     * @param  string  $decision  "approved" or "denied".
+     * @param  string  $reason  Reason given with the decision, or ''.
+     * @return void
+     */
+    public static function runApproved(string $runId, string $callId, string $toolName, string $decision, string $reason): void
+    {
+        EventPayload::fire(
+            LifecycleEvent::RunApproved->value,
+            ['call_id' => $callId, 'tool_name' => $toolName, 'decision' => $decision, 'reason' => $reason],
+            runId: $runId,
+        );
+    }
+
+    /**
+     * Fires when a run is cancelled.
+     *
+     * @param  string  $runId  Cancelled run id.
+     * @param  string  $reason  Reason given, or ''.
+     * @return void
+     */
+    public static function runCancelled(string $runId, string $reason): void
+    {
+        EventPayload::fire(
+            LifecycleEvent::RunCancelled->value,
+            ['reason' => $reason],
+            runId: $runId,
+        );
+    }
 }

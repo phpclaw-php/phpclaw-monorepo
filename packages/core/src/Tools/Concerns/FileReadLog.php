@@ -36,6 +36,16 @@ final class FileReadLog
     }
 
     /**
+     * Every recorded read, so a saved run can carry it to the process that resumes it.
+     *
+     * @return array<string, list<string>> Canonical paths read, keyed by workspace root.
+     */
+    public static function all(): array
+    {
+        return array_map(static fn (array $paths): array => array_keys($paths), self::$readPathsByWorkspace);
+    }
+
+    /**
      * Forget every recorded read across all workspaces.
      *
      * @return void

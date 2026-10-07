@@ -1,0 +1,70 @@
+#!/usr/bin/env php
+<?php
+
+declare(strict_types=1);
+
+/**
+ * phpclaw-resume: finish the saved durable runs that are due, once, for a cron job or a worker loop.
+ */
+
+$options = getopt('', ['bootstrap:', 'limit:', 'seconds:', 'help']);
+
+if (isset($options['help'])) {
+    fwrite(STDOUT, "Usage: phpclaw-resume --bootstrap=<file.php> [--limit=N] [--seconds=N]\n");
+    fwrite(STDOUT, "The bootstrap file returns your configured PhpClaw\\Claw; due saved runs are resumed once.\n");
+    exit(0);
+}
+
+$bootstrap = (string) ($options['bootstrap'] ?? '');
+
+if ($bootstrap === '') {
+    fwrite(STDERR, "phpclaw-resume: --bootstrap=<file.php> is required.\n");
+    exit(1);
+}
+
+if (! is_file($bootstrap)) {
+    fwrite(STDERR, "phpclaw-resume: bootstrap file not found: {$bootstrap}\n");
+    exit(1);
+}
+
+$autoloadCandidates = [
+    __DIR__ . '/../vendor/autoload.php',
+    __DIR__ . '/../../../autoload.php',
+    __DIR__ . '/../../../../autoload.php',
+];
+
+foreach ($autoloadCandidates as $path) {
+    if (is_file($path)) {
+        require $path;
+        break;
+    }
+}
+
+$claw = require $bootstrap;
+
+if (! $claw instanceof \PhpClaw\Claw) {
+    fwrite(STDERR, "phpclaw-resume: the bootstrap file must return a PhpClaw\\Claw instance.\n");
+    exit(1);
+}
+
+$arguments = [];
+
+if (isset($options['limit'])) {
+    $arguments['limit'] = (int) $options['limit'];
+}
+
+if (isset($options['seconds'])) {
+    $arguments['timeBudgetSeconds'] = (int) $options['seconds'];
+}
+
+$report = $claw->resumeDue(...$arguments);
+
+fwrite(STDOUT, sprintf(
+    "completed=%d suspended=%d failed=%d skipped=%d\n",
+    $report->completed,
+    $report->suspended,
+    $report->failed,
+    $report->skipped,
+));
+
+exit(0);

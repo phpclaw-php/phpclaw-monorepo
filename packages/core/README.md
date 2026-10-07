@@ -113,7 +113,7 @@ print_r($response->toolsCalled);
 
 ✅ **8 default guards + 1 opt-in**: prompt-injection, Unicode/homoglyph, role-switch, PII, code-injection, destructive-SQL and length checks scan every message before it reaches the provider, on by default, zero config.
 
-✅ **46 lifecycle hooks**: observe or react to every step of the agent loop, `agent.before` through `skill.not_matched`, without touching core code.
+✅ **50 lifecycle hooks**: observe or react to every step of the agent loop, `agent.before` through `skill.not_matched`, without touching core code.
 
 ✅ **Streaming, prompt caching, extended thinking**: token-by-token output, cached input tokens billed at Anthropic's discounted cache-read rate (see [Anthropic's pricing](https://www.anthropic.com/pricing)), Claude's reasoning chain exposed on `$response->thinking`.
 
@@ -172,9 +172,30 @@ $claw = Claw::builder()
     ->build();
 ```
 
+**Durable runs.** `durableRuns($stepBudget, $deadlineSeconds)` saves a `send()`, `stream()` or conversation run through the memory driver after every step, and stops it with `RunSuspendedException` when the process has spent its step or time budget. `withSuspendableApproval()` also pauses a run at a mutating tool until someone calls `approve()` or `deny()`; `resume($runId)` continues it in any process (a conversation run's finished turn is then added to its conversation), `pendingApprovals()` lists the paused runs and `cancel()` stops one. Both need a memory driver with `storeMessages` on, and are off by default.
+
+```php
+$claw = Claw::builder()->memory($memory)->withSuspendableApproval()->build();
+
+try {
+    $claw->send('Refund order 1042');
+} catch (RunSuspendedException $e) {
+    // later, in another request or worker:
+    $claw->approve($e->runId, $claw->pendingApprovals()[0]->paused->callId());
+    $claw->resume($e->runId);
+}
+```
+
+To finish saved runs without tracking their ids, call `resumeDue()` from a cron job or worker. It resumes up to 5 runs that are due (suspended on a budget, paused with a decision recorded, or left running for 15 minutes by a process that died) and returns the counts. From cron, `vendor/bin/phpclaw-resume --bootstrap=claw.php` does the same, where `claw.php` returns your configured `Claw`:
+
+```php
+$report = $claw->resumeDue();
+echo "{$report->completed} finished, {$report->suspended} paused again";
+```
+
 ## Trust signals
 
-2,461 tests, zero real network calls or API keys required to run the suite, every provider and tool call is mocked. 80% line coverage enforced in CI as one whole-package figure (covered statements over total statements), not per class. One public API (`Claw::send`/`stream`/`conversation`) that doesn't break without a major version bump.
+2,529 tests, zero real network calls or API keys required to run the suite, every provider and tool call is mocked. 80% line coverage enforced in CI as one whole-package figure (covered statements over total statements), not per class. One public API (`Claw::send`/`stream`/`conversation`) that doesn't break without a major version bump.
 
 ## Documentation
 

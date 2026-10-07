@@ -6,9 +6,8 @@ namespace PhpClaw\Agent;
 
 use PhpClaw\Agent\Contracts\ApprovalGateInterface;
 use PhpClaw\Exceptions\HumanDeniedException;
-use PhpClaw\Tools\Contracts\MutatingToolInterface;
-use PhpClaw\Tools\Contracts\PerInvocationMutabilityInterface;
 use PhpClaw\Tools\Contracts\ToolInterface;
+use PhpClaw\Tools\ToolMutability;
 
 /**
  * CLI Y/n approval gate: read tools pass silently, mutating tools wait for STDIN confirmation (fail-closed with no tty).
@@ -31,11 +30,7 @@ final class CliApprovalGate implements ApprovalGateInterface
      */
     public function check(string $toolName, array $toolInput, ?ToolInterface $tool = null): void
     {
-        if ($tool instanceof PerInvocationMutabilityInterface) {
-            if (! $tool->isMutating($toolInput)) {
-                return;
-            }
-        } elseif (! $tool instanceof MutatingToolInterface) {
+        if (! ToolMutability::isApprovalRequired($tool, $toolInput)) {
             return;
         }
 

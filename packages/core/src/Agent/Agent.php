@@ -6,14 +6,18 @@ namespace PhpClaw\Agent;
 
 use PhpClaw\Agent\Contracts\ApprovalGateInterface;
 use PhpClaw\Config\LoopConfig;
+use PhpClaw\Exceptions\ApprovalPendingException;
 use PhpClaw\Exceptions\HumanDeniedException;
 use PhpClaw\Exceptions\MaxIterationsException;
 use PhpClaw\Exceptions\ProviderException;
+use PhpClaw\Exceptions\RunConflictException;
+use PhpClaw\Exceptions\RunSuspendedException;
 use PhpClaw\Exceptions\TokenBudgetExceededException;
 use PhpClaw\Exceptions\ToolException;
 use PhpClaw\Guards\ToolOutputGuard;
 use PhpClaw\Hooks\HookDispatcher;
 use PhpClaw\Providers\Contracts\ProviderInterface;
+use PhpClaw\Tools\Concerns\FileReadLog;
 use PhpClaw\Tools\ToolRegistry;
 use PhpClaw\Tools\ToolRouter;
 
@@ -37,6 +41,10 @@ final class Agent
     private const RESPONSE_TYPE_TEXT = 'text';
 
     private const RESPONSE_TYPE_TOOL_BATCH = 'tool_use_batch';
+
+    private const DENIED_BY_HUMAN = 'Action denied by human. Propose an alternative approach or ask what to do instead.';
+
+    private const DENIED_CANNOT_PAUSE = 'This action needs human approval and this run cannot pause for it. Propose an alternative approach or ask what to do instead.';
 
     private readonly ProviderInterface $provider;
 
@@ -142,7 +150,7 @@ final class Agent
      */
     public function run(string $message, array $history = [], string $runId = '', string $originalMessage = ''): AgentResponse
     {
-        return $this->executeIterationLoop($message, $history, $runId, onToken: null, originalMessage: $originalMessage);
+        return $this->executeIterationLoop(RunState::start($runId, $message, self::resolveRoutingMessage($message, $originalMessage), $history), onToken: null);
     }
 
     /**
@@ -171,7 +179,31 @@ final class Agent
             return $this->streamFastPath($message, $onToken, $history, $startNs, $runId);
         }
 
-        return $this->executeIterationLoop($message, $history, $runId, $onToken, $originalMessage);
+        return $this->executeIterationLoop(RunState::start($runId, $message, self::resolveRoutingMessage($message, $originalMessage), $history), $onToken);
+    }
+
+    /**
+     * Run or continue a durable run, saving it after every step.
+     *
+     * @param  RunState  $state  A new run from RunState::start(), or a saved run that RunState::assertResumable() accepted.
+     * @param  RunCheckpoint  $checkpoint  Saves the run and holds this process's budget.
+     * @param  (callable(string): void)|null  $onToken  Receives the final answer's chunks; null for a plain run.
+     * @return AgentResponse The terminal text response produced by the loop.
+     *
+     * @throws RunSuspendedException When the run pauses for approval, spends its budget, or finds itself cancelled.
+     * @throws RunConflictException When another process saved the run meanwhile.
+     * @throws MaxIterationsException When the loop exceeds maxIterations without a text response.
+     * @throws ToolException When a tool execution or hallucination cannot be recovered.
+     * @throws ProviderException When the upstream provider fails after all retries.
+     * @throws TokenBudgetExceededException When the accumulated token spend would exceed maxTokenBudget.
+     */
+    public function runDurable(RunState $state, RunCheckpoint $checkpoint, ?callable $onToken = null): AgentResponse
+    {
+        if ($onToken !== null) {
+            HookDispatcher::streamStart($state->task->message, $this->provider->name(), $this->provider->model(), $state->runId());
+        }
+
+        return $this->executeIterationLoop($state, $onToken, $checkpoint);
     }
 
     /**
@@ -210,39 +242,46 @@ final class Agent
     }
 
     /**
-     * Shared ReAct loop body. When $onToken is non-null, hooks fire with streaming:true, the final text is chunked through $onToken, and stream.end fires at completion.
+     * Run the ReAct loop from $state; with a $checkpoint the run is saved between steps.
      *
-     * @param  string  $message  Current user message to append before the loop runs.
-     * @param  Message[]  $history  Prior conversation history (may be empty).
-     * @param  string  $runId  Optional run identifier propagated to hooks for run correlation.
+     * @param  RunState  $state  Run to start or continue.
      * @param  (callable(string): void)|null  $onToken  null = blocking mode, callable = streaming mode.
-     * @param  string  $originalMessage  The user message before memory and skill context were prepended; used for tool routing. Empty falls back to $message.
+     * @param  RunCheckpoint|null  $checkpoint  Saves a durable run and holds this process's budget; null = not durable.
      * @return AgentResponse The terminal text response produced by the loop.
      *
      * @throws MaxIterationsException When the loop exhausts all iterations without a text response.
      * @throws ToolException When a tool is not registered or fails fatally.
      * @throws ProviderException When the provider fails after all retries.
      * @throws TokenBudgetExceededException When the accumulated token spend would exceed maxTokenBudget.
+     * @throws RunSuspendedException When a durable run pauses, spends its budget, or finds itself cancelled.
+     * @throws RunConflictException When another process saved the durable run meanwhile.
      */
-    private function executeIterationLoop(string $message, array $history, string $runId, ?callable $onToken, string $originalMessage): AgentResponse
+    private function executeIterationLoop(RunState $state, ?callable $onToken, ?RunCheckpoint $checkpoint = null): AgentResponse
     {
         $streaming = $onToken !== null;
         $startNs = hrtime(true);
-        $toolsCalled = [];
-        $failedCalls = [];
-        $tokensSpent = 0;
+        $runId = $state->runId();
+        $message = $state->task->message;
+        $refusal = null;
+        $progress = $this->prepareProgress($state, $checkpoint, $refusal);
 
-        $this->tools->resetRunState();
-
-        $history[] = Message::user($message);
-        $toolSchemas = $this->tools->schemas($this->provider->name(), $this->leanToolSchemas);
-        if ($this->toolRouter !== null) {
-            $toolSchemas = $this->toolRouter->filter($toolSchemas, $originalMessage !== '' ? $originalMessage : $message, $this->provider->model(), $this->tools->routingMetadata());
-            $toolSchemas = $this->fitToolsToBudget($toolSchemas, $history);
+        if ($refusal !== null) {
+            return $this->buildTextResponse(['text' => $refusal], $progress->iteration, $startNs, $progress->tools->called, $runId);
         }
-        $isHallucinationRetry = false;
 
-        for ($iteration = 1; $iteration <= $this->maxIterations; $iteration++) {
+        $history = $progress->messages;
+        $toolsCalled = $progress->tools->called;
+        $failedCalls = $progress->tools->failed;
+        $tokensSpent = $progress->tokensSpent;
+        $isHallucinationRetry = $progress->isHallucinationRetry;
+        $toolSchemas = $isHallucinationRetry ? [] : $this->resolveToolSchemas($state->task->routingMessage, $history);
+        $firstIteration = $progress->iteration + 1;
+
+        for ($iteration = $firstIteration; $iteration <= $this->maxIterations; $iteration++) {
+            if ($checkpoint !== null && $iteration > $firstIteration) {
+                $this->saveCheckpoint($checkpoint, $state, new RunProgress($history, $iteration - 1, $tokensSpent, isHallucinationRetry: $isHallucinationRetry, tools: self::buildToolLog($toolsCalled, $failedCalls)), $iteration - $firstIteration, $startNs);
+            }
+
             $iterationId = $this->buildIterationId($runId, $iteration);
 
             HookDispatcher::agentIteration($iteration, $message, $this->provider->name(), $this->provider->model(), streaming: $streaming, runId: $runId, history: $history, parentRunId: $iterationId);
@@ -251,73 +290,31 @@ final class Agent
 
             $this->enforceTokenBudget($tokensSpent, $history, $runId, $iterationId);
 
-            HookDispatcher::providerRequest(
-                provider: $this->provider->name(),
-                model: $this->provider->model(),
-                historyLen: count($history),
-                toolCount: count($toolSchemas),
-                streaming: $streaming,
-                runId: $runId,
-                parentRunId: $iterationId,
-            );
+            $response = $this->requestProvider($history, $toolSchemas, $isHallucinationRetry, $iteration, $streaming, $runId, $iterationId);
 
-            try {
-                $response = $this->retryLoop->send($history, $toolSchemas, $iteration, streaming: $streaming, runId: $runId, parentRunId: $iterationId);
-            } catch (ProviderException $e) {
-                if ($this->retryLoop->isHallucinationRejection($e) && ! $isHallucinationRetry) {
-                    $this->triggerHallucinationRetry(
-                        $isHallucinationRetry,
-                        $toolSchemas,
-                        '(provider-rejected)',
-                        'Provider rejected request due to hallucinated tool; retrying once with no tools: '.$e->getMessage(),
-                        $runId,
-                        $iterationId,
-                    );
-
-                    continue;
-                }
-                throw $e;
+            if ($response === null) {
+                continue;
             }
 
             $this->fireProviderResponseHooks($response, streaming: $streaming, runId: $runId, iterationId: $iterationId);
             $tokensSpent += (int) ($response['input_tokens'] ?? 0) + (int) ($response['output_tokens'] ?? 0);
 
+            if ($this->shouldRetryWithoutTools($response, $toolSchemas, $isHallucinationRetry, $runId, $iterationId)) {
+                continue;
+            }
+
             if ($response['type'] === self::RESPONSE_TYPE_TEXT) {
-                if ($this->isLostToolCall($response, $toolSchemas) && ! $isHallucinationRetry) {
-                    $this->triggerHallucinationRetry(
-                        $isHallucinationRetry,
-                        $toolSchemas,
-                        '(empty-response)',
-                        'Model spent output tokens but returned no text and no tool call; retrying once with no tools.',
-                        $runId,
-                        $iterationId,
-                    );
-
-                    continue;
-                }
-
                 return $this->finaliseTextResponse($response, $message, $iteration, $startNs, $toolsCalled, $runId, $onToken);
             }
 
             if ($response['type'] === self::RESPONSE_TYPE_TOOL_BATCH) {
-                $calls = $response['calls'] ?? [];
-                $hallucinated = $this->detectHallucinatedToolNames($calls);
-
-                if (! empty($hallucinated) && ! $isHallucinationRetry) {
-                    $this->triggerHallucinationRetry(
-                        $isHallucinationRetry,
-                        $toolSchemas,
-                        implode(',', $hallucinated),
-                        'Model hallucinated unregistered tool(s); retrying once with no tools.',
-                        $runId,
-                        $iterationId,
-                    );
-
-                    continue;
-                }
-
+                $calls = array_values($response['calls'] ?? []);
                 $refusal = null;
-                $results = $this->executeToolBatch($calls, $iteration, $runId, $iterationId, $toolsCalled, $failedCalls, $refusal);
+                $results = $this->executeToolBatch($calls, $iteration, $runId, $iterationId, $toolsCalled, $failedCalls, $refusal, canPause: $checkpoint !== null);
+
+                if ($checkpoint !== null && count($results) < count($calls)) {
+                    $this->pauseForApproval($checkpoint, $state, new RunProgress($history, $iteration, $tokensSpent, isHallucinationRetry: $isHallucinationRetry, tools: self::buildToolLog($toolsCalled, $failedCalls)), PausedBatch::now($calls, $results, count($results)));
+                }
 
                 if ($refusal !== null) {
                     return $this->buildTextResponse(['text' => $refusal], $iteration, $startNs, $toolsCalled, $runId);
@@ -328,6 +325,274 @@ final class Agent
         }
 
         $this->throwMaxIterations($message, $runId);
+    }
+
+    /**
+     * Send one provider request; null when the provider rejected a hallucinated tool and the run retries without tools.
+     *
+     * @param  Message[]  $history  Conversation history for this request.
+     * @param  array<int, array<string, mixed>>  $toolSchemas  Tool schemas offered; emptied on the retry.
+     * @param  bool  $isHallucinationRetry  Whether the one retry without tools is already spent; set on the retry.
+     * @param  int  $iteration  Current iteration number.
+     * @param  bool  $streaming  Whether the run streams.
+     * @param  string  $runId  Run id.
+     * @param  string  $iterationId  Id of this iteration.
+     * @return array<string, mixed>|null The provider response, or null to retry.
+     *
+     * @throws ProviderException When the request fails for any other reason.
+     */
+    private function requestProvider(array $history, array &$toolSchemas, bool &$isHallucinationRetry, int $iteration, bool $streaming, string $runId, string $iterationId): ?array
+    {
+        HookDispatcher::providerRequest(
+            provider: $this->provider->name(),
+            model: $this->provider->model(),
+            historyLen: count($history),
+            toolCount: count($toolSchemas),
+            streaming: $streaming,
+            runId: $runId,
+            parentRunId: $iterationId,
+        );
+
+        try {
+            return $this->retryLoop->send($history, $toolSchemas, $iteration, streaming: $streaming, runId: $runId, parentRunId: $iterationId);
+        } catch (ProviderException $e) {
+            if (! $this->retryLoop->isHallucinationRejection($e) || $isHallucinationRetry) {
+                throw $e;
+            }
+
+            $this->triggerHallucinationRetry(
+                $isHallucinationRetry,
+                $toolSchemas,
+                '(provider-rejected)',
+                'Provider rejected request due to hallucinated tool; retrying once with no tools: '.$e->getMessage(),
+                $runId,
+                $iterationId,
+            );
+
+            return null;
+        }
+    }
+
+    /**
+     * Whether to spend the one retry without tools: an empty answer that lost its tool call, or calls to unregistered tools.
+     *
+     * @param  array<string, mixed>  $response  Provider response.
+     * @param  array<int, array<string, mixed>>  $toolSchemas  Tool schemas offered; emptied on the retry.
+     * @param  bool  $isHallucinationRetry  Whether the retry is already spent; set when it starts.
+     * @param  string  $runId  Run id.
+     * @param  string  $iterationId  Id of this iteration.
+     * @return bool True when the run retries without tools.
+     */
+    private function shouldRetryWithoutTools(array $response, array &$toolSchemas, bool &$isHallucinationRetry, string $runId, string $iterationId): bool
+    {
+        if ($isHallucinationRetry) {
+            return false;
+        }
+
+        if ($response['type'] === self::RESPONSE_TYPE_TEXT && $this->isLostToolCall($response, $toolSchemas)) {
+            $this->triggerHallucinationRetry($isHallucinationRetry, $toolSchemas, '(empty-response)', 'Model spent output tokens but returned no text and no tool call; retrying once with no tools.', $runId, $iterationId);
+
+            return true;
+        }
+
+        $hallucinated = $response['type'] === self::RESPONSE_TYPE_TOOL_BATCH ? $this->detectHallucinatedToolNames(array_values($response['calls'] ?? [])) : [];
+
+        if ($hallucinated === []) {
+            return false;
+        }
+
+        $this->triggerHallucinationRetry($isHallucinationRetry, $toolSchemas, implode(',', $hallucinated), 'Model hallucinated unregistered tool(s); retrying once with no tools.', $runId, $iterationId);
+
+        return true;
+    }
+
+    /**
+     * Restore a saved run's tool state and finish its paused batch once decided.
+     *
+     * @param  RunState  $state  Run to start or continue.
+     * @param  RunCheckpoint|null  $checkpoint  Saves a durable run; null = not durable.
+     * @param  string|null  $refusal  Set to the failure message when the finished batch repeats a failure verbatim.
+     * @return RunProgress Progress the loop continues from.
+     *
+     * @throws RunSuspendedException When a later call in the paused batch needs approval too.
+     * @throws RunConflictException When another process saved the run meanwhile.
+     * @throws ToolException When the approved call names a tool that is not registered.
+     */
+    private function prepareProgress(RunState $state, ?RunCheckpoint $checkpoint, ?string &$refusal): RunProgress
+    {
+        $this->tools->resetRunState();
+        self::restoreReadPaths($state->progress->tools->readPaths);
+
+        if ($checkpoint === null || $state->paused === null || $state->paused->decision === null) {
+            return $state->progress;
+        }
+
+        return $this->finishPausedBatch($state, $state->paused, $checkpoint, $refusal);
+    }
+
+    /**
+     * Tool schemas for the provider, routed and fitted to the request budget the same way on a fresh run and on a resume.
+     *
+     * @param  string  $routingMessage  Original user message the router ranks tools against.
+     * @param  Message[]  $history  History including the current user message.
+     * @return array<int, array<string, mixed>> Schemas offered on each request.
+     */
+    private function resolveToolSchemas(string $routingMessage, array $history): array
+    {
+        $toolSchemas = $this->tools->schemas($this->provider->name(), $this->leanToolSchemas);
+
+        if ($this->toolRouter === null) {
+            return $toolSchemas;
+        }
+
+        $toolSchemas = $this->toolRouter->filter($toolSchemas, $routingMessage, $this->provider->model(), $this->tools->routingMetadata());
+
+        return $this->fitToolsToBudget($toolSchemas, $history);
+    }
+
+    /**
+     * Save a step of a durable run, and stop this process when the run was cancelled or the budget is spent.
+     *
+     * @param  RunCheckpoint  $checkpoint  Saves the run and holds this process's budget.
+     * @param  RunState  $state  The run, for its id and task.
+     * @param  RunProgress  $progress  Progress after the last completed step.
+     * @param  int  $stepsRun  Steps run in this process so far.
+     * @param  int  $startNs  hrtime(true) when this process started the loop.
+     * @return void
+     *
+     * @throws RunSuspendedException When the run was cancelled or this process spent its budget.
+     * @throws RunConflictException When another process saved the run meanwhile.
+     */
+    private function saveCheckpoint(RunCheckpoint $checkpoint, RunState $state, RunProgress $progress, int $stepsRun, int $startNs): void
+    {
+        $shouldSuspend = $checkpoint->isBudgetSpent($stepsRun, $startNs);
+        $stored = $checkpoint->save(new RunState($state->task, $shouldSuspend ? RunStatus::Suspended : RunStatus::Running, $progress));
+
+        if ($stored === RunStatus::Cancelled || $shouldSuspend) {
+            throw new RunSuspendedException($state->runId(), $stored === RunStatus::Cancelled ? RunStatus::Cancelled : RunStatus::Suspended);
+        }
+    }
+
+    /**
+     * Save a run paused on a call that needs approval, then stop this process.
+     *
+     * @param  RunCheckpoint  $checkpoint  Saves the run.
+     * @param  RunState  $state  The run, for its id and task.
+     * @param  RunProgress  $progress  Progress up to the paused batch.
+     * @param  PausedBatch  $paused  The batch and the call waiting for a decision.
+     * @return never
+     *
+     * @throws RunSuspendedException Always: AwaitingApproval, or Cancelled when the run was cancelled meanwhile.
+     * @throws RunConflictException When another process saved the run meanwhile.
+     */
+    private function pauseForApproval(RunCheckpoint $checkpoint, RunState $state, RunProgress $progress, PausedBatch $paused): never
+    {
+        $stored = $checkpoint->save(new RunState($state->task, RunStatus::AwaitingApproval, $progress, $paused));
+
+        throw new RunSuspendedException($state->runId(), $stored === RunStatus::Cancelled ? RunStatus::Cancelled : RunStatus::AwaitingApproval);
+    }
+
+    /**
+     * Finish the batch a run paused in, pausing again if a later call needs approval.
+     *
+     * @param  RunState  $state  Saved run, AwaitingApproval with a decision recorded.
+     * @param  PausedBatch  $paused  The decided batch.
+     * @param  RunCheckpoint  $checkpoint  Saves the run if it pauses again.
+     * @param  string|null  $refusal  Set to the failure message when a call repeats a failure verbatim.
+     * @return RunProgress Progress with the finished batch appended.
+     *
+     * @throws RunSuspendedException When a later call in the batch needs approval too.
+     * @throws RunConflictException When another process saved the run meanwhile.
+     * @throws ToolException When the approved call names a tool that is not registered.
+     */
+    private function finishPausedBatch(RunState $state, PausedBatch $paused, RunCheckpoint $checkpoint, ?string &$refusal): RunProgress
+    {
+        $progress = $state->progress;
+        $toolsCalled = $progress->tools->called;
+        $failedCalls = $progress->tools->failed;
+        $iteration = $progress->iteration;
+
+        $iterationId = $this->buildIterationId($state->runId(), $iteration);
+        $result = $this->runDecidedCall($paused, $iteration, $state->runId(), $iterationId);
+        $this->recordToolFailure($paused->toolName(), $paused->input(), $result, $failedCalls, $refusal);
+
+        $rest = array_slice($paused->calls, $paused->index + 1);
+        $later = $this->executeToolBatch($rest, $iteration, $state->runId(), $iterationId, $toolsCalled, $failedCalls, $refusal, canPause: true);
+        $results = $paused->results + [$paused->callId() => $result] + $later;
+
+        if (count($later) < count($rest)) {
+            $done = new RunProgress($progress->messages, $iteration, $progress->tokensSpent, isHallucinationRetry: $progress->isHallucinationRetry, tools: self::buildToolLog($toolsCalled, $failedCalls));
+            $this->pauseForApproval($checkpoint, $state, $done, PausedBatch::now($paused->calls, $results, $paused->index + 1 + count($later)));
+        }
+
+        return new RunProgress(
+            [...$progress->messages, Message::toolBatch($paused->calls, $results)],
+            $iteration,
+            $progress->tokensSpent,
+            isHallucinationRetry: $progress->isHallucinationRetry,
+            tools: self::buildToolLog($toolsCalled, $failedCalls),
+        );
+    }
+
+    /**
+     * Run the paused call when it was approved, or hand back the denial when it was denied, and fire tool.after for it.
+     *
+     * @param  PausedBatch  $paused  The decided batch.
+     * @param  int  $iteration  Iteration the batch belongs to.
+     * @param  string  $runId  Run id, for hooks.
+     * @param  string  $iterationId  Parent run id for nesting the hook under the iteration.
+     * @return string The call's result.
+     *
+     * @throws ToolException When the approved call names a tool that is not registered.
+     */
+    private function runDecidedCall(PausedBatch $paused, int $iteration, string $runId, string $iterationId): string
+    {
+        $result = $paused->decision === PausedBatch::APPROVED
+            ? $this->executeTool($paused->toolName(), $paused->input(), $runId)
+            : $this->buildDeniedResult($paused->toolName(), self::DENIED_BY_HUMAN);
+
+        HookDispatcher::toolAfter($paused->toolName(), $paused->input(), $result, $iteration, $runId, parentRunId: $iterationId);
+
+        return $result;
+    }
+
+    /**
+     * The tool log a saved run carries: the given counters plus every file read so far.
+     *
+     * @param  list<string>  $called  Tools called so far.
+     * @param  array<string, bool>  $failed  Failure signatures so far.
+     * @return RunToolLog
+     */
+    private static function buildToolLog(array $called, array $failed): RunToolLog
+    {
+        return new RunToolLog($called, $failed, FileReadLog::all());
+    }
+
+    /**
+     * Mark every file a saved run had read as read again, after the per-run reset, so the read-before-edit gate holds.
+     *
+     * @param  array<string, list<string>>  $readPaths  Canonical paths read, keyed by workspace root.
+     * @return void
+     */
+    private static function restoreReadPaths(array $readPaths): void
+    {
+        foreach ($readPaths as $workspaceRoot => $paths) {
+            foreach ($paths as $path) {
+                FileReadLog::markRead((string) $workspaceRoot, (string) $path);
+            }
+        }
+    }
+
+    /**
+     * The message tools are routed against: the original user message, or the sent message when there is none.
+     *
+     * @param  string  $message  Message sent to the model.
+     * @param  string  $originalMessage  User message before context was prepended; empty when not given.
+     * @return string
+     */
+    private static function resolveRoutingMessage(string $message, string $originalMessage): string
+    {
+        return $originalMessage === '' ? $message : $originalMessage;
     }
 
     /**
@@ -576,9 +841,10 @@ final class Agent
      * @param  list<string>  $toolsCalled  Accumulator (by-reference) appended with each tool name as it runs.
      * @param  array<string, bool>  $failedCalls  Signatures of calls that already failed in this run.
      * @param  string|null  $refusal  Set to the failure message when a call repeats a failure verbatim.
-     * @return array<string, string> Map of toolUseId → result string.
+     * @param  bool  $canPause  Whether the run can pause for an approval; when false a call that needs one is denied.
+     * @return array<string, string> Map of toolUseId → result string; fewer results than calls means the batch paused at the first call without one.
      */
-    private function executeToolBatch(array $calls, int $iteration, string $runId, string $iterationId, array &$toolsCalled, array &$failedCalls = [], ?string &$refusal = null): array
+    private function executeToolBatch(array $calls, int $iteration, string $runId, string $iterationId, array &$toolsCalled, array &$failedCalls = [], ?string &$refusal = null, bool $canPause = false): array
     {
         $results = [];
 
@@ -591,7 +857,11 @@ final class Agent
 
             HookDispatcher::toolBefore($toolName, $toolInput, $iteration, $runId, parentRunId: $iterationId);
 
-            $result = $this->runWithApproval($toolName, $toolInput, $runId);
+            try {
+                $result = $this->runWithApproval($toolName, $toolInput, $runId, canPause: $canPause);
+            } catch (ApprovalPendingException) {
+                return $results;
+            }
 
             HookDispatcher::toolAfter($toolName, $toolInput, $result, $iteration, $runId, parentRunId: $iterationId);
 
@@ -609,9 +879,12 @@ final class Agent
      * @param  string  $toolName  Name of the tool to execute.
      * @param  array<string, mixed>  $toolInput  Arguments passed by the model.
      * @param  string  $runId  Run identifier propagated to hooks for run correlation.
+     * @param  bool  $canPause  Whether a call that needs approval may pause the run; when false it is denied instead.
      * @return string Tool output, or a JSON denial envelope when the gate rejects the call.
+     *
+     * @throws ApprovalPendingException When the gate asks for a later decision and the run can pause.
      */
-    private function runWithApproval(string $toolName, array $toolInput, string $runId): string
+    private function runWithApproval(string $toolName, array $toolInput, string $runId, bool $canPause = false): string
     {
         if ($this->approvalGate === null) {
             return $this->executeTool($toolName, $toolInput, $runId);
@@ -623,12 +896,30 @@ final class Agent
 
             return $this->executeTool($toolName, $toolInput, $runId);
         } catch (HumanDeniedException $e) {
-            return (string) json_encode([
-                'status' => 'denied',
-                'tool' => $e->toolName,
-                'message' => 'Action denied by human. Propose an alternative approach or ask what to do instead.',
-            ]);
+            return $this->buildDeniedResult($e->toolName, self::DENIED_BY_HUMAN);
+        } catch (ApprovalPendingException $e) {
+            if ($canPause) {
+                throw $e;
+            }
+
+            return $this->buildDeniedResult($e->toolName, self::DENIED_CANNOT_PAUSE);
         }
+    }
+
+    /**
+     * The JSON result the model sees for a call that did not run for lack of approval.
+     *
+     * @param  string  $toolName  Tool that was not run.
+     * @param  string  $message  Why, and what the model should do instead.
+     * @return string
+     */
+    private function buildDeniedResult(string $toolName, string $message): string
+    {
+        return (string) json_encode([
+            'status' => 'denied',
+            'tool' => $toolName,
+            'message' => $message,
+        ]);
     }
 
     /**

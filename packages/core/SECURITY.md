@@ -18,6 +18,13 @@ Include in your report:
 
 We will acknowledge your report within **48 hours** and aim to release a fix within **14 days** for critical issues.
 
+## Durable runs
+
+With `durableRuns()` or `withSuspendableApproval()`, a `send()`, `stream()` or conversation run is saved through the configured memory driver under the
+`runs` namespace for up to 7 days, and the saved row holds the full conversation so far, including tool inputs and
+results and the paths of files the run read. Both settings refuse to build without a memory driver or with
+`storeMessages` off, so the row is only ever written where conversations are already stored.
+
 ## Scope
 
 In scope:
@@ -27,6 +34,7 @@ In scope:
 - Execution of any command in `ShellTool`'s hard-blocked set (`rm`, `curl`, `sudo`, `bash`, `python`, and the full `HARD_BLOCKED` list) through any code path
 - Raw message content persisted to the memory driver when `store_messages` is `false`, `PrivacyAwareMemory::set()` must be a strict no-op when disabled
 - SSRF via `HttpTool` or a custom provider `base_url` input
+- A durable run executing a paused mutating tool call that has no recorded approval
 
 Out of scope:
 - Vulnerabilities in third-party AI providers (Anthropic, OpenAI, Gemini, etc.)
