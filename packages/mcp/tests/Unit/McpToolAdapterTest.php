@@ -7,6 +7,8 @@ namespace PhpClaw\Mcp\Tests\Unit;
 use PhpClaw\Mcp\McpToolAdapter;
 use PhpClaw\Mcp\Tests\Stubs\EchoTool;
 use PhpClaw\Mcp\Tests\Stubs\FailingTool;
+use PhpClaw\Mcp\Tests\Stubs\SometimesWriteTool;
+use PhpClaw\Mcp\Tests\Stubs\WriteTool;
 use PHPUnit\Framework\TestCase;
 
 final class McpToolAdapterTest extends TestCase
@@ -84,5 +86,19 @@ final class McpToolAdapterTest extends TestCase
         $list = $this->adapter->toList([new EchoTool, new FailingTool]);
         self::assertSame('echo', $list['tools'][0]['name']);
         self::assertSame('fail', $list['tools'][1]['name']);
+    }
+
+    public function test_a_tool_that_changes_data_is_marked_destructive(): void
+    {
+        $descriptor = (new McpToolAdapter)->toDescriptor(new WriteTool);
+
+        self::assertSame(['readOnlyHint' => false, 'destructiveHint' => true], $descriptor['annotations']);
+    }
+
+    public function test_a_tool_that_may_change_data_on_some_calls_is_marked_destructive(): void
+    {
+        $descriptor = (new McpToolAdapter)->toDescriptor(new SometimesWriteTool);
+
+        self::assertSame(['readOnlyHint' => false, 'destructiveHint' => true], $descriptor['annotations']);
     }
 }
