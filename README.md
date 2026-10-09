@@ -167,22 +167,7 @@ Full extension recipes with working code for every subsystem: [phpclaw.ai/docs](
 for pkg in core cloud mcp; do (cd packages/$pkg && composer test); done
 ```
 
-**Working on `packages/core` and testing through an adapter?** Adapters consume the three libraries
-as **copied** composer path repositories, not symlinks, and most composer commands will not refresh
-that copy:
-
-| Command | Delivers a core change? |
-|---|---|
-| `composer install` (no `vendor/` yet) | **yes** |
-| `composer install` (`vendor/` already present) | **NO** |
-| `composer update phpclaw/phpclaw` | **NO** |
-| `composer sync-core` | **yes** |
-
-**After editing `packages/core`, `packages/cloud` or `packages/mcp`, run `composer sync-core` in the
-adapter you are testing, or you are testing a stale copy.** The first `install` succeeding is what
-makes the second one dangerous: the command appears to work, so nobody suspects it later.
-
-Unit tests use mocks and stubs for HTTP clients, `\Redis`, and the filesystem: no external network calls and no API keys are needed to run the suite for core, cloud, or mcp. Coverage requirements and the full testing rules are in [CONTRIBUTING.md](.github/CONTRIBUTING.md).
+Unit tests use mocks and stubs for HTTP clients, `\Redis`, and the filesystem: no external network calls and no API keys are needed to run the suite for core, cloud, or mcp. The full testing rules, including how to test a core change through an adapter, are in the [contributing guide](https://phpclaw.ai/docs/contributing).
 
 ## Documentation
 
@@ -190,7 +175,7 @@ This README gets you installed. Everything else, architecture, the full provider
 
 **[phpclaw.ai/docs](https://phpclaw.ai/docs)**
 
-- [CONTRIBUTING.md](.github/CONTRIBUTING.md) · [SECURITY.md](.github/SECURITY.md)
+- [Contributing guide](https://phpclaw.ai/docs/contributing) · [Security policy](https://github.com/phpclaw-php/phpclaw-monorepo/security/policy)
 
 ## Requirements
 
