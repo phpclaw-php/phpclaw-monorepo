@@ -18,7 +18,7 @@ final class ToolOutputGuard
 
     private const INVISIBLE_CHARS_PATTERN = '/[\x{200B}\x{200C}\x{200D}\x{FEFF}\x{00AD}\x{2060}\x{180E}]/u';
 
-    private const PATTERNS = [...InjectionGuard::PATTERNS, ...RoleSwitchGuard::PATTERNS, '<?php', '<?=', '?>'];
+    private const PATTERNS = [...InjectionGuard::PATTERNS, ...RoleSwitchGuard::PATTERNS];
 
     /**
      * Redact every injection pattern found in a tool result, including look-alike, full-width and extra-space spellings, and leave every other byte unchanged.
