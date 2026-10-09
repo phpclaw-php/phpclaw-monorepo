@@ -80,14 +80,17 @@ Every "AI in PHP" tutorial ends the same way: an HTTP client bolted onto a provi
 | Memory abstraction | Swappable drivers | None |
 | Streaming + tool-calls together | Hybrid mode | Varies |
 | MCP server bundled | Expose any app to Claude Desktop | None |
+| Chains and multi-agent graphs | `Pipeline` and `Graph`: loops, human pause and resume, fan-out | You build it |
 | Zero framework deps in core | `ext-curl`, `ext-json`, `ext-mbstring`, done | Depends |
 | Core license | MIT, nothing gated | Varies |
 
-**Not trying to be everything.** phpClaw isn't built for complex RAG pipelines or multi-agent orchestration. It's built for one job: give an LLM tools, memory, and security controls against your real application, in an afternoon.
+**Not trying to be everything.** phpClaw isn't a RAG framework: there are no embeddings or vector stores. It's built to give an LLM tools, memory and security controls against your real application, and to chain those agents into pipelines and graphs when one call isn't enough.
 
 ## What phpClaw provides
 
 **Agent runtime.** A ReAct loop with a hard iteration cap (`max_iterations`, default 20), pluggable tools, pluggable memory, and skills the model loads on demand through the `load_skill` tool, all running inside a single reasoning cycle.
+
+**Pipelines and graphs.** `Pipeline` chains steps (prompt template, agent, structured output, your own callables) with retry and fallback. `Graph` runs nodes that loop, branch, pause for a human, resume in another process, and fan out to branches that run inline or are drained by workers from cron, a queue or the CLI. See [Pipelines and Graphs](https://phpclaw.ai/docs/pipelines-and-graphs/).
 
 **Provider flexibility.** 7 providers auto-detected from environment variables: Anthropic, OpenAI, Groq, Gemini, Mistral, DeepSeek, Ollama. A custom OpenAI-compatible endpoint is also supported, opt-in via `PHPCLAW_PROVIDER=custom`. Switch providers with `->provider()` and `->model()`, no code changes elsewhere.
 
