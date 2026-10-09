@@ -21,7 +21,7 @@ final class SkillConfig
     /**
      * Group and validate the skill-facing configuration.
      *
-     * @param  SkillInterface[]  $skills  Skills registered for keyword-matched context injection.
+     * @param  SkillInterface[]  $skills  Skills the agent can load or inject by name.
      * @param  int  $skillMatchLimit  Maximum matched skills injected per turn; clamped to at least 1.
      * @param  string[]  $remoteSkillUrls  Remote skill collection URLs loaded on build.
      * @return void

@@ -209,7 +209,7 @@ final class GeminiProvider implements ProviderInterface, SupportsWebSearchInterf
      */
     private function buildUrl(string $operation): string
     {
-        return $this->baseUrl.'/'.$this->model.$operation.'?key='.urlencode($this->apiKey);
+        return $this->baseUrl.'/'.$this->model.$operation.(str_contains($operation, '?') ? '&' : '?').'key='.urlencode($this->apiKey);
     }
 
     /**

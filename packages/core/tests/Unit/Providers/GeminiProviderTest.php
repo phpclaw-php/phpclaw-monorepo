@@ -428,7 +428,7 @@ final class GeminiProviderTest extends TestCase
         $this->assertGreaterThan(0, $capturedBody['generationConfig']['maxOutputTokens']);
     }
 
-    public function test_stream_url_contains_stream_endpoint_and_key(): void
+    public function test_stream_url_sends_alt_and_key_as_separate_query_parameters(): void
     {
         $capturedUrl = null;
 
@@ -439,8 +439,32 @@ final class GeminiProviderTest extends TestCase
 
         $this->provider->stream([Message::user('hi')], fn (string $t) => null);
 
-        $this->assertStringContainsString(':streamGenerateContent', $capturedUrl);
-        $this->assertStringContainsString('key=AIza-test-key', $capturedUrl);
+        parse_str((string) parse_url((string) $capturedUrl, PHP_URL_QUERY), $query);
+
+        $this->assertStringEndsWith(':streamGenerateContent', (string) parse_url((string) $capturedUrl, PHP_URL_PATH));
+        $this->assertSame(['alt' => 'sse', 'key' => 'AIza-test-key'], $query);
+    }
+
+    public function test_send_url_sends_only_the_key_as_query_parameter(): void
+    {
+        $capturedUrl = null;
+
+        $this->mockHttp->method('post')
+            ->willReturnCallback(function (string $url, array $headers, array $body) use (&$capturedUrl): array {
+                $capturedUrl = $url;
+
+                return [
+                    'candidates' => [['content' => ['parts' => [['text' => 'ok']]], 'finishReason' => 'STOP']],
+                    'usageMetadata' => ['promptTokenCount' => 1, 'candidatesTokenCount' => 1],
+                ];
+            });
+
+        $this->provider->send([Message::user('hi')]);
+
+        parse_str((string) parse_url((string) $capturedUrl, PHP_URL_QUERY), $query);
+
+        $this->assertStringEndsWith(':generateContent', (string) parse_url((string) $capturedUrl, PHP_URL_PATH));
+        $this->assertSame(['key' => 'AIza-test-key'], $query);
     }
 
     public function test_web_search_tool_options_encodes_as_json_object(): void

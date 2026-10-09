@@ -15,8 +15,8 @@ final class ArraySkill implements SkillInterface
      * Create a new ArraySkill instance.
      *
      * @param  string  $name  Unique machine-readable identifier.
-     * @param  string  $description  Short description used in keyword matching.
-     * @param  string[]  $tags  Tags used for keyword matching.
+     * @param  string  $description  Short description shown to the model in the skills list.
+     * @param  string[]  $tags  Tags for listings; not used to pick a skill.
      * @param  string  $content  Instruction text injected when this skill matches.
      * @return void
      */
@@ -38,7 +38,7 @@ final class ArraySkill implements SkillInterface
     }
 
     /**
-     * Short human-readable description used in keyword matching.
+     * Short human-readable description shown to the model in the skills list.
      *
      * @return string
      */
@@ -48,7 +48,7 @@ final class ArraySkill implements SkillInterface
     }
 
     /**
-     * Tags used for keyword matching.
+     * Tags for listings; not used to pick a skill.
      *
      * @return string[]
      */

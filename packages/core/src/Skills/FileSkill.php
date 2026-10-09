@@ -63,7 +63,7 @@ final class FileSkill implements SkillInterface
     }
 
     /**
-     * Short human-readable description used in keyword matching.
+     * Short human-readable description shown to the model in the skills list.
      *
      * @return string
      */
@@ -73,7 +73,7 @@ final class FileSkill implements SkillInterface
     }
 
     /**
-     * Tags used for keyword matching.
+     * Tags for listings; not used to pick a skill.
      *
      * @return string[]
      */
