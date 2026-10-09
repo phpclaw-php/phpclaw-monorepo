@@ -127,6 +127,10 @@ final class CloudPayloadBuilder
             LifecycleEvent::SkillLoaded->value => $base + $this->fromSkillLoaded($context),
             LifecycleEvent::SkillMatched->value => $base + $this->fromSkillMatched($context),
             LifecycleEvent::SkillNotMatched->value => $base + $this->fromSkillNotMatched($context),
+            LifecycleEvent::GraphStart->value => $base + $this->fromGraphStart($context),
+            LifecycleEvent::GraphEnd->value => $base + $this->fromGraphEnd($context),
+            LifecycleEvent::GraphFanOut->value => $base + $this->fromGraphFanOut($context),
+            LifecycleEvent::GraphJoin->value => $base + $this->fromGraphJoin($context),
             default => $base + $this->fromGenericEvent($context),
         };
 
@@ -188,6 +192,7 @@ final class CloudPayloadBuilder
     {
         $payload = [
             'run_id' => self::str($context, 'run_id'),
+            'parent_run_id' => self::str($context, 'parent_run_id'),
             'conversation_id' => self::str($context, 'conversation_id'),
             'has_conversation' => self::hasConversation($context),
             'streaming' => self::bool($context, 'streaming'),
@@ -221,6 +226,7 @@ final class CloudPayloadBuilder
     {
         $payload = [
             'run_id' => self::str($context, 'run_id'),
+            'parent_run_id' => self::str($context, 'parent_run_id'),
             'conversation_id' => self::str($context, 'conversation_id'),
             'provider' => self::str($context, 'provider'),
             'model' => self::str($context, 'model'),
@@ -848,6 +854,70 @@ final class CloudPayloadBuilder
             'parent_run_id' => self::str($context, 'parent_run_id'),
             'message_excerpt' => self::str($context, 'message_excerpt'),
             'available_skills' => $context['available_skills'] ?? null,
+        ];
+    }
+
+    /**
+     * Build the cloud payload for the `graph.start` event.
+     *
+     * @param  array<string, mixed>  $context  Raw event context from the hook dispatcher.
+     * @return array<string, mixed> Cloud-ready payload fields for this event.
+     */
+    private function fromGraphStart(array $context): array
+    {
+        return [
+            'run_id' => self::str($context, 'run_id'),
+            'parent_run_id' => self::str($context, 'parent_run_id'),
+            'entry_node' => self::str($context, 'entry_node'),
+        ];
+    }
+
+    /**
+     * Build the cloud payload for the `graph.end` event.
+     *
+     * @param  array<string, mixed>  $context  Raw event context from the hook dispatcher.
+     * @return array<string, mixed> Cloud-ready payload fields for this event.
+     */
+    private function fromGraphEnd(array $context): array
+    {
+        return [
+            'run_id' => self::str($context, 'run_id'),
+            'parent_run_id' => self::str($context, 'parent_run_id'),
+            'steps' => self::int($context, 'steps'),
+            'last_node' => self::str($context, 'last_node'),
+        ];
+    }
+
+    /**
+     * Build the cloud payload for the `graph.fan_out` event.
+     *
+     * @param  array<string, mixed>  $context  Raw event context from the hook dispatcher.
+     * @return array<string, mixed> Cloud-ready payload fields for this event.
+     */
+    private function fromGraphFanOut(array $context): array
+    {
+        return [
+            'run_id' => self::str($context, 'run_id'),
+            'parent_run_id' => self::str($context, 'parent_run_id'),
+            'node' => self::str($context, 'node'),
+            'branches' => self::int($context, 'branches'),
+        ];
+    }
+
+    /**
+     * Build the cloud payload for the `graph.join` event.
+     *
+     * @param  array<string, mixed>  $context  Raw event context from the hook dispatcher.
+     * @return array<string, mixed> Cloud-ready payload fields for this event.
+     */
+    private function fromGraphJoin(array $context): array
+    {
+        return [
+            'run_id' => self::str($context, 'run_id'),
+            'parent_run_id' => self::str($context, 'parent_run_id'),
+            'node' => self::str($context, 'node'),
+            'branches' => self::int($context, 'branches'),
+            'failed' => self::int($context, 'failed'),
         ];
     }
 

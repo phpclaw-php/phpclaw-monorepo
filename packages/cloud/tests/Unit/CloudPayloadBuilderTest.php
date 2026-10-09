@@ -429,4 +429,79 @@ final class CloudPayloadBuilderTest extends TestCase
         $this->assertNull($payload['run_id']);
         $this->assertNull($payload['parent_run_id']);
     }
+
+    public function test_agent_before_and_after_carry_the_parent_run_id(): void
+    {
+        $builder = new CloudPayloadBuilder;
+
+        $before = $builder->build('agent.before', ['message' => 'hi', 'run_id' => 'r2', 'parent_run_id' => 'graph-1']);
+        $after = $builder->build('agent.after', ['text' => 'ok', 'run_id' => 'r2', 'parent_run_id' => 'graph-1']);
+
+        $this->assertSame('graph-1', $before['parent_run_id']);
+        $this->assertSame('graph-1', $after['parent_run_id']);
+    }
+
+    public function test_agent_before_outside_any_graph_has_a_null_parent_run_id(): void
+    {
+        $payload = (new CloudPayloadBuilder)->build('agent.before', ['message' => 'hi', 'run_id' => 'r1']);
+
+        $this->assertArrayHasKey('parent_run_id', $payload);
+        $this->assertNull($payload['parent_run_id']);
+    }
+
+    public function test_graph_start_payload_contains_flat_fields(): void
+    {
+        $payload = (new CloudPayloadBuilder)->build('graph.start', [
+            'entry_node' => 'write',
+            'run_id' => 'graph-2',
+            'parent_run_id' => 'graph-1',
+        ]);
+
+        $this->assertSame('graph.start', $payload['event']);
+        $this->assertSame('graph-2', $payload['run_id']);
+        $this->assertSame('graph-1', $payload['parent_run_id']);
+        $this->assertSame('write', $payload['entry_node']);
+        $this->assertArrayNotHasKey('payload', $payload);
+    }
+
+    public function test_graph_end_payload_contains_flat_fields(): void
+    {
+        $payload = (new CloudPayloadBuilder)->build('graph.end', [
+            'steps' => 6,
+            'last_node' => 'review',
+            'run_id' => 'graph-2',
+        ]);
+
+        $this->assertSame('graph.end', $payload['event']);
+        $this->assertSame('graph-2', $payload['run_id']);
+        $this->assertNull($payload['parent_run_id']);
+        $this->assertSame(6, $payload['steps']);
+        $this->assertSame('review', $payload['last_node']);
+        $this->assertArrayNotHasKey('payload', $payload);
+    }
+
+    public function test_graph_fan_out_payload_contains_flat_fields(): void
+    {
+        $payload = (new CloudPayloadBuilder)->build('graph.fan_out', ['node' => 'split', 'branches' => 4, 'run_id' => 'graph-3']);
+
+        $this->assertSame('graph.fan_out', $payload['event']);
+        $this->assertSame('graph-3', $payload['run_id']);
+        $this->assertNull($payload['parent_run_id']);
+        $this->assertSame('split', $payload['node']);
+        $this->assertSame(4, $payload['branches']);
+        $this->assertArrayNotHasKey('payload', $payload);
+    }
+
+    public function test_graph_join_payload_contains_flat_fields(): void
+    {
+        $payload = (new CloudPayloadBuilder)->build('graph.join', ['node' => 'split', 'branches' => 4, 'failed' => 1, 'run_id' => 'graph-4', 'parent_run_id' => 'graph-1']);
+
+        $this->assertSame('graph.join', $payload['event']);
+        $this->assertSame('graph-4', $payload['run_id']);
+        $this->assertSame('graph-1', $payload['parent_run_id']);
+        $this->assertSame('split', $payload['node']);
+        $this->assertSame(4, $payload['branches']);
+        $this->assertSame(1, $payload['failed']);
+        $this->assertArrayNotHasKey('payload', $payload);
+    }
 }
