@@ -227,6 +227,7 @@ class PhpClawFactory implements PhpClawFactoryInterface
             foreach (ToolCatalogue::instantiateDefaults([
                 'allowlist' => $this->config->getShellAllowlist(),
                 'workspaceRoot' => null,
+                'projectRoot' => defined('BP') ? (string) BP : null,
                 'allowPhpWrite' => $allowPhpWrite,
             ]) as $coreTool) {
                 $byName[$coreTool->name()] ??= $coreTool;
