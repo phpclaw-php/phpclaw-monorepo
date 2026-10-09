@@ -23,7 +23,9 @@ use PhpClaw\Symfony\Extension\PhpClawExtensions;
 use PhpClaw\Symfony\Support\ArgumentFreeConstructor;
 use PhpClaw\Symfony\Tools\DatabaseTool;
 use PhpClaw\Symfony\Tools\LogTool;
+use PhpClaw\Symfony\Tools\TestRunTool;
 use PhpClaw\Tools\Contracts\ToolInterface;
+use PhpClaw\Tools\FileEditTool;
 use PhpClaw\Tools\FileReadTool;
 use PhpClaw\Tools\FileWriteTool;
 use PhpClaw\Tools\ShellTool;
@@ -65,7 +67,7 @@ final class PhpClawFactory
      * @param  mixed[]  $skills  Skill definitions to resolve.
      * @param  string  $baseUrl  Base URL for the 'custom' provider.
      * @param  string[]  $toolDeny  Tool names to exclude from the registry.
-     * @param  string  $remoteSkillUrls  Comma-separated HTTPS SKILL.md / JSON URLs loaded at build (always-on, keyword-matched).
+     * @param  string  $remoteSkillUrls  Comma-separated HTTPS SKILL.md / JSON URLs loaded at build (always-on, picked by name).
      * @param  PhpClawExtensions  $extensions  Runtime extensions bag.
      * @param  Connection|null  $connection  Doctrine DBAL connection for DatabaseTool, or null when absent.
      * @param  bool|null  $console  Console context override; null defers to the ConsoleContext service.
@@ -84,6 +86,7 @@ final class PhpClawFactory
      * @param  bool  $durableRuns  Save every run after each step and let web and worker runs pause for approval; needs store_messages.
      * @param  int  $durableStepBudget  Steps one process runs before the run is suspended; 0 = no limit.
      * @param  int|null  $durableDeadlineSeconds  Seconds one process runs before the run is suspended; null = half of max_execution_time.
+     * @param  string  $environment  Kernel environment; `prod` refuses the console-only test_run tool.
      */
     public function __construct(
         private readonly string $apiKey,
@@ -121,6 +124,7 @@ final class PhpClawFactory
         private readonly bool $durableRuns = false,
         private readonly int $durableStepBudget = 0,
         private readonly ?int $durableDeadlineSeconds = null,
+        private readonly string $environment = '',
     ) {}
 
     /**
@@ -144,34 +148,40 @@ final class PhpClawFactory
     }
 
     /**
-     * Build the engine for the interactive chat command, which keeps the Y/n prompt.
+     * Build the engine for the console commands, which keeps the Y/n prompt; a chat session may swap provider or model.
      *
+     * @param  string  $provider  Provider for this session; '' keeps the configured one.
+     * @param  string  $model  Model for this session; '' keeps the configured one.
      * @return PhpClawInterface
      */
-    public function createForTerminal(): PhpClawInterface
+    public function createForTerminal(string $provider = '', string $model = ''): PhpClawInterface
     {
-        return $this->build(terminalApproval: true);
+        return $this->build(terminalApproval: true, provider: $provider, model: $model);
     }
 
     /**
      * Build the engine; a null $terminalApproval keeps the Y/n prompt only in an interactive console.
      *
      * @param  bool|null  $terminalApproval  True keeps the Y/n prompt and the console tool rights, false pauses runs for a later decision.
+     * @param  string  $provider  Provider to use; '' uses the configured one.
+     * @param  string  $model  Model to use; '' uses the configured one.
      * @return PhpClawInterface
      */
-    private function build(?bool $terminalApproval): PhpClawInterface
+    private function build(?bool $terminalApproval, string $provider = '', string $model = ''): PhpClawInterface
     {
+        $provider = $provider !== '' ? $provider : $this->provider;
+        $model = $model !== '' ? $model : $this->model;
         $memory = new PrivacyAwareMemory($this->memory, $this->storeMessages);
 
         $isConsole = $terminalApproval === true || ($this->console ?? ($this->consoleContext?->isConsole() ?? false));
 
         $builder = PhpClaw::builder()
             ->apiKey($this->apiKey)
-            ->provider($this->provider)
-            ->model($this->model)
+            ->provider($provider)
+            ->model($model)
             ->storeMessages($this->storeMessages)
             ->maxIterations($this->maxIterations)
-            ->maxToolsPerTurn(ToolProfileResolver::maxTools(ToolProfileResolver::resolve($this->provider, $this->model)))
+            ->maxToolsPerTurn(ToolProfileResolver::maxTools(ToolProfileResolver::resolve($provider, $model)))
             ->tools(ToolProfileResolver::filter($this->resolveTools($isConsole)))
             ->shellAllowlist($this->shellAllowlist)
             ->memory($memory)
@@ -186,14 +196,14 @@ final class PhpClawFactory
             $builder->withRemoteSkills($url);
         }
 
-        $override = $this->buildCustomProviderOverride();
+        $override = $this->buildCustomProviderOverride($provider, $model);
         if ($override !== null) {
             $builder->providerOverride($override);
         }
 
         $this->applyApprovalMode($builder, $terminalApproval ?? $isConsole);
 
-        $this->applyAgentPrimitives($builder);
+        $this->applyAgentPrimitives($builder, $provider);
 
         return $builder->build();
     }
@@ -235,11 +245,12 @@ final class PhpClawFactory
      * Apply the fallback provider, outbound rate limit, response cache, and token budget primitives; each stays off unless the site owner set it.
      *
      * @param  ClawBuilder  $builder
+     * @param  string  $provider  Primary provider the engine is built with.
      * @return void
      */
-    private function applyAgentPrimitives(ClawBuilder $builder): void
+    private function applyAgentPrimitives(ClawBuilder $builder, string $provider): void
     {
-        $resolvedPrimary = $this->provider !== '' ? $this->provider : (new ClawConfig)->providerName;
+        $resolvedPrimary = $provider !== '' ? $provider : (new ClawConfig)->providerName;
         $fallbackCompatible = $this->fallbackProvider !== ''
             && $this->fallbackProvider !== 'custom'
             && ToolRegistry::toolFormat($this->fallbackProvider) === ToolRegistry::toolFormat($resolvedPrimary);
@@ -284,11 +295,13 @@ final class PhpClawFactory
     /**
      * Build an OpenAIProvider override for the 'custom' provider with a validated base_url.
      *
+     * @param  string|null  $provider  Primary provider the engine is built with; null uses the configured one.
+     * @param  string|null  $model  Model the engine is built with; null uses the configured one.
      * @return ?ProviderInterface
      */
-    private function buildCustomProviderOverride(): ?ProviderInterface
+    private function buildCustomProviderOverride(?string $provider = null, ?string $model = null): ?ProviderInterface
     {
-        if ($this->provider !== 'custom') {
+        if (($provider ?? $this->provider) !== 'custom') {
             return null;
         }
 
@@ -300,7 +313,7 @@ final class PhpClawFactory
 
         return new OpenAIProvider(
             apiKey: $this->apiKey,
-            model: $this->model,
+            model: $model ?? $this->model,
             systemPrompt: $this->systemPrompt,
             endpoint: $baseUrl,
             name: 'custom',
@@ -373,6 +386,14 @@ final class PhpClawFactory
                 ShellTool::class => new ShellTool(allowlist: $this->shellAllowlist),
                 FileReadTool::class => new FileReadTool(workspaceRoot: $this->workspaceRoot),
                 FileWriteTool::class => new FileWriteTool(workspaceRoot: $this->workspaceRoot, allowPhpWrite: $allowPhpWrite),
+                FileEditTool::class => new FileEditTool(workspaceRoot: $this->workspaceRoot),
+                TestRunTool::class => new TestRunTool(
+                    projectRoot: $this->projectRoot,
+                    environment: $this->environment,
+                    console: $this->consoleContext,
+                    identity: $this->identity,
+                    requireChatRole: $this->requireChatRole,
+                ),
                 DatabaseTool::class => $this->connection !== null
                     ? new DatabaseTool($this->connection, $this->consoleContext, $this->identity, $this->requireChatRole)
                     : null,

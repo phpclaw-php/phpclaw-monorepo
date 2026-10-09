@@ -316,13 +316,13 @@ final class GuideCommand extends Command
      */
     private function sectionSkills(SymfonyStyle $io): void
     {
-        $io->writeln('Skills inject relevant content into every agent prompt via keyword matching.');
+        $io->writeln('Skills give the agent curated guidance it loads by name when a task needs it.');
         $io->writeln('Define skills in config/packages/phpclaw.yaml under skills:');
         $io->writeln("  Inline:  { name: '...', description: '...', tags: [...], content: '...' }");
         $io->writeln("  File:    { file: '%kernel.project_dir%/skills/my-skill.md' }");
         $io->writeln('  Class:   { class: App\\Skill\\MySkill }');
         $io->newLine();
-        $io->writeln('All discovered skills are always active and inject on keyword match, with no per-skill toggle.');
+        $io->writeln('All discovered skills are always active and inject when your message names one, with no per-skill toggle.');
         $io->writeln('Add remote HTTPS skills via remote_skill_urls in phpclaw.yaml (PHPCLAW_REMOTE_SKILL_URLS).');
     }
 
@@ -376,7 +376,8 @@ final class GuideCommand extends Command
     private function sectionCli(SymfonyStyle $io): void
     {
         $io->writeln('Available console commands:');
-        $io->writeln('  phpclaw {message}                 : send a message to the agent');
+        $io->writeln('  phpclaw {message}                 : send a message to the agent (--conv-id, --continue, --trace)');
+        $io->writeln('  phpclaw:chat                      : interactive session with a live tool trace and slash commands');
         $io->writeln('  phpclaw:about [--test]            : show adapter info + test connection');
         $io->writeln('  phpclaw:guide [--section=<name>]  : show this documentation');
         $io->writeln('  phpclaw:stats                     : show conversation/message counts');
@@ -441,7 +442,7 @@ final class GuideCommand extends Command
         $io->writeln('  PHPCLAW_CLOUD_KEY       : cloud key (leave empty for local mode)');
         $io->writeln('  PHPCLAW_CLOUD_SIGNING_SECRET : verify signed cloud scan responses (empty = skip)');
         $io->writeln('  PHPCLAW_API_ENABLED     : false disables every REST route');
-        $io->writeln('  PHPCLAW_REMOTE_SKILL_URLS : comma-separated HTTPS skill URLs (always-on, keyword-matched)');
+        $io->writeln('  PHPCLAW_REMOTE_SKILL_URLS : comma-separated HTTPS skill URLs (always-on, picked by name)');
         $io->writeln('  PHPCLAW_FALLBACK_PROVIDER : fallback provider slug tried when the primary fails (default: off)');
         $io->writeln('  PHPCLAW_FALLBACK_MODEL    : fallback provider model override');
         $io->writeln('  PHPCLAW_FALLBACK_API_KEY  : fallback provider API key');

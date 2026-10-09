@@ -41,6 +41,7 @@ services:
             $consoleContext:    '@PhpClaw\Symfony\Console\ConsoleContext'
             $identity:          '@PhpClaw\Symfony\SymfonyIdentityResolver'
             $requireChatRole:   '%phpclaw.require_chat_role%'
+            $environment:       '%kernel.environment%'
             $projectRoot:       '%kernel.project_dir%'
             $fallbackProvider:  '%phpclaw.fallback_provider%'
             $fallbackModel:     '%phpclaw.fallback_model%'

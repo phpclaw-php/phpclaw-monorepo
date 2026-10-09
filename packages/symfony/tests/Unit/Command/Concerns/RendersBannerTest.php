@@ -29,16 +29,11 @@ final class RendersBannerTest extends TestCase
         $this->assertStringContainsString('AI agents for Symfony', $content);
     }
 
-    public function test_banner_version_is_a_real_release_tag_or_the_dev_fallback(): void
+    public function test_banner_tagline_is_the_product_line_alone(): void
     {
-        $subject = $this->subject();
-        $version = $subject->version();
+        $lines = explode("\n", $this->render(false));
 
-        $this->assertNotSame('', $version);
-        $this->assertTrue(
-            $version === 'dev' || (bool) preg_match('/^\d+\.\d+\.\d+/', $version),
-            "bannerVersion() must return 'dev' or a real semver-shaped version, got: {$version}",
-        );
+        $this->assertSame('AI agents for Symfony', $lines[6]);
     }
 
     private function render(bool $decorated): string
@@ -61,11 +56,6 @@ final class RendersBannerTest extends TestCase
             public function render(SymfonyStyle $io): void
             {
                 $this->banner($io);
-            }
-
-            public function version(): string
-            {
-                return $this->bannerVersion();
             }
         };
     }

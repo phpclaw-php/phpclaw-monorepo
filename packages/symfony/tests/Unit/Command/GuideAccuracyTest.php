@@ -108,7 +108,7 @@ final class GuideAccuracyTest extends TestCase
             $this->createMock(ClawInterface::class),
         ))->getDefinition();
 
-        self::assertSame(['stream'], array_keys($definition->getOptions()));
+        self::assertSame(['stream', 'conv-id', 'continue', 'trace'], array_keys($definition->getOptions()));
     }
 
     private function section(string $name): string

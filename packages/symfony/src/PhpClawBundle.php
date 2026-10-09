@@ -14,6 +14,7 @@ use PhpClaw\Hooks\HookEventBridge;
 use PhpClaw\Hooks\HookRegistry;
 use PhpClaw\Hooks\LifecycleEvent;
 use PhpClaw\Memory\Contracts\MemoryInterface;
+use PhpClaw\Memory\MemoryCatalogue;
 use PhpClaw\Memory\MemoryRegistry;
 use PhpClaw\Providers\ProviderRegistry;
 use PhpClaw\Skills\Contracts\SkillInterface;
@@ -317,7 +318,7 @@ final class PhpClawBundle extends AbstractBundle
     }
 
     /**
-     * Registers Doctrine and Cache memory drivers into MemoryRegistry.
+     * Registers Doctrine, Cache and catalogue memory drivers, then binds the configured one as the memory service.
      *
      * @return void
      */
@@ -341,6 +342,8 @@ final class PhpClawBundle extends AbstractBundle
                 $this->container->get(CacheInterface::class),
             ));
         }
+
+        MemoryCatalogue::activateAll();
 
         $driver = (string) $this->container->getParameter('phpclaw.memory_driver');
 

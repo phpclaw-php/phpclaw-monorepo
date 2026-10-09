@@ -41,7 +41,11 @@ The agent from your terminal, scriptable and CI-friendly:
 ```bash
 bin/console phpclaw "how many users signed up this week?"
 bin/console phpclaw "tail the last 50 error-level log lines" --stream
+bin/console phpclaw:chat
 ```
+
+`phpclaw:chat` opens an interactive session with slash commands; `--conv-id`, `--continue` and `--trace` are in the
+[Symfony guide](https://phpclaw.ai/docs/adapters/symfony/).
 
 ## Programmatic use
 

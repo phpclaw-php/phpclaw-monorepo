@@ -77,6 +77,7 @@ final class GuideCommandTest extends TestCase
 
         self::assertSame([
             'phpclaw:about',
+            'phpclaw:chat',
             'phpclaw:guide',
             'phpclaw:jobs:list',
             'phpclaw:jobs:status',

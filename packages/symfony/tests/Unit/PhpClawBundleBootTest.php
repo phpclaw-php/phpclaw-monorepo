@@ -10,7 +10,10 @@ use PhpClaw\Guards\GuardRegistry;
 use PhpClaw\Guards\InjectionGuard;
 use PhpClaw\Hooks\HookRegistry;
 use PhpClaw\Hooks\LifecycleEvent;
+use PhpClaw\Memory\ArrayMemory;
 use PhpClaw\Memory\Contracts\MemoryInterface;
+use PhpClaw\Memory\MemoryCatalogue;
+use PhpClaw\Memory\MemoryRegistry;
 use PhpClaw\Skills\PhpBestPracticesSkill;
 use PhpClaw\Skills\SkillRegistry;
 use PhpClaw\Symfony\Http\StreamEventBridge;
@@ -325,6 +328,26 @@ final class PhpClawBundleBootTest extends KernelTestCase
         $container = self::bootKernel()->getContainer();
 
         $this->assertTrue($container->has(MemoryInterface::class));
+    }
+
+    public function test_boot_selects_a_driver_that_only_the_memory_catalogue_registers(): void
+    {
+        MemoryCatalogue::register('catalogue_only', 'Catalogue only', ArrayMemory::class);
+        IntegrationKernel::configure([
+            'memory_driver' => 'catalogue_only',
+            'store_messages' => false,
+            'event_bridge' => false,
+        ]);
+
+        try {
+            $container = self::bootKernel()->getContainer();
+
+            $this->assertInstanceOf(ArrayMemory::class, $container->get(MemoryInterface::class));
+        } finally {
+            MemoryCatalogue::reset();
+            MemoryRegistry::reset();
+            IntegrationKernel::configure(['memory_driver' => 'file', 'store_messages' => false, 'event_bridge' => false]);
+        }
     }
 
     public function test_boot_with_unknown_memory_driver_still_wires_a_memory_service(): void
