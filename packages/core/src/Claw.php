@@ -851,13 +851,13 @@ final class Claw implements ClawInterface
     }
 
     /**
-     * Boot phpClaw Cloud features when a cloud key is configured AND the optional `phpclaw/phpclaw-cloud` package is installed.
+     * Boot phpClaw Cloud features when a cloud key is configured, storeMessages is on, and the optional `phpclaw/phpclaw-cloud` package is installed.
      *
      * @return void
      */
     private function bootCloud(): void
     {
-        if (! $this->config->isCloudEnabled()) {
+        if (! $this->config->isCloudEnabled() || ! $this->config->storeMessages) {
             return;
         }
 
