@@ -189,6 +189,44 @@ final class WpDbConversationMemoryTest extends TestCase
         self::assertSame(['id' => 'conv-del', 'namespace' => 'default'], $this->wpdb->deleteLog[0][1]);
     }
 
+    public function test_forget_deletes_the_messages_before_the_conversation_row(): void
+    {
+        $this->wpdb->nextGetRow = ['user_id' => '5'];
+
+        (new WpDbConversationMemory)->forget('conv-del', 'default');
+
+        self::assertSame([
+            ['wp_phpclaw_messages', ['conversation_id' => 'conv-del']],
+            ['wp_phpclaw_conversations', ['id' => 'conv-del', 'namespace' => 'default']],
+        ], $this->wpdb->deleteLog);
+    }
+
+    public function test_forget_of_a_missing_conversation_leaves_messages_untouched(): void
+    {
+        $this->wpdb->nextGetRow = null;
+
+        (new WpDbConversationMemory)->forget('conv-missing', 'default');
+
+        self::assertSame([
+            ['wp_phpclaw_conversations', ['id' => 'conv-missing', 'namespace' => 'default']],
+        ], $this->wpdb->deleteLog);
+    }
+
+    public function test_forget_of_another_users_conversation_deletes_nothing(): void
+    {
+        Functions\when('current_user_can')->justReturn(false);
+        $this->wpdb->nextGetRow = ['user_id' => '9'];
+
+        try {
+            (new WpDbConversationMemory)->forget('conv-other', 'default');
+            self::fail('forget() must refuse a conversation owned by another user.');
+        } catch (MemoryException $e) {
+            self::assertInstanceOf(ConversationAccessDeniedException::class, $e->getPrevious());
+        }
+
+        self::assertSame([], $this->wpdb->deleteLog);
+    }
+
     public function test_has_returns_true_when_count_is_one(): void
     {
         $this->wpdb->nextGetVar = '1';

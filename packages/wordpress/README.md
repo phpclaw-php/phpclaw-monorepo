@@ -39,7 +39,7 @@ Same agent, three ways in: the admin chat, WP-CLI, or your own app over REST.
 
 A chat panel inside `wp-admin`, next to Posts and Plugins. Ask a question, the agent picks a tool, runs it against your site, and answers in the same panel.
 
-## CLI Experience
+## CLI
 
 <img alt="phpClaw WordPress CLI in action" src=".github/assets/screenshots/cli.png" width="800">
 

@@ -271,6 +271,7 @@ final class WpDbConversationMemory implements MemoryInterface
 
             if (is_array($existing)) {
                 self::assertOwnership($existing);
+                $wpdb->delete($this->messagesTable, ['conversation_id' => $key], ['%s']);
             }
 
             $wpdb->delete(

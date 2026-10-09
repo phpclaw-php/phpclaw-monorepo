@@ -851,7 +851,7 @@ final class GuidePage
         ?>
         <h2 class="pc-mt-0">Skills</h2>
         <p class="pc-text-muted">
-            Skills inject curated context snippets into the prompt when their keywords match the user message. All discovered skills are active automatically, no setup needed.
+            Skills give the agent curated guidance: it sees each skill's name and description and loads the full text when a task needs it, or straight away when your message names the skill. All discovered skills are active automatically, no setup needed.
         </p>
 
         <h3 class="pc-mt-24">Discovered Skills</h3>
