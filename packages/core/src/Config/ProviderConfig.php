@@ -49,7 +49,7 @@ final class ProviderConfig
      * @param  string  $apiKey  Provider API key; empty triggers env-var auto-detection.
      * @param  string  $provider  Provider slug (anthropic, gemini, or an OpenAI-compatible preset); empty triggers env-var auto-detection.
      * @param  string  $model  Upstream model id; empty uses each provider's smart default.
-     * @param  string  $systemPrompt  Free-form system prompt (may already include AGENTIC_DOCTRINE prefix from the builder).
+     * @param  string  $systemPrompt  Free-form system prompt (from the builder it starts with the phpClaw identity, then AGENTIC_DOCTRINE when tools are registered).
      * @param  int  $maxTokens  Hard ceiling on response tokens; clamped to >=0, 0 lets the provider choose.
      * @param  bool  $promptCache  Enable Anthropic prompt caching (no-op for other providers).
      * @param  int  $thinkingBudget  Reasoning-token budget for Anthropic extended thinking; clamped to >=0, 0 disables.

@@ -18,6 +18,9 @@ use PHPUnit\Framework\TestCase;
 
 final class ClawBuilderTest extends TestCase
 {
+    private const IDENTITY = 'You are phpClaw AI Agent, an assistant running inside this application. '
+        .'If the instructions below give you a different name or role, use that instead.';
+
     protected function setUp(): void
     {
         $_ENV['ANTHROPIC_API_KEY'] = 'sk-test';
@@ -307,80 +310,38 @@ final class ClawBuilderTest extends TestCase
         $this->assertSame('', $claw->config()->cloudSigningSecret);
     }
 
-    public function test_system_prompt_with_no_tools_is_passed_verbatim(): void
-    {
-        $claw = Claw::builder()->systemPrompt('You are a tester.')->build();
-        $this->assertSame('You are a tester.', $claw->config()->systemPrompt);
-    }
-
-    public function test_empty_system_prompt_with_no_tools_stays_empty(): void
+    public function test_identity_only_when_no_tools_and_no_system_prompt(): void
     {
         $claw = Claw::builder()->build();
-        $this->assertSame('', $claw->config()->systemPrompt);
+        $this->assertSame(self::IDENTITY, $claw->config()->systemPrompt);
     }
 
-    public function test_doctrine_prepends_when_tools_registered(): void
+    public function test_identity_doctrine_then_owner_prompt_when_tools_registered(): void
     {
         $claw = Claw::builder()
             ->systemPrompt('Custom prompt.')
             ->addTool($this->makeTool('x'))
             ->build();
-        $prompt = $claw->config()->systemPrompt;
-        $this->assertStringContainsString(Claw::AGENTIC_DOCTRINE, $prompt);
-        $this->assertStringContainsString('Custom prompt.', $prompt);
-        $this->assertStringStartsWith(Claw::AGENTIC_DOCTRINE, $prompt);
+        $this->assertSame(
+            self::IDENTITY."\n\n".Claw::AGENTIC_DOCTRINE."\n\nCustom prompt.",
+            $claw->config()->systemPrompt,
+        );
     }
 
-    public function test_doctrine_only_when_tools_registered_and_no_system_prompt(): void
+    public function test_identity_then_doctrine_when_tools_registered_and_no_system_prompt(): void
     {
         $claw = Claw::builder()
             ->addTool($this->makeTool('x'))
             ->build();
-        $this->assertSame(Claw::AGENTIC_DOCTRINE, $claw->config()->systemPrompt);
+        $this->assertSame(self::IDENTITY."\n\n".Claw::AGENTIC_DOCTRINE, $claw->config()->systemPrompt);
     }
 
-    public function test_agentic_doctrine_used_when_agentic_mode_on(): void
-    {
-        $claw = Claw::builder()
-            ->systemPrompt('Custom prompt.')
-            ->addTool($this->makeTool('x'))
-            ->build();
-        $prompt = $claw->config()->systemPrompt;
-        $this->assertStringContainsString(Claw::AGENTIC_DOCTRINE, $prompt);
-        $this->assertStringContainsString('Custom prompt.', $prompt);
-        $this->assertStringStartsWith(Claw::AGENTIC_DOCTRINE, $prompt);
-    }
-
-    public function test_agentic_doctrine_only_when_no_system_prompt(): void
-    {
-        $claw = Claw::builder()
-            ->addTool($this->makeTool('x'))
-            ->build();
-        $this->assertSame(Claw::AGENTIC_DOCTRINE, $claw->config()->systemPrompt);
-    }
-
-    public function test_default_doctrine_is_agentic_not_framework(): void
-    {
-        $claw = Claw::builder()
-            ->addTool($this->makeTool('x'))
-            ->build();
-        $this->assertSame(Claw::AGENTIC_DOCTRINE, $claw->config()->systemPrompt);
-    }
-
-    public function test_agentic_mode_suppressed_when_no_tools(): void
+    public function test_identity_then_owner_prompt_without_doctrine_when_no_tools(): void
     {
         $claw = Claw::builder()
             ->systemPrompt('Custom prompt.')
             ->build();
-        $this->assertSame('Custom prompt.', $claw->config()->systemPrompt);
-    }
-
-    public function test_doctrine_suppressed_when_no_tools(): void
-    {
-        $claw = Claw::builder()
-            ->systemPrompt('Custom prompt.')
-            ->build();
-        $this->assertSame('Custom prompt.', $claw->config()->systemPrompt);
+        $this->assertSame(self::IDENTITY."\n\nCustom prompt.", $claw->config()->systemPrompt);
         $this->assertStringNotContainsString(Claw::AGENTIC_DOCTRINE, $claw->config()->systemPrompt);
     }
 

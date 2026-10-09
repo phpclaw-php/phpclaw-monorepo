@@ -30,6 +30,9 @@ use Psr\SimpleCache\CacheInterface;
  */
 final class ClawBuilder
 {
+    private const AGENT_IDENTITY = 'You are phpClaw AI Agent, an assistant running inside this application. '
+        .'If the instructions below give you a different name or role, use that instead.';
+
     private string $cloudKey = '';
 
     private string $cloudSigningSecret = '';
@@ -379,7 +382,7 @@ final class ClawBuilder
     /**
      * System prompt injected into every request.
      *
-     * @param  string  $prompt  Free-form system prompt; combined with AGENTIC_DOCTRINE when tools are registered.
+     * @param  string  $prompt  Free-form system prompt; sent after the phpClaw identity and, when tools are registered, AGENTIC_DOCTRINE.
      * @return static Builder instance for fluent chaining.
      */
     public function systemPrompt(string $prompt): static
@@ -799,19 +802,23 @@ final class ClawBuilder
     }
 
     /**
-     * Prepend the agentic doctrine when tools are registered.
+     * Join the identity, the agentic doctrine when tools are registered, and the owner's prompt.
      *
      * @param  ToolInterface[]  $tools  The (possibly remote-profile-filtered) tool list.
-     * @return string Either the raw systemPrompt or Claw::AGENTIC_DOCTRINE (optionally followed by the user prompt).
+     * @return string The identity, then the doctrine and the owner's prompt where present.
      */
     private function composeSystemPrompt(array $tools): string
     {
-        if (empty($tools)) {
-            return $this->systemPrompt;
+        $parts = [self::AGENT_IDENTITY];
+
+        if (! empty($tools)) {
+            $parts[] = Claw::AGENTIC_DOCTRINE;
         }
 
-        return $this->systemPrompt === ''
-            ? Claw::AGENTIC_DOCTRINE
-            : Claw::AGENTIC_DOCTRINE."\n\n".$this->systemPrompt;
+        if ($this->systemPrompt !== '') {
+            $parts[] = $this->systemPrompt;
+        }
+
+        return implode("\n\n", $parts);
     }
 }
