@@ -301,6 +301,10 @@ final class CloudHttp
 
         $host = (string) parse_url($url, PHP_URL_HOST);
 
+        if (str_starts_with($host, '[') && str_ends_with($host, ']')) {
+            $host = substr($host, 1, -1);
+        }
+
         return in_array($host, ['localhost', '127.0.0.1', '::1'], true);
     }
 

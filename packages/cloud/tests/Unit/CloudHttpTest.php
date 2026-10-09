@@ -25,6 +25,16 @@ final class CloudHttpTest extends TestCase
         self::assertTrue($ref->invoke(null, 'http://localhost:8000/api'), 'localhost http allowed');
     }
 
+    public function test_transport_allows_ipv6_loopback_written_with_brackets(): void
+    {
+        $ref = new \ReflectionMethod(CloudHttp::class, 'isTransportSecure');
+
+        self::assertTrue($ref->invoke(null, 'http://[::1]:8080/api'), 'IPv6 loopback http allowed');
+        self::assertFalse($ref->invoke(null, 'http://[::2]:8080/api'), 'another IPv6 host must be refused');
+        self::assertFalse($ref->invoke(null, 'http://[2001:db8::1]/api'), 'a remote IPv6 host must be refused');
+        self::assertFalse($ref->invoke(null, 'http://[::1].evil.test/api'), 'a host that only starts like loopback must be refused');
+    }
+
     public function test_get_returns_null_when_host_is_unreachable(): void
     {
         $result = CloudHttp::get(
