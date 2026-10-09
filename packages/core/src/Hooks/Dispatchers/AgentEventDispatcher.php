@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace PhpClaw\Hooks\Dispatchers;
 
 use PhpClaw\Hooks\EventPayload;
+use PhpClaw\Hooks\HookRunContext;
 use PhpClaw\Hooks\LifecycleEvent;
 
 /**
@@ -31,6 +32,7 @@ final class AgentEventDispatcher
             LifecycleEvent::AgentBefore->value,
             ['message' => $message],
             runId: $runId,
+            parentRunId: HookRunContext::currentParentRunId(),
             streaming: $streaming,
             conversationId: $conversationId,
         );
@@ -119,6 +121,7 @@ final class AgentEventDispatcher
                 'cache_write_tokens' => $cacheWriteTokens,
             ],
             runId: $runId,
+            parentRunId: HookRunContext::currentParentRunId(),
             streaming: $streaming,
             conversationId: $conversationId,
         );
@@ -389,6 +392,78 @@ final class AgentEventDispatcher
             LifecycleEvent::RunCancelled->value,
             ['reason' => $reason],
             runId: $runId,
+        );
+    }
+
+    /**
+     * Fires when a graph run starts; carries the entry node name, never the state.
+     *
+     * @param  string  $runId  Graph run id.
+     * @param  string  $entryNode  Name of the first node.
+     * @return void
+     */
+    public static function graphStart(string $runId, string $entryNode): void
+    {
+        EventPayload::fire(
+            LifecycleEvent::GraphStart->value,
+            ['entry_node' => $entryNode],
+            runId: $runId,
+            parentRunId: HookRunContext::currentParentRunId(),
+        );
+    }
+
+    /**
+     * Fires when a graph run reaches Graph::END; carries the step count and last node, never the state.
+     *
+     * @param  string  $runId  Graph run id.
+     * @param  int  $steps  Nodes run, counting repeats.
+     * @param  string  $lastNode  Name of the node that ran last.
+     * @return void
+     */
+    public static function graphEnd(string $runId, int $steps, string $lastNode): void
+    {
+        EventPayload::fire(
+            LifecycleEvent::GraphEnd->value,
+            ['steps' => $steps, 'last_node' => $lastNode],
+            runId: $runId,
+            parentRunId: HookRunContext::currentParentRunId(),
+        );
+    }
+
+    /**
+     * Fires when a fan-out node splits the run into branches; carries the node name and branch count, never the state.
+     *
+     * @param  string  $runId  Graph run id.
+     * @param  string  $node  Fan-out node name.
+     * @param  int  $branches  Number of branches.
+     * @return void
+     */
+    public static function graphFanOut(string $runId, string $node, int $branches): void
+    {
+        EventPayload::fire(
+            LifecycleEvent::GraphFanOut->value,
+            ['node' => $node, 'branches' => $branches],
+            runId: $runId,
+            parentRunId: HookRunContext::currentParentRunId(),
+        );
+    }
+
+    /**
+     * Fires when the branch results reach the join; carries the counts, never a branch result.
+     *
+     * @param  string  $runId  Graph run id.
+     * @param  string  $node  Fan-out node name.
+     * @param  int  $branches  Number of branches.
+     * @param  int  $failed  Branches that failed.
+     * @return void
+     */
+    public static function graphJoin(string $runId, string $node, int $branches, int $failed): void
+    {
+        EventPayload::fire(
+            LifecycleEvent::GraphJoin->value,
+            ['node' => $node, 'branches' => $branches, 'failed' => $failed],
+            runId: $runId,
+            parentRunId: HookRunContext::currentParentRunId(),
         );
     }
 }

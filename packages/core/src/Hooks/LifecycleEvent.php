@@ -68,6 +68,11 @@ enum LifecycleEvent: string
     case RunApproved = 'run.approved';
     case RunCancelled = 'run.cancelled';
 
+    case GraphStart = 'graph.start';
+    case GraphEnd = 'graph.end';
+    case GraphFanOut = 'graph.fan_out';
+    case GraphJoin = 'graph.join';
+
     case SkillRegistered = 'skill.registered';
     case SkillLoaded = 'skill.loaded';
     case SkillMatched = 'skill.matched';

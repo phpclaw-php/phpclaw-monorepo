@@ -44,7 +44,7 @@ final class InvocationPipeline
             $this->scanOrThrow($augmented, $message);
 
             return $this->invokeWithHooks(static fn (): AgentResponse => $invoke($augmented, $runId, $message), $message, $streaming, $runId);
-        });
+        }, parentRunId: HookDispatcher::currentRunId());
     }
 
     /**
@@ -66,7 +66,7 @@ final class InvocationPipeline
             }
 
             return $response;
-        });
+        }, parentRunId: HookDispatcher::currentRunId());
     }
 
     /**
@@ -138,7 +138,7 @@ final class InvocationPipeline
                 response: $response,
                 conversation: $updated,
             );
-        });
+        }, parentRunId: HookDispatcher::currentRunId());
     }
 
     /**

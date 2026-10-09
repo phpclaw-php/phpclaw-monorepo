@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace PhpClaw\Agent;
 
 /**
- * Counts of the saved runs one Claw::resumeDue() call resumed, by outcome.
+ * Counts of the saved runs or graph threads one Claw::resumeDue() or Graph::drain() call ran, by outcome.
  */
 final class ResumeReport
 {
