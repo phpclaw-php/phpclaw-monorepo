@@ -593,7 +593,7 @@ final class DurableRunTest extends TestCase
         $this->assertSame('refund', $events['run.suspended']['tool_name'] ?? null);
         $this->assertSame('approved', $events['run.approved']['decision'] ?? null);
         $this->assertSame($e->runId, $events['run.resumed']['run_id'] ?? null);
-        $this->assertStringNotContainsString('400', (string) json_encode($events));
+        $this->assertStringNotContainsString('"amount"', (string) json_encode($events));
     }
 
     public function test_a_later_call_in_the_resumed_batch_pauses_the_run_again(): void
