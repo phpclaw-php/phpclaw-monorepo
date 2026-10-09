@@ -444,6 +444,7 @@ final class EngineFactory
 
         $coreTools = ToolCatalogue::instantiateDefaults([
             'workspaceRoot' => $resolvedWorkspaceRoot,
+            'projectRoot' => defined('ABSPATH') ? rtrim((string) ABSPATH, '/') : null,
             'allowlist' => $shellAllowlist,
             'allowPhpWrite' => $allowPhpWrite,
         ]);
