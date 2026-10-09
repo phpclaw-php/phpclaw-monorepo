@@ -233,7 +233,7 @@
 
     <div class="tab-pane" id="guide-skills">
       <h4 class="phpclaw-section-title">Skills</h4>
-      <p class="phpclaw-body-text">Skills are always-on and inject curated context into the prompt when their keywords match the user message, so no per-skill toggle is needed. Add remote skills under {% if manage_all %}<a href="/admin/config/phpclaw/settings">Settings → Remote Skill URLs</a>{% else %}Settings → Remote Skill URLs{% endif %} <span class="phpclaw-text-muted">(Administrator only)</span>.</p>
+      <p class="phpclaw-body-text">Skills are always-on: the agent sees each skill's name and description and loads the full text when a task needs it, or straight away when your message names the skill, so no per-skill toggle is needed. Add remote skills under {% if manage_all %}<a href="/admin/config/phpclaw/settings">Settings → Remote Skill URLs</a>{% else %}Settings → Remote Skill URLs{% endif %} <span class="phpclaw-text-muted">(Administrator only)</span>.</p>
 
       <h5 class="phpclaw-mt-16">Discovered Skills</h5>
       {% if capability_records.skills is empty %}

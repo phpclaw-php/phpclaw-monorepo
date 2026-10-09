@@ -315,7 +315,7 @@ HTML;
         $form['remote_skill_urls'] = [
             '#type' => 'textarea',
             '#title' => $this->t('Remote Skill URLs'),
-            '#description' => $this->t('Comma-separated HTTPS URLs pointing to SKILL.md or skill JSON files. Skills are always-on and keyword-matched per message, so no per-skill toggle is needed.'),
+            '#description' => $this->t('Comma-separated HTTPS URLs pointing to SKILL.md or skill JSON files. Skills are always-on and picked by name, so no per-skill toggle is needed.'),
             '#default_value' => (string) ($config->get('remote_skill_urls') ?? ''),
             '#placeholder' => 'https://example.com/skills/drupal-tips.md, https://example.com/skills/commerce.json',
             '#rows' => 3,
