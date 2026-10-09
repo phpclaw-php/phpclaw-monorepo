@@ -3,6 +3,11 @@
 An AI agent inside your Symfony application. Ask it in plain English about your database and
 application logs, from the console, from your own code, or over REST. Works on Symfony 6.4, 7 and 8.
 
+## 0.1.3 (2026-10-09)
+
+### Added
+- Interactive phpclaw:chat command, conversation flags on phpclaw, redis memory fix (#125)
+
 ## 0.1.2 (2026-10-07)
 
 ### Added
