@@ -4,6 +4,11 @@ The cloud transport for phpClaw. Forwards agent runs to phpClaw Cloud for tracin
 screens prompts through the cloud scan guard, with secret redaction and payload size caps applied
 before anything leaves your server. Inert until a cloud key is set. PHP 8.1 and later.
 
+## 0.1.3 (2026-10-09)
+
+### Added
+- Trace payloads for graph events and parent run ids (#103)
+
 ## 0.1.2 (2026-10-07)
 
 ### Added
