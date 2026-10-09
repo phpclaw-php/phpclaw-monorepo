@@ -27,6 +27,10 @@ final class ToolConfig
 
     public readonly ?ApprovalGateInterface $approvalGate;
 
+    public readonly bool $redactToolResultPii;
+
+    public readonly array $piiExemptTools;
+
     /**
      * Group and validate the tool-facing configuration.
      *
@@ -35,6 +39,8 @@ final class ToolConfig
      * @param  bool  $allowPhpWrite  True to permit PHP file writes when an adapter constructs FileWriteTool from this config.
      * @param  string[]  $remoteToolProfileUrls  Remote tool-activation profile URLs applied at build.
      * @param  ApprovalGateInterface|null  $approvalGate  Approval gate checked before gated tools run; null disables gating.
+     * @param  bool  $redactToolResultPii  True to redact personal data in tool results before the model sees them.
+     * @param  list<string>  $piiExemptTools  Tool names whose results keep real values.
      * @return void
      */
     public function __construct(
@@ -43,11 +49,15 @@ final class ToolConfig
         bool $allowPhpWrite = false,
         array $remoteToolProfileUrls = [],
         ?ApprovalGateInterface $approvalGate = null,
+        bool $redactToolResultPii = false,
+        array $piiExemptTools = [],
     ) {
         $this->tools = $tools;
         $this->shellAllowlist = $shellAllowlist !== [] ? $shellAllowlist : self::DEFAULT_SHELL_ALLOWLIST;
         $this->allowPhpWrite = $allowPhpWrite;
         $this->remoteToolProfileUrls = $remoteToolProfileUrls;
         $this->approvalGate = $approvalGate;
+        $this->redactToolResultPii = $redactToolResultPii;
+        $this->piiExemptTools = array_values($piiExemptTools);
     }
 }

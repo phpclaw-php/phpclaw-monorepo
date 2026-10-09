@@ -8,7 +8,7 @@ use PhpClaw\Guards\Concerns\NormalisesText;
 use PhpClaw\Hooks\HookDispatcher;
 
 /**
- * Sanitises tool output before it is appended to agent history, blocking indirect prompt injection.
+ * Sanitises tool output before it is appended to agent history: injection phrases always, personal data when configured.
  */
 final class ToolOutputGuard
 {
@@ -21,13 +21,61 @@ final class ToolOutputGuard
     private const PATTERNS = [...InjectionGuard::PATTERNS, ...RoleSwitchGuard::PATTERNS];
 
     /**
+     * Set which personal data to redact from tool results; with no patterns, only injection phrases are redacted.
+     *
+     * @param  array<string, string>  $piiPatterns  Type name to regex, for example PiiDetectionGuard::patterns(); empty turns PII redaction off.
+     * @param  list<string>  $piiExemptTools  Tool names whose results keep real values.
+     * @return void
+     */
+    public function __construct(
+        private readonly array $piiPatterns = [],
+        private readonly array $piiExemptTools = [],
+    ) {}
+
+    /**
+     * Redact injection phrases from a tool result, then any configured personal data.
+     *
+     * @param  string  $toolResult  Raw output returned by the tool.
+     * @param  string  $toolName  Name of the tool that produced the result (for the hook and the exempt list).
+     * @return string The sanitised tool result.
+     */
+    public function sanitise(string $toolResult, string $toolName = ''): string
+    {
+        return $this->redactPii($this->redactInjection($toolResult, $toolName), $toolName);
+    }
+
+    /**
+     * Replace each configured personal-data match with [REDACTED_<TYPE>], unless the tool is exempt; the hook gets the type, never the value.
+     *
+     * @param  string  $toolResult  Tool result after injection redaction.
+     * @param  string  $toolName  Name of the tool that produced the result.
+     * @return string The result with personal data replaced.
+     */
+    private function redactPii(string $toolResult, string $toolName): string
+    {
+        if ($this->piiPatterns === [] || in_array($toolName, $this->piiExemptTools, true)) {
+            return $toolResult;
+        }
+
+        foreach ($this->piiPatterns as $type => $pattern) {
+            $toolResult = (string) preg_replace_callback($pattern, static function () use ($type, $toolName): string {
+                HookDispatcher::guardToolOutputRedacted($toolName, 'pii:'.$type);
+
+                return '[REDACTED_'.strtoupper($type).']';
+            }, $toolResult);
+        }
+
+        return $toolResult;
+    }
+
+    /**
      * Redact every injection pattern found in a tool result, including look-alike, full-width and extra-space spellings, and leave every other byte unchanged.
      *
      * @param  string  $toolResult  Raw output returned by the tool.
      * @param  string  $toolName  Name of the tool that produced the result (for the hook).
-     * @return string The sanitised tool result with patterns replaced by [REDACTED].
+     * @return string The tool result with injection patterns replaced by [REDACTED].
      */
-    public function sanitise(string $toolResult, string $toolName = ''): string
+    private function redactInjection(string $toolResult, string $toolName): string
     {
         $toolResult = self::stripInvisible($toolResult);
         $normalised = $this->normalise($toolResult);

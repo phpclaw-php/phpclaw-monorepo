@@ -33,6 +33,8 @@ use PhpClaw\Exceptions\TokenBudgetExceededException;
 use PhpClaw\Exceptions\ToolException;
 use PhpClaw\Exceptions\UnsupportedSchemaException;
 use PhpClaw\Guards\GuardRegistry;
+use PhpClaw\Guards\PiiDetectionGuard;
+use PhpClaw\Guards\ToolOutputGuard;
 use PhpClaw\Hooks\Dispatchers\AgentEventDispatcher;
 use PhpClaw\Memory\Contracts\MemoryInterface;
 use PhpClaw\Memory\PrivacyAwareMemory;
@@ -510,6 +512,10 @@ final class Claw implements ClawInterface
             maxIterations: $this->config->maxIterations,
             maxRetries: $this->config->maxRetries,
             maxHistoryLength: $this->config->maxHistoryLength,
+            toolOutputGuard: new ToolOutputGuard(
+                piiPatterns: $this->config->redactToolResultPii ? (new PiiDetectionGuard)->patterns() : [],
+                piiExemptTools: $this->config->piiExemptTools,
+            ),
             outputSanitiser: new OutputSanitiser($this->config->sanitiseOutput),
             compactHistory: $this->config->compactHistory,
             approvalGate: $this->config->approvalGate,

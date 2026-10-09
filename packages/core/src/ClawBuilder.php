@@ -108,6 +108,10 @@ final class ClawBuilder
 
     private bool $allowPhpWrite = false;
 
+    private bool $redactToolResultPii = false;
+
+    private array $piiExemptTools = [];
+
     private array $remoteToolProfileUrls = [];
 
     private ?ApprovalGateInterface $approvalGate = null;
@@ -604,6 +608,21 @@ final class ClawBuilder
     }
 
     /**
+     * Redact emails, card numbers, SSNs and phone numbers in tool results before the model sees them. Off by default.
+     *
+     * @param  bool  $enabled  True to redact.
+     * @param  list<string>  $exemptTools  Tool names whose results keep real values, for tools that must return customer data.
+     * @return static Builder instance for fluent chaining.
+     */
+    public function redactPiiInToolResults(bool $enabled = true, array $exemptTools = []): static
+    {
+        $this->redactToolResultPii = $enabled;
+        $this->piiExemptTools = array_values($exemptTools);
+
+        return $this;
+    }
+
+    /**
      * Register a remote tool-activation profile URL that names which local tools stay active.
      *
      * @param  string  $url  HTTPS URL of a tool profile JSON.
@@ -755,6 +774,8 @@ final class ClawBuilder
                 allowPhpWrite: $this->allowPhpWrite,
                 remoteToolProfileUrls: $this->remoteToolProfileUrls,
                 approvalGate: $this->approvalGate,
+                redactToolResultPii: $this->redactToolResultPii,
+                piiExemptTools: $this->piiExemptTools,
             ),
             skills: new SkillConfig(
                 skills: $this->skills,
