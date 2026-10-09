@@ -307,6 +307,7 @@ final class EngineFactory
         if (class_exists(ToolCatalogue::class)) {
             foreach (ToolCatalogue::instantiateDefaults([
                 'workspaceRoot' => $workspaceRoot,
+                'projectRoot' => defined('_PS_ROOT_DIR_') ? (string) _PS_ROOT_DIR_ : null,
                 'allowlist' => $shellAllowlist,
                 'allowPhpWrite' => $isCli,
             ]) as $tool) {
