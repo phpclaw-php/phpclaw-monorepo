@@ -1,12 +1,15 @@
 {
     "name": "phpclaw/phpclaw",
-    "description": "Universal AI agent engine for PHP. Zero framework dependencies. Anthropic, OpenAI, Groq, Gemini.",
+    "description": "phpClaw: open-source AI agent framework for PHP. Tool-calling agent loop, memory and security guards, with any LLM provider. No framework dependencies.",
     "homepage": "https://phpclaw.ai",
     "type": "library",
     "license": "MIT",
     "keywords": [
         "ai",
         "agent",
+        "ai-agent",
+        "ai-agent-framework",
+        "tool-calling",
         "llm",
         "php",
         "anthropic",
