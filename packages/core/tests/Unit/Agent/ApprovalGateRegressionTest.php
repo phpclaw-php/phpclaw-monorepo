@@ -60,7 +60,7 @@ final class ApprovalGateRegressionTest extends TestCase
             'file_write' => [new FileWriteTool($this->workspace), ['path' => 'a.txt', 'content' => 'x']],
             'file_edit' => [new FileEditTool($this->workspace), ['path' => 'a.txt', 'old_str' => 'a', 'new_str' => 'b']],
             'zip_package' => [new ZipPackagerTool($this->workspace), ['source_dir' => 'a', 'output_name' => 'a']],
-            'shell_exec_mutating' => [new ShellTool, ['command' => 'rm -rf /tmp/phpclaw-nope']],
+            'shell_exec_mutating' => [new ShellTool(allowlist: ['touch']), ['command' => 'touch /tmp/phpclaw-nope']],
         ];
     }
 

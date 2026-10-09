@@ -645,4 +645,44 @@ final class ShellToolTest extends TestCase
 
         $this->assertFalse($tool->isMutating(['command' => 'grep x f']));
     }
+
+    public function test_a_command_with_a_metacharacter_needs_no_approval_because_it_is_refused(): void
+    {
+        $tool = new ShellTool;
+
+        $this->assertFalse($tool->isMutating(['command' => 'find app -type f | wc -l']));
+        $this->expectException(ShellDeniedException::class);
+        $this->expectExceptionMessage('Command contains a disallowed shell metacharacter.');
+        $tool->execute(['command' => 'find app -type f | wc -l']);
+    }
+
+    public function test_a_hard_blocked_command_needs_no_approval_because_it_is_refused(): void
+    {
+        $tool = new ShellTool(allowlist: ['rm']);
+
+        $this->assertFalse($tool->isMutating(['command' => 'rm notes.txt']));
+        $this->expectException(ShellDeniedException::class);
+        $this->expectExceptionMessage("Command 'rm' is permanently blocked and cannot be executed.");
+        $tool->execute(['command' => 'rm notes.txt']);
+    }
+
+    public function test_a_command_off_the_allowlist_needs_no_approval_because_it_is_refused(): void
+    {
+        $tool = new ShellTool;
+
+        $this->assertFalse($tool->isMutating(['command' => 'php artisan migrate']));
+        $this->expectException(ShellDeniedException::class);
+        $this->expectExceptionMessage("Command 'php' is not in the shell allowlist.");
+        $tool->execute(['command' => 'php artisan migrate']);
+    }
+
+    public function test_an_allowed_command_that_changes_things_still_needs_approval(): void
+    {
+        $this->assertTrue((new ShellTool(allowlist: ['touch']))->isMutating(['command' => 'touch notes.txt']));
+    }
+
+    public function test_an_empty_command_still_needs_approval(): void
+    {
+        $this->assertTrue((new ShellTool)->isMutating(['command' => '  ']));
+    }
 }

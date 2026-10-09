@@ -152,7 +152,7 @@ final class ShellTool implements AuthorizableToolInterface, MutatingToolInterfac
      * @return array{input: array<string, mixed>, result: string|null}
      *
      * @throws ToolException If no command is provided.
-     * @throws ShellDeniedException If the command is hard-blocked or not in the allowlist.
+     * @throws ShellDeniedException If the command has a metacharacter, is hard-blocked or is not in the allowlist.
      */
     protected function plan(array $input): array
     {
@@ -168,11 +168,15 @@ final class ShellTool implements AuthorizableToolInterface, MutatingToolInterfac
             throw new ToolException('No command provided.');
         }
 
-        $this->rejectOnMetacharacters($command);
+        $refusal = $this->refusal($command);
+
+        if ($refusal !== null) {
+            HookDispatcher::shellDenied($command, $refusal['program'], $refusal['reason'], $refusal['detail']);
+
+            throw new ShellDeniedException($refusal['message']);
+        }
 
         $cmdName = $this->parseCommand($command);
-
-        $this->enforceCommandBlocklists($command, $cmdName);
 
         if (in_array($cmdName, self::FILE_READING_COMMANDS, true)) {
             $this->validateFileArguments($command, $cmdName);
@@ -232,10 +236,10 @@ final class ShellTool implements AuthorizableToolInterface, MutatingToolInterfac
     }
 
     /**
-     * Whether this specific command invocation would have a side effect, lets an approval gate fast-path a benign read (e.g. "ls") without gating every shell_exec call equally. Unparsable or empty input is treated as mutating (fail closed).
+     * Whether this command needs approval: not for a read-only command or one the tool refuses before running; empty input does (fail closed).
      *
      * @param  array<string, mixed>  $input  Same input execute() is about to receive.
-     * @return bool True unless the command's first token is in READONLY_COMMANDS.
+     * @return bool False for a refused command or a first token in READONLY_COMMANDS.
      */
     public function isMutating(array $input): bool
     {
@@ -245,9 +249,38 @@ final class ShellTool implements AuthorizableToolInterface, MutatingToolInterfac
             return true;
         }
 
+        if ($this->refusal($command) !== null) {
+            return false;
+        }
+
+        return ! in_array($this->parseCommand($command), self::READONLY_COMMANDS, true);
+    }
+
+    /**
+     * Why the command is refused before it runs: a shell metacharacter, a hard-blocked program, or a program not on the allowlist; null when it may run.
+     *
+     * @param  string  $command  Trimmed command from the model.
+     * @return array{reason: string, program: string, detail: string, message: string}|null
+     */
+    private function refusal(string $command): ?array
+    {
+        foreach (self::METACHARACTERS as $char) {
+            if (str_contains($command, $char)) {
+                return ['reason' => 'metacharacter', 'program' => '', 'detail' => $char, 'message' => 'Command contains a disallowed shell metacharacter.'];
+            }
+        }
+
         $cmdName = $this->parseCommand($command);
 
-        return ! in_array($cmdName, self::READONLY_COMMANDS, true);
+        if (in_array(strtolower(basename($cmdName)), self::HARD_BLOCKED, true)) {
+            return ['reason' => 'hard_blocked', 'program' => $cmdName, 'detail' => '', 'message' => "Command '{$cmdName}' is permanently blocked and cannot be executed."];
+        }
+
+        if (! in_array($cmdName, $this->allowlist, true)) {
+            return ['reason' => 'not_in_allowlist', 'program' => $cmdName, 'detail' => '', 'message' => "Command '{$cmdName}' is not in the shell allowlist."];
+        }
+
+        return null;
     }
 
     /**
@@ -281,27 +314,6 @@ final class ShellTool implements AuthorizableToolInterface, MutatingToolInterfac
     }
 
     /**
-     * Reject the command outright if it contains any shell metacharacter.
-     *
-     * @param  string  $command  Raw command string from the LLM.
-     * @return void
-     *
-     * @throws ShellDeniedException When a metacharacter is present.
-     */
-    private function rejectOnMetacharacters(string $command): void
-    {
-        foreach (self::METACHARACTERS as $char) {
-            if (str_contains($command, $char)) {
-                HookDispatcher::shellDenied($command, '', 'metacharacter', $char);
-
-                throw new ShellDeniedException(
-                    'Command contains a disallowed shell metacharacter.'
-                );
-            }
-        }
-    }
-
-    /**
      * Extract the leading program token from an already-validated command string, split the same way {@see runProcess()} builds its argv so the allowlist checks the exact token that would be executed.
      *
      * @param  string  $command  Raw command string from the LLM.
@@ -315,34 +327,6 @@ final class ShellTool implements AuthorizableToolInterface, MutatingToolInterfac
         ));
 
         return $parts[0] ?? '';
-    }
-
-    /**
-     * Refuse a hard-blocked program by its lower-cased base name, then any program not exactly on the allowlist. Fires the shell.denied hook on rejection.
-     *
-     * @param  string  $command  Full command string (used in the hook payload).
-     * @param  string  $cmdName  First-word command name.
-     * @return void
-     *
-     * @throws ShellDeniedException When the command is hard-blocked or not in the allowlist.
-     */
-    private function enforceCommandBlocklists(string $command, string $cmdName): void
-    {
-        if (in_array(strtolower(basename($cmdName)), self::HARD_BLOCKED, true)) {
-            HookDispatcher::shellDenied($command, $cmdName, 'hard_blocked');
-
-            throw new ShellDeniedException(
-                "Command '{$cmdName}' is permanently blocked and cannot be executed."
-            );
-        }
-
-        if (! in_array($cmdName, $this->allowlist, true)) {
-            HookDispatcher::shellDenied($command, $cmdName, 'not_in_allowlist');
-
-            throw new ShellDeniedException(
-                "Command '{$cmdName}' is not in the shell allowlist."
-            );
-        }
     }
 
     /**
