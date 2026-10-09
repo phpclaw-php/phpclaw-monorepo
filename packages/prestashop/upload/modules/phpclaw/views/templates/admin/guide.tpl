@@ -338,7 +338,7 @@
       <div class="card-body">
         <h3 class="card-title mt-0">Skills</h3>
         <p class="text-muted mb-3 phpclaw-guide-intro">
-          Skills inject curated context snippets into the prompt when their keywords match the user message. Discovered skills are always active, no configuration needed.
+          Skills give the agent curated guidance: it sees each skill's name and description and loads the full text when a task needs it, or straight away when your message names the skill. Discovered skills are always active, no configuration needed.
         </p>
         <h4 class="phpclaw-guide-h4">Discovered Skills</h4>
         {if $skills|count > 0}

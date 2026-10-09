@@ -38,7 +38,7 @@ Same agent, three ways in: the back-office chat, CLI, or your own app over a RES
 
 A chat panel inside the back-office, reached from **phpClaw → Chat**. Ask a question, the agent picks a tool, runs it against your store, and answers in the same panel.
 
-## CLI Experience
+## CLI
 
 <img alt="phpClaw PrestaShop CLI in action" src=".github/assets/screenshots/cli.png" width="800">
 
