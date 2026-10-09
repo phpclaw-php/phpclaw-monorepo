@@ -3,6 +3,10 @@
 An AI agent inside your Joomla administrator. Ask it in plain English about articles, categories,
 users and installed extensions, and it answers from your own site data. Works on Joomla 4, 5 and 6.
 
+## 0.1.4 (2026-10-09)
+
+- Dependency update: core 0.1.4.
+
 ## 0.1.3 (2026-10-07)
 
 ### Added
