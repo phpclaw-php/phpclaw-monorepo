@@ -5,6 +5,18 @@ DeepSeek, Ollama or any OpenAI-compatible endpoint, runs tools in a ReAct loop, 
 through guards, remembers conversations, and powers every phpClaw adapter. Zero framework
 dependencies, PHP 8.1 and later.
 
+## 0.1.4 (2026-10-09)
+
+### Added
+- Pipelines, graphs and graph fan-out (#90)
+
+### Fixed
+- File_edit approval prompt shows the file path (#91)
+- A shell command the tool refuses no longer asks for approval first (#92)
+- Code_search skips .env and secret files, the same as file_read (#93)
+- Keep PHP tags in tool results so a PHP file read and written again stays valid (#94)
+- Send Gemini thought signatures back with tool calls (#95)
+
 ## 0.1.3 (2026-10-07)
 
 ### Added
