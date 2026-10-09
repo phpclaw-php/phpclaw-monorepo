@@ -4,6 +4,10 @@ An AI agent inside your OpenCart admin. Ask it in plain English about products,
 categories, orders, customers, coupons, manufacturers, reviews and shipping, and
 it answers from your own store data. Works on OpenCart 3.x and 4.x.
 
+## 0.1.4 (2026-10-09)
+
+- Dependency update: core 0.1.4, cloud 0.1.3.
+
 ## 0.1.3 (2026-10-07)
 
 ### Added
