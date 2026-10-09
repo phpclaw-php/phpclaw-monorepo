@@ -37,7 +37,7 @@ Same agent, three ways in: the admin chat, the CLI, or the component's administr
 
 A chat panel inside the Joomla back-end, reached from **Components → phpClaw**. Ask a question, the agent picks a tool, runs it against your site, and answers in the same panel.
 
-## CLI Experience
+## CLI
 
 <img alt="phpClaw Joomla CLI in action" src=".github/assets/screenshots/cli.png" width="800">
 

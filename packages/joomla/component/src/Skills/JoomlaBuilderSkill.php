@@ -61,7 +61,7 @@ final class JoomlaBuilderSkill implements SkillInterface
 
 ### When these rules apply
 They apply ONLY when the user has asked you to create, generate, scaffold or package a Joomla
-extension. The keyword matcher is fuzzy, so this text is often supplied for messages that merely
+extension. This text can be loaded for messages that merely
 mention Joomla, a plugin or an extension. If the user is asking a QUESTION about the site (how many
 articles, which plugins are installed, list users, run a query), ignore everything below, answer the
 question, and use the tools you were given. Do not describe how to build a plugin, do not write
