@@ -4,6 +4,12 @@ An AI agent inside your Drupal admin. Ask it in plain English about nodes, users
 media, menus, blocks, views, modules, roles, path aliases, webforms, configuration, cron and cache
 status, and it answers from your own site data. Works on Drupal 10 and 11.
 
+## 0.1.3 (2026-10-09)
+
+### Fixed
+- Admin text says skills are picked by name, not keywords (#111)
+- Project_info inspects DRUPAL_ROOT instead of relying on Drush's working directory (#133)
+
 ## 0.1.2 (2026-10-07)
 
 ### Added
