@@ -1,6 +1,6 @@
 {
     "name": "phpclaw/phpclaw-prestashop",
-    "description": "AI assistant module for PrestaShop 8 and 9: chat UI, 14 tools, REST API, CLI, 8 AI providers",
+    "description": "phpClaw AI agent module for PrestaShop 8 and 9: chat UI, built-in tools, REST API, CLI and 8 AI providers.",
     "homepage": "https://phpclaw.ai",
     "type": "prestashop-module",
     "license": "MIT",
@@ -12,7 +12,7 @@
         "phpclaw",
         "anthropic",
         "openai",
-        "chatgpt"
+        "ai-agent"
     ],
     "authors": [
         {
