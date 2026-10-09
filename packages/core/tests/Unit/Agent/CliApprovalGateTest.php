@@ -155,4 +155,18 @@ final class CliApprovalGateTest extends TestCase
     {
         self::assertStringContainsString('foo', $this->describe('mystery', ['foo' => 'bar']));
     }
+
+    public function test_describe_file_edit_shows_the_path_key_the_tool_uses(): void
+    {
+        $out = $this->describe('file_edit', ['path' => 'app/Models/Post.php', 'old_str' => 'FOO', 'new_str' => 'BAR']);
+
+        self::assertStringStartsWith('Edit file: app/Models/Post.php'."\n", $out);
+    }
+
+    public function test_describe_file_edit_without_a_path_shows_a_question_mark(): void
+    {
+        $out = $this->describe('file_edit', ['old_str' => 'FOO', 'new_str' => 'BAR']);
+
+        self::assertStringStartsWith('Edit file: ?'."\n", $out);
+    }
 }

@@ -95,7 +95,7 @@ final class CliApprovalGate implements ApprovalGateInterface
         return match ($toolName) {
             'file_write' => 'Write file: '.(string) ($toolInput['path'] ?? $toolInput['file'] ?? '?')
                            .' ('.strlen((string) ($toolInput['content'] ?? '')).' bytes)',
-            'file_edit' => 'Edit file: '.(string) ($toolInput['file'] ?? '?')
+            'file_edit' => 'Edit file: '.(string) ($toolInput['path'] ?? $toolInput['file'] ?? '?')
                            ."\n            OLD: ".mb_substr((string) ($toolInput['old_str'] ?? ''), 0, self::DESCRIBE_EXCERPT_LENGTH)
                            ."\n            NEW: ".mb_substr((string) ($toolInput['new_str'] ?? ''), 0, self::DESCRIBE_EXCERPT_LENGTH),
             'shell_exec' => 'Run: '.(string) ($toolInput['command'] ?? '?'),
