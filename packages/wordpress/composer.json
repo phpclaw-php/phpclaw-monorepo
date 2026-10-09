@@ -1,12 +1,13 @@
 {
     "name": "phpclaw/phpclaw-wordpress",
-    "description": "AI assistant plugin for WordPress and WooCommerce: chat UI, 30 built-in tools, 8 AI providers, REST API and WP-CLI commands.",
+    "description": "phpClaw AI agent plugin for WordPress and WooCommerce: chat UI, built-in tools, REST API and WP-CLI commands, with 8 AI providers.",
     "homepage": "https://phpclaw.ai",
     "type": "wordpress-plugin",
     "license": "MIT",
     "keywords": [
         "ai",
         "agent",
+        "ai-agent",
         "llm",
         "wordpress",
         "woocommerce",
