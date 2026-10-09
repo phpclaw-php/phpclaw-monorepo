@@ -356,4 +356,66 @@ final class CodeSearchToolTest extends TestCase
 
         $tool->execute(['pattern' => 'targetNeedle', 'path' => '../..']);
     }
+
+    private function filesMatching(string $pattern, array $extra = []): array
+    {
+        $files = array_map(static fn (array $hit): string => $hit['file'], $this->search(['pattern' => $pattern] + $extra)['results']);
+        sort($files);
+
+        return $files;
+    }
+
+    public function test_env_files_are_never_searched(): void
+    {
+        file_put_contents($this->workspace.'/.env', "SECRET_NEEDLE=1\n");
+        file_put_contents($this->workspace.'/.env.local', "SECRET_NEEDLE=2\n");
+        file_put_contents($this->workspace.'/.ENV.backup', "SECRET_NEEDLE=3\n");
+        file_put_contents($this->workspace.'/notes.txt', "SECRET_NEEDLE in notes\n");
+
+        self::assertSame(['notes.txt'], $this->filesMatching('SECRET_NEEDLE', ['context_lines' => 1]));
+    }
+
+    public function test_a_blocked_file_name_is_never_searched(): void
+    {
+        file_put_contents($this->workspace.'/sub/config.php', "SECRET_NEEDLE\n");
+        file_put_contents($this->workspace.'/sub/id_rsa', "SECRET_NEEDLE\n");
+        file_put_contents($this->workspace.'/sub/routes.php', "SECRET_NEEDLE\n");
+
+        self::assertSame(['sub/routes.php'], $this->filesMatching('SECRET_NEEDLE'));
+    }
+
+    public function test_a_blocked_extension_is_never_searched(): void
+    {
+        file_put_contents($this->workspace.'/sub/server.pem', "SECRET_NEEDLE\n");
+        file_put_contents($this->workspace.'/sub/data.SQLITE', "SECRET_NEEDLE\n");
+        file_put_contents($this->workspace.'/sub/readme.md', "SECRET_NEEDLE\n");
+
+        self::assertSame(['sub/readme.md'], $this->filesMatching('SECRET_NEEDLE'));
+    }
+
+    public function test_a_secret_folder_is_never_searched(): void
+    {
+        mkdir($this->workspace.'/.ssh', 0755, true);
+        mkdir($this->workspace.'/sub/.AWS', 0755, true);
+        file_put_contents($this->workspace.'/.ssh/notes.txt', "SECRET_NEEDLE\n");
+        file_put_contents($this->workspace.'/sub/.AWS/creds.txt', "SECRET_NEEDLE\n");
+        file_put_contents($this->workspace.'/sub/ok.txt', "SECRET_NEEDLE\n");
+
+        self::assertSame(['sub/ok.txt'], $this->filesMatching('SECRET_NEEDLE'));
+    }
+
+    public function test_a_path_into_a_secret_folder_is_refused(): void
+    {
+        mkdir($this->workspace.'/sub/.ssh/keys', 0755, true);
+
+        $this->expectException(ToolException::class);
+        $this->expectExceptionMessage("code_search: the '.ssh' folder is blocked.");
+
+        (new CodeSearchTool($this->workspace))->execute(['pattern' => 'x', 'path' => 'sub/.ssh/keys']);
+    }
+
+    public function test_a_path_to_an_ordinary_folder_is_still_searched(): void
+    {
+        self::assertSame(['sub/a.php'], $this->filesMatching('targetNeedle', ['path' => 'sub']));
+    }
 }

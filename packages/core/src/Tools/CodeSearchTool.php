@@ -11,6 +11,7 @@ use PhpClaw\Tools\Concerns\HasCoreToolBinding;
 use PhpClaw\Tools\Contracts\AuthorizableToolInterface;
 use PhpClaw\Tools\Contracts\ToolInterface;
 use PhpClaw\Tools\Contracts\ToolRoutingInterface;
+use PhpClaw\Tools\Security\BlockedPaths;
 
 /**
  * Recursive read-only pattern search across workspace files, returns file, line, match, and context.
@@ -257,12 +258,12 @@ final class CodeSearchTool implements AuthorizableToolInterface, ToolInterface, 
     }
 
     /**
-     * Resolve the search root, keeping any sub-path inside the workspace.
+     * Resolve the search root, keeping any sub-path inside the workspace and out of secret folders.
      *
      * @param  string  $subPath  Optional workspace-relative sub-path.
      * @return string Absolute search root.
      *
-     * @throws ToolException When the sub-path escapes the workspace root.
+     * @throws ToolException When the sub-path escapes the workspace root or is inside a secret folder.
      */
     private function resolveRoot(string $subPath): string
     {
@@ -284,7 +285,33 @@ final class CodeSearchTool implements AuthorizableToolInterface, ToolInterface, 
             throw new ToolException('code_search: path escapes workspace root - blocked.');
         }
 
+        $relative = substr($real, strlen(rtrim($workspaceBase, '/\\')) + 1);
+
+        foreach (preg_split('#[/\\\\]#', $relative) ?: [] as $segment) {
+            if (in_array(strtolower($segment), BlockedPaths::SECURITY_DIRS, true)) {
+                throw new ToolException("code_search: the '{$segment}' folder is blocked.");
+            }
+        }
+
         return $real;
+    }
+
+    /**
+     * Whether file_read refuses this file: a .env file, a blocked name, or a blocked extension.
+     *
+     * @param  string  $filename  File name without its folder.
+     * @return bool
+     */
+    private static function isBlockedFile(string $filename): bool
+    {
+        $name = strtolower($filename);
+
+        if ($name === '.env' || str_starts_with($name, '.env.')) {
+            return true;
+        }
+
+        return in_array($name, BlockedPaths::FILENAMES, true)
+            || in_array(strtolower(pathinfo($name, PATHINFO_EXTENSION)), BlockedPaths::EXTENSIONS, true);
     }
 
     /**
@@ -324,7 +351,8 @@ final class CodeSearchTool implements AuthorizableToolInterface, ToolInterface, 
         $iterator = new \RecursiveIteratorIterator(
             new \RecursiveCallbackFilterIterator(
                 new \RecursiveDirectoryIterator($root, \FilesystemIterator::SKIP_DOTS),
-                static fn (\SplFileInfo $fileInfo): bool => ! in_array($fileInfo->getFilename(), self::SKIP_DIRS, true),
+                static fn (\SplFileInfo $fileInfo): bool => ! in_array($fileInfo->getFilename(), self::SKIP_DIRS, true)
+                    && ! in_array(strtolower($fileInfo->getFilename()), BlockedPaths::SECURITY_DIRS, true),
             ),
         );
 
@@ -338,7 +366,7 @@ final class CodeSearchTool implements AuthorizableToolInterface, ToolInterface, 
 
         try {
             foreach ($iterator as $file) {
-                if (! $file->isFile() || $file->getSize() > self::MAX_FILE_BYTES) {
+                if (! $file->isFile() || $file->getSize() > self::MAX_FILE_BYTES || self::isBlockedFile($file->getFilename())) {
                     continue;
                 }
                 if ($extension !== '' && strtolower($file->getExtension()) !== strtolower($extension)) {
