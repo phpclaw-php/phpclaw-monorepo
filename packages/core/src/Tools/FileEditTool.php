@@ -110,7 +110,8 @@ final class FileEditTool implements AuthorizableToolInterface, MutatingToolInter
     public function description(): string
     {
         return 'Edit a file by replacing old_str with new_str. old_str must appear exactly once. '
-             .'Use for targeted fixes; use file_write only for whole new files.';
+             .'Use for targeted fixes; use file_write only for whole new files. '
+             .'Copy old_str from the file text only, never the line-number prefix file_read adds.';
     }
 
     /**

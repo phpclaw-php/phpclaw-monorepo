@@ -106,7 +106,7 @@ final class FileReadTool implements AuthorizableToolInterface, ResettableInterfa
     }
 
     /**
-     * JSON Schema describing the tool's `path` input.
+     * JSON Schema describing the tool's `path` input and the optional line range.
      *
      * @return array<string, mixed>
      */
@@ -118,6 +118,18 @@ final class FileReadTool implements AuthorizableToolInterface, ResettableInterfa
                 'path' => [
                     'type' => 'string',
                     'description' => 'Relative path to the file within the workspace (e.g. "logs/app.log").',
+                ],
+                'offset' => [
+                    'type' => 'integer',
+                    'description' => 'Optional first line to return, counting from 1. Use the next_offset of a previous read to continue.',
+                ],
+                'limit' => [
+                    'type' => 'integer',
+                    'description' => 'Optional number of lines to return from offset.',
+                ],
+                'line_numbers' => [
+                    'type' => 'boolean',
+                    'description' => 'Optional. True prefixes each line with its number and a tab, to cite lines; never copy that prefix into file_edit.',
                 ],
             ],
             'required' => ['path'],
@@ -152,9 +164,50 @@ final class FileReadTool implements AuthorizableToolInterface, ResettableInterfa
             'input' => [
                 'path' => $relativePath,
                 'absolute_path' => $this->validatePath($relativePath),
+                'range' => $this->lineRange($input),
             ],
             'result' => null,
         ];
+    }
+
+    /**
+     * The requested line range, or null when none of offset, limit and line_numbers was given.
+     *
+     * @param  array<string, mixed>  $input  Raw runtime input.
+     * @return array{offset: int, limit: int|null, line_numbers: bool}|null
+     *
+     * @throws ToolException When offset or limit is not a whole number of 1 or more.
+     */
+    private function lineRange(array $input): ?array
+    {
+        if (! array_key_exists('offset', $input) && ! array_key_exists('limit', $input) && ! array_key_exists('line_numbers', $input)) {
+            return null;
+        }
+
+        return [
+            'offset' => array_key_exists('offset', $input) ? self::positiveWholeNumber($input['offset']) : 1,
+            'limit' => array_key_exists('limit', $input) ? self::positiveWholeNumber($input['limit']) : null,
+            'line_numbers' => filter_var($input['line_numbers'] ?? false, FILTER_VALIDATE_BOOLEAN),
+        ];
+    }
+
+    /**
+     * Return the value as an int when it is a whole number of 1 or more.
+     *
+     * @param  mixed  $value  Raw offset or limit.
+     * @return int
+     *
+     * @throws ToolException When the value is anything else.
+     */
+    private static function positiveWholeNumber(mixed $value): int
+    {
+        $number = is_int($value) ? $value : (is_string($value) && ctype_digit($value) ? (int) $value : 0);
+
+        if ($number < 1) {
+            throw new ToolException('file_read: offset and limit must be whole numbers of 1 or more.');
+        }
+
+        return $number;
     }
 
     /**
@@ -169,7 +222,10 @@ final class FileReadTool implements AuthorizableToolInterface, ResettableInterfa
     {
         $absolutePath = (string) $input['absolute_path'];
 
-        $read = $this->readTruncated($absolutePath, (string) $input['path']);
+        $range = $input['range'] ?? null;
+        $read = is_array($range)
+            ? $this->readLines($absolutePath, (string) $input['path'], $range)
+            : $this->readTruncated($absolutePath, (string) $input['path']);
 
         FileReadLog::markRead($this->resolveWorkspaceRoot(), $absolutePath);
 
@@ -199,11 +255,14 @@ final class FileReadTool implements AuthorizableToolInterface, ResettableInterfa
     {
         $content = (string) $execution['content'];
 
+        $data = ['path' => (string) $input['path'], 'content' => $content];
+
+        if (array_key_exists('next_offset', $execution)) {
+            $data['next_offset'] = $execution['next_offset'];
+        }
+
         return $this->success(
-            [
-                'path' => (string) $input['path'],
-                'content' => $content,
-            ],
+            $data,
             [
                 'mode' => 'read',
                 'bytes' => strlen($content),
@@ -540,31 +599,9 @@ final class FileReadTool implements AuthorizableToolInterface, ResettableInterfa
      */
     private function readTruncated(string $absolutePath, string $relativePath): array
     {
-        if (! file_exists($absolutePath)) {
-            throw new ToolException('File not found: '.$this->sanitizeForMessage($relativePath));
-        }
-
-        if (! is_file($absolutePath)) {
-            throw new ToolException('Path is not a file: '.$this->sanitizeForMessage($relativePath));
-        }
-
-        $handle = fopen($absolutePath, 'r');
-
-        if ($handle === false) {
-            throw new ToolException('Cannot open file for reading: '.$this->sanitizeForMessage($relativePath));
-        }
+        $handle = $this->openText($absolutePath, $relativePath);
 
         try {
-            $sample = (string) fread($handle, self::BINARY_SNIFF_BYTES);
-
-            if (str_contains($sample, "\0")) {
-                throw new ToolException('Binary file; not readable as text: '.$this->sanitizeForMessage($relativePath));
-            }
-
-            if (rewind($handle) === false) {
-                throw new ToolException('Cannot open file for reading: '.$this->sanitizeForMessage($relativePath));
-            }
-
             $content = (string) fread($handle, $this->maxBytes);
 
             $stat = fstat($handle);
@@ -581,6 +618,103 @@ final class FileReadTool implements AuthorizableToolInterface, ResettableInterfa
         }
 
         return ['content' => $content, 'truncated' => $truncated];
+    }
+
+    /**
+     * Read the requested lines, stopping at the limit, the end of the file or the byte cap, and note the first line not returned.
+     *
+     * @param  string  $absolutePath  Canonical absolute path.
+     * @param  string  $relativePath  Workspace-relative path, for messages.
+     * @param  array{offset: int, limit: int|null, line_numbers: bool}  $range  Requested range.
+     * @return array{content: string, truncated: bool, next_offset: int|null}
+     *
+     * @throws ToolException When the file is missing, not a regular file, binary, or unreadable.
+     */
+    private function readLines(string $absolutePath, string $relativePath, array $range): array
+    {
+        $handle = $this->openText($absolutePath, $relativePath);
+        $lines = [];
+        $bytes = 0;
+        $truncated = false;
+        $nextOffset = null;
+        $number = 0;
+
+        try {
+            while (($line = fgets($handle)) !== false) {
+                $number++;
+
+                if ($number < $range['offset']) {
+                    continue;
+                }
+
+                if ($range['limit'] !== null && count($lines) >= $range['limit']) {
+                    $nextOffset = $number;
+
+                    break;
+                }
+
+                $text = rtrim($line, "\r\n");
+                $text = $range['line_numbers'] ? $number."\t".$text : $text;
+                $added = strlen($text) + ($lines === [] ? 0 : 1);
+
+                if ($bytes + $added > $this->maxBytes) {
+                    $truncated = true;
+                    $nextOffset = $lines === [] ? $number + 1 : $number;
+                    $lines = $lines === [] ? [$this->trimIncompleteUtf8Tail(substr($text, 0, $this->maxBytes))] : $lines;
+
+                    break;
+                }
+
+                $lines[] = $text;
+                $bytes += $added;
+            }
+        } finally {
+            fclose($handle);
+        }
+
+        return ['content' => implode("\n", $lines), 'truncated' => $truncated, 'next_offset' => $nextOffset];
+    }
+
+    /**
+     * Open an existing regular text file for reading, refusing a missing path, a folder or a binary file.
+     *
+     * @param  string  $absolutePath  Canonical absolute path.
+     * @param  string  $relativePath  Workspace-relative path, for messages.
+     * @return resource Handle positioned at the start of the file.
+     *
+     * @throws ToolException When the file is missing, not a regular file, binary, or unreadable.
+     */
+    private function openText(string $absolutePath, string $relativePath)
+    {
+        if (! file_exists($absolutePath)) {
+            throw new ToolException('File not found: '.$this->sanitizeForMessage($relativePath));
+        }
+
+        if (! is_file($absolutePath)) {
+            throw new ToolException('Path is not a file: '.$this->sanitizeForMessage($relativePath));
+        }
+
+        $handle = fopen($absolutePath, 'r');
+
+        if ($handle === false) {
+            throw new ToolException('Cannot open file for reading: '.$this->sanitizeForMessage($relativePath));
+        }
+
+        $sample = (string) fread($handle, self::BINARY_SNIFF_BYTES);
+
+        if (str_contains($sample, "\0")) {
+            fclose($handle);
+
+            throw new ToolException('Binary file; not readable as text: '.$this->sanitizeForMessage($relativePath));
+        }
+
+        if (rewind($handle) === false) {
+            fclose($handle);
+
+            throw new ToolException('Cannot open file for reading: '.$this->sanitizeForMessage($relativePath));
+        }
+
+        return $handle;
     }
 
     /**

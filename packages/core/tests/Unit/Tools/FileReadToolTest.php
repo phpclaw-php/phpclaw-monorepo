@@ -987,4 +987,106 @@ final class FileReadToolTest extends TestCase
 
         self::assertSame('# environment notes', self::content($tool->execute(['path' => '.environment.md'])));
     }
+
+    private function numberedFile(int $lines): void
+    {
+        $this->write('lines.txt', implode("\n", array_map(static fn (int $n): string => "line {$n}", range(1, $lines)))."\n");
+    }
+
+    private function readData(array $input, ?FileReadTool $tool = null): array
+    {
+        $decoded = (array) json_decode(($tool ?? new FileReadTool($this->workspace))->execute($input), true);
+
+        return (array) $decoded['data'];
+    }
+
+    public function test_it_returns_the_requested_line_range(): void
+    {
+        $this->numberedFile(10);
+
+        $data = $this->readData(['path' => 'lines.txt', 'offset' => 3, 'limit' => 2]);
+
+        $this->assertSame("line 3\nline 4", $data['content']);
+        $this->assertSame(5, $data['next_offset']);
+    }
+
+    public function test_it_prefixes_line_numbers_when_asked(): void
+    {
+        $this->numberedFile(10);
+
+        $data = $this->readData(['path' => 'lines.txt', 'offset' => 9, 'line_numbers' => true]);
+
+        $this->assertSame("9\tline 9\n10\tline 10", $data['content']);
+        $this->assertNull($data['next_offset']);
+    }
+
+    public function test_it_keeps_raw_output_by_default(): void
+    {
+        $this->numberedFile(3);
+
+        $data = $this->readData(['path' => 'lines.txt']);
+
+        $this->assertSame(['path', 'content'], array_keys($data));
+        $this->assertSame("line 1\nline 2\nline 3\n", $data['content']);
+    }
+
+    public function test_offset_past_the_end_returns_an_empty_slice(): void
+    {
+        $this->numberedFile(5);
+
+        $data = $this->readData(['path' => 'lines.txt', 'offset' => 50]);
+
+        $this->assertSame('', $data['content']);
+        $this->assertNull($data['next_offset']);
+    }
+
+    public function test_the_byte_cap_still_applies_to_the_slice(): void
+    {
+        $this->numberedFile(10);
+
+        $json = (new FileReadTool($this->workspace, maxBytes: 20))->execute(['path' => 'lines.txt', 'offset' => 1]);
+        $decoded = (array) json_decode($json, true);
+
+        $this->assertSame("line 1\nline 2\nline 3", $decoded['data']['content']);
+        $this->assertSame(4, $decoded['data']['next_offset']);
+        $this->assertTrue($decoded['meta']['truncated']);
+    }
+
+    public function test_invalid_offset_or_limit_is_rejected(): void
+    {
+        $this->numberedFile(3);
+        $tool = new FileReadTool($this->workspace);
+
+        foreach ([['offset' => 0], ['limit' => 0], ['offset' => -2], ['limit' => 'ten'], ['offset' => 1.5]] as $bad) {
+            try {
+                $tool->execute(['path' => 'lines.txt'] + $bad);
+                $this->fail('Expected a ToolException for '.json_encode($bad));
+            } catch (ToolException $e) {
+                $this->assertSame('file_read: offset and limit must be whole numbers of 1 or more.', $e->getMessage());
+            }
+        }
+    }
+
+    public function test_a_range_reads_past_the_first_16_kb(): void
+    {
+        $this->numberedFile(3000);
+        $this->assertGreaterThan(16384, (int) filesize($this->workspace.'/lines.txt'));
+
+        $data = $this->readData(['path' => 'lines.txt', 'offset' => 2900, 'limit' => 2]);
+
+        $this->assertSame("line 2900\nline 2901", $data['content']);
+        $this->assertSame(2902, $data['next_offset']);
+    }
+
+    public function test_next_offset_points_to_the_first_line_not_returned(): void
+    {
+        $this->numberedFile(6);
+
+        $first = $this->readData(['path' => 'lines.txt', 'offset' => 1, 'limit' => 4]);
+        $rest = $this->readData(['path' => 'lines.txt', 'offset' => $first['next_offset']]);
+
+        $this->assertSame(5, $first['next_offset']);
+        $this->assertSame("line 5\nline 6", $rest['content']);
+        $this->assertNull($rest['next_offset']);
+    }
 }
