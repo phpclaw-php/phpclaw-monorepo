@@ -21,6 +21,7 @@ use PhpClaw\Providers\OpenAIProvider;
 use PhpClaw\Skills\Contracts\SkillInterface;
 use PhpClaw\Skills\SkillResolver;
 use PhpClaw\Tools\Contracts\ToolInterface;
+use PhpClaw\Tools\FileEditTool;
 use PhpClaw\Tools\FileReadTool;
 use PhpClaw\Tools\FileWriteTool;
 use PhpClaw\Tools\ShellTool;
@@ -217,6 +218,9 @@ final class EngineFactory
                 FileWriteTool::class => new FileWriteTool(
                     workspaceRoot: (string) config('phpclaw.workspace_root', storage_path('phpclaw')),
                     allowPhpWrite: $allowPhpWrite,
+                ),
+                FileEditTool::class => new FileEditTool(
+                    workspaceRoot: (string) config('phpclaw.workspace_root', storage_path('phpclaw')),
                 ),
                 default => $app->make($class),
             };

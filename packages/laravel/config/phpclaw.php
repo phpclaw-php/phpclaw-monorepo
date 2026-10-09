@@ -32,6 +32,7 @@ return [
     'store_messages' => env('PHPCLAW_STORE_MESSAGES', true),
     'max_iterations' => (int) env('PHPCLAW_MAX_ITERATIONS', ClawConfig::DEFAULT_MAX_ITERATIONS),
     'memory_driver' => env('PHPCLAW_MEMORY_DRIVER', 'database'),
+    // Folder the file tools may use. PHPCLAW_WORKSPACE=./ lets them read and edit the app itself: dev machines only, refused by phpclaw:chat and --trace in production.
     'workspace_root' => env('PHPCLAW_WORKSPACE', storage_path('phpclaw')),
 
     'system_prompt' => env('PHPCLAW_SYSTEM_PROMPT', ''),

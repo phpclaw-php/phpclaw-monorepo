@@ -48,6 +48,7 @@
         "illuminate/contracts": "^10.0|^11.0|^12.0|^13.0",
         "illuminate/bus": "^10.0|^11.0|^12.0|^13.0",
         "illuminate/queue": "^10.0|^11.0|^12.0|^13.0",
+        "laravel/prompts": "^0.1.9|^0.2|^0.3",
         "phpclaw/phpclaw-mcp": "^0.1"
     },
     "support": {

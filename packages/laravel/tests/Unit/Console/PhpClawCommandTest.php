@@ -16,11 +16,38 @@ use PhpClaw\Exceptions\MaxIterationsException;
 use PhpClaw\Exceptions\ProviderException;
 use PhpClaw\Exceptions\RunSuspendedException;
 use PhpClaw\Exceptions\TokenBudgetExceededException;
+use PhpClaw\Hooks\HookRegistry;
 use PhpClaw\Laravel\PhpClawServiceProvider;
 use PHPUnit\Framework\MockObject\MockObject;
 
 final class PhpClawCommandTest extends TestCase
 {
+    private string $storage = '';
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        HookRegistry::reset();
+        $this->storage = sys_get_temp_dir().'/phpclaw-cmd-'.uniqid();
+        mkdir($this->storage, 0777, true);
+        $this->app->useStoragePath($this->storage);
+    }
+
+    protected function tearDown(): void
+    {
+        HookRegistry::reset();
+        $state = $this->storage.'/phpclaw/.last-conversation';
+        if (is_file($state)) {
+            unlink($state);
+        }
+        foreach ([$this->storage.'/phpclaw', $this->storage] as $dir) {
+            if (is_dir($dir)) {
+                rmdir($dir);
+            }
+        }
+        parent::tearDown();
+    }
+
     protected function getPackageProviders($app): array
     {
         return [PhpClawServiceProvider::class];
@@ -297,5 +324,244 @@ final class PhpClawCommandTest extends TestCase
         $this->artisan('phpclaw', ['message' => 'refund'])
             ->assertExitCode(0)
             ->expectsOutputToContain('stopped: awaiting_approval. Next: php artisan phpclaw:runs list, then approve or deny the paused call');
+    }
+
+    private function conversationWithId(string $id): Conversation
+    {
+        return new Conversation($id, [], new \DateTimeImmutable);
+    }
+
+    private function turnWithTools(array $tools, ?Conversation $conversation = null): ConversationTurn
+    {
+        $response = new AgentResponse(text: 'Done.', provider: 'ollama', model: 'qwen2.5:7b', iterations: 2, toolsCalled: $tools, inputTokens: 10, outputTokens: 20);
+
+        return new ConversationTurn($response, $conversation ?? Conversation::start());
+    }
+
+    private function stateFile(): string
+    {
+        return $this->storage.'/phpclaw/.last-conversation';
+    }
+
+    public function test_it_lists_tools_called_in_the_summary(): void
+    {
+        $mock = $this->mockAgent();
+        $mock->method('sendInConversation')->willReturn($this->turnWithTools(['file_read', 'code_search', 'file_read']));
+        $this->app->instance(PhpClawInterface::class, $mock);
+
+        $this->artisan('phpclaw', ['message' => 'look around'])
+            ->assertSuccessful()
+            ->expectsOutputToContain('Tools: file_read, code_search');
+    }
+
+    public function test_it_omits_the_tools_segment_when_no_tool_ran(): void
+    {
+        $mock = $this->mockAgent();
+        $mock->method('sendInConversation')->willReturn($this->turnWithTools([]));
+        $this->app->instance(PhpClawInterface::class, $mock);
+
+        $this->artisan('phpclaw', ['message' => 'hello'])
+            ->assertSuccessful()
+            ->doesntExpectOutputToContain('Tools:');
+    }
+
+    public function test_the_summary_prints_the_conversation_id(): void
+    {
+        $mock = $this->mockAgent();
+        $mock->method('sendInConversation')->willReturn($this->turnWithTools([], $this->conversationWithId('01CONVERSATIONID000000000A')));
+        $this->app->instance(PhpClawInterface::class, $mock);
+
+        $this->artisan('phpclaw', ['message' => 'hello'])
+            ->assertSuccessful()
+            ->expectsOutputToContain('Conversation: 01CONVERSATIONID000000000A');
+    }
+
+    public function test_it_resumes_the_conversation_named_by_conv_id(): void
+    {
+        config(['phpclaw.memory_driver' => 'database']);
+        $stored = $this->conversationWithId('01STOREDCONVERSATION00000A');
+        $mock = $this->createMock(PhpClawInterface::class);
+        $mock->expects($this->once())->method('conversation')->with('01STOREDCONVERSATION00000A')->willReturn($stored);
+        $mock->expects($this->once())->method('sendInConversation')->with($stored, 'and then?')->willReturn($this->turnWithTools([], $stored));
+        $this->app->instance(PhpClawInterface::class, $mock);
+
+        $this->artisan('phpclaw', ['message' => 'and then?', '--conv-id' => '01STOREDCONVERSATION00000A'])
+            ->assertSuccessful()
+            ->doesntExpectOutputToContain('No stored conversation');
+    }
+
+    public function test_an_unknown_conv_id_says_that_a_new_conversation_started(): void
+    {
+        config(['phpclaw.memory_driver' => 'database']);
+        $fresh = $this->conversationWithId('01FRESHCONVERSATION000000A');
+        $mock = $this->createMock(PhpClawInterface::class);
+        $mock->method('conversation')->with('01MISSING')->willReturn($fresh);
+        $mock->method('sendInConversation')->willReturn($this->turnWithTools([], $fresh));
+        $this->app->instance(PhpClawInterface::class, $mock);
+
+        $this->artisan('phpclaw', ['message' => 'hi', '--conv-id' => '01MISSING'])
+            ->assertSuccessful()
+            ->expectsOutputToContain('No stored conversation 01MISSING; started 01FRESHCONVERSATION000000A.');
+    }
+
+    public function test_it_warns_and_starts_fresh_when_the_memory_driver_is_array(): void
+    {
+        $mock = $this->createMock(PhpClawInterface::class);
+        $mock->expects($this->once())->method('conversation')->with('')->willReturn(Conversation::start());
+        $mock->method('sendInConversation')->willReturn($this->turnWithTools([]));
+        $this->app->instance(PhpClawInterface::class, $mock);
+
+        $this->artisan('phpclaw', ['message' => 'hi', '--conv-id' => '01ANYTHING'])
+            ->assertSuccessful()
+            ->expectsOutputToContain('Resuming needs a stored memory driver (memory_driver is array); starting a new conversation.');
+    }
+
+    public function test_it_writes_the_conversation_id_to_the_state_file(): void
+    {
+        $mock = $this->mockAgent();
+        $mock->method('sendInConversation')->willReturn($this->turnWithTools([], $this->conversationWithId('01WRITTENCONVERSATION0000A')));
+        $this->app->instance(PhpClawInterface::class, $mock);
+
+        $this->artisan('phpclaw', ['message' => 'hi'])->assertSuccessful();
+
+        $this->assertSame('01WRITTENCONVERSATION0000A', file_get_contents($this->stateFile()));
+    }
+
+    public function test_continue_reads_the_state_file(): void
+    {
+        config(['phpclaw.memory_driver' => 'database']);
+        mkdir(dirname($this->stateFile()), 0777, true);
+        file_put_contents($this->stateFile(), '01LASTCONVERSATION0000000A');
+        $last = $this->conversationWithId('01LASTCONVERSATION0000000A');
+        $mock = $this->createMock(PhpClawInterface::class);
+        $mock->expects($this->once())->method('conversation')->with('01LASTCONVERSATION0000000A')->willReturn($last);
+        $mock->method('sendInConversation')->willReturn($this->turnWithTools([], $last));
+        $this->app->instance(PhpClawInterface::class, $mock);
+
+        $this->artisan('phpclaw', ['message' => 'continue please', '--continue' => true])->assertSuccessful();
+    }
+
+    public function test_conv_id_wins_over_continue(): void
+    {
+        config(['phpclaw.memory_driver' => 'database']);
+        mkdir(dirname($this->stateFile()), 0777, true);
+        file_put_contents($this->stateFile(), '01LASTCONVERSATION0000000A');
+        $named = $this->conversationWithId('01NAMEDCONVERSATION000000A');
+        $mock = $this->createMock(PhpClawInterface::class);
+        $mock->expects($this->once())->method('conversation')->with('01NAMEDCONVERSATION000000A')->willReturn($named);
+        $mock->method('sendInConversation')->willReturn($this->turnWithTools([], $named));
+        $this->app->instance(PhpClawInterface::class, $mock);
+
+        $this->artisan('phpclaw', ['message' => 'hi', '--continue' => true, '--conv-id' => '01NAMEDCONVERSATION000000A'])->assertSuccessful();
+    }
+
+    public function test_continue_falls_back_to_a_new_conversation_when_no_state_file(): void
+    {
+        config(['phpclaw.memory_driver' => 'database']);
+        $mock = $this->createMock(PhpClawInterface::class);
+        $mock->expects($this->once())->method('conversation')->with('')->willReturn(Conversation::start());
+        $mock->method('sendInConversation')->willReturn($this->turnWithTools([]));
+        $this->app->instance(PhpClawInterface::class, $mock);
+
+        $this->artisan('phpclaw', ['message' => 'hi', '--continue' => true])
+            ->assertSuccessful()
+            ->expectsOutputToContain('No previous conversation to continue; starting a new one.');
+    }
+
+    private function agentFiringTools(array $events): PhpClawInterface&MockObject
+    {
+        $mock = $this->mockAgent();
+        $mock->method('sendInConversation')->willReturnCallback(function () use ($events): ConversationTurn {
+            foreach ($events as [$event, $context]) {
+                HookRegistry::fire($event, $context);
+            }
+
+            return $this->turnWithTools(array_column(array_column($events, 1), 'tool_name'));
+        });
+
+        return $mock;
+    }
+
+    public function test_trace_prints_one_line_per_tool_call(): void
+    {
+        $this->app->instance(PhpClawInterface::class, $this->agentFiringTools([
+            ['tool.before', ['tool_name' => 'file_write', 'tool_input' => ['path' => 'notes.txt', 'content' => 'hello'], 'iteration' => 1]],
+            ['tool.before', ['tool_name' => 'shell_exec', 'tool_input' => ['command' => 'ls -la'], 'iteration' => 2]],
+        ]));
+
+        $this->artisan('phpclaw', ['message' => 'go', '--trace' => true])
+            ->assertSuccessful()
+            ->expectsOutputToContain('> file_write: notes.txt (5 bytes)')
+            ->expectsOutputToContain('> shell_exec: ls -la');
+    }
+
+    public function test_trace_never_prints_the_tool_result(): void
+    {
+        $this->app->instance(PhpClawInterface::class, $this->agentFiringTools([
+            ['tool.before', ['tool_name' => 'db_query', 'tool_input' => ['sql' => 'select 1'], 'iteration' => 1]],
+            ['tool.after', ['tool_name' => 'db_query', 'tool_input' => ['sql' => 'select 1'], 'tool_result' => 'SECRET-ROW-VALUE', 'iteration' => 1]],
+        ]));
+
+        $this->artisan('phpclaw', ['message' => 'go', '--trace' => true])
+            ->assertSuccessful()
+            ->expectsOutputToContain('> db_query')
+            ->doesntExpectOutputToContain('SECRET-ROW-VALUE')
+            ->doesntExpectOutputToContain('select 1');
+    }
+
+    public function test_trace_truncates_the_input_summary(): void
+    {
+        $long = 'echo '.str_repeat('a', 300);
+        $this->app->instance(PhpClawInterface::class, $this->agentFiringTools([
+            ['tool.before', ['tool_name' => 'shell_exec', 'tool_input' => ['command' => $long], 'iteration' => 1]],
+        ]));
+
+        $this->artisan('phpclaw', ['message' => 'go', '--trace' => true])
+            ->assertSuccessful()
+            ->expectsOutputToContain('> shell_exec: echo '.str_repeat('a', 75).'...')
+            ->doesntExpectOutputToContain(str_repeat('a', 81));
+    }
+
+    public function test_trace_is_off_without_the_flag(): void
+    {
+        $this->app->instance(PhpClawInterface::class, $this->agentFiringTools([
+            ['tool.before', ['tool_name' => 'shell_exec', 'tool_input' => ['command' => 'ls'], 'iteration' => 1]],
+        ]));
+
+        $this->artisan('phpclaw', ['message' => 'go'])
+            ->assertSuccessful()
+            ->doesntExpectOutputToContain('> shell_exec');
+    }
+
+    public function test_the_trace_listener_is_removed_when_the_run_ends(): void
+    {
+        $this->app->instance(PhpClawInterface::class, $this->agentFiringTools([]));
+        $before = HookRegistry::count('tool.before');
+
+        $this->artisan('phpclaw', ['message' => 'go', '--trace' => true])->assertSuccessful();
+
+        $this->assertSame($before, HookRegistry::count('tool.before'));
+    }
+
+    public function test_trace_refuses_a_project_workspace_in_production(): void
+    {
+        $this->app['env'] = 'production';
+        config(['phpclaw.workspace_root' => base_path()]);
+        $mock = $this->createMock(PhpClawInterface::class);
+        $mock->expects($this->never())->method('sendInConversation');
+        $this->app->instance(PhpClawInterface::class, $mock);
+
+        $this->artisan('phpclaw', ['message' => 'go', '--trace' => true])
+            ->assertFailed()
+            ->expectsOutputToContain('Refused: the workspace is outside storage/phpclaw and APP_ENV is production.');
+    }
+
+    public function test_trace_runs_in_production_with_the_default_workspace(): void
+    {
+        $this->app['env'] = 'production';
+        config(['phpclaw.workspace_root' => storage_path('phpclaw')]);
+        $this->app->instance(PhpClawInterface::class, $this->agentFiringTools([]));
+
+        $this->artisan('phpclaw', ['message' => 'go', '--trace' => true])->assertSuccessful();
     }
 }

@@ -74,32 +74,32 @@ final class RendersBannerCoverageTest extends TestCase
         $this->assertStringContainsString("\e[", $content, 'Decorated output must contain ANSI escape codes.');
     }
 
-    public function test_banner_version_is_a_real_release_tag_or_the_dev_fallback(): void
+    public function test_banner_tagline_is_the_product_line_alone(): void
     {
         $command = new class extends Command
         {
             use RendersBanner;
 
-            protected $signature = 'phpclaw:test-version';
+            protected $signature = 'phpclaw:test-banner-plain';
 
             public function handle(): int
             {
-                return 0;
-            }
+                $this->banner();
 
-            public function getVersion(): string
-            {
-                return $this->bannerVersion();
+                return 0;
             }
         };
 
-        $command->setLaravel($this->app);
+        $buffered = new BufferedOutput(OutputInterface::VERBOSITY_NORMAL, false);
+        $input = new ArrayInput([]);
+        $input->setInteractive(false);
 
-        $version = $command->getVersion();
-        $this->assertIsString($version);
-        $this->assertTrue(
-            $version === 'dev' || (bool) preg_match('/^\d+\.\d+\.\d+/', $version),
-            "bannerVersion() must return 'dev' or a real semver-shaped version, got: {$version}",
-        );
+        $command->setLaravel($this->app);
+        $command->setOutput(new OutputStyle($input, $buffered));
+        $command->handle();
+
+        $lines = explode("\n", $buffered->fetch());
+
+        $this->assertSame('AI agents for Laravel', $lines[6]);
     }
 }

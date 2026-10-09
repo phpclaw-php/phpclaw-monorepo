@@ -312,13 +312,13 @@ final class GuideCommand extends Command
         }
 
         $this->newLine();
-        $this->line('Skills inject relevant content into every agent prompt via keyword matching.');
+        $this->line('Skills give the agent curated guidance it loads by name when a task needs it.');
         $this->line('Define skills in config/phpclaw.php under skills:');
         $this->line("  Inline:  ['name'=>'...', 'description'=>'...', 'tags'=>[...], 'content'=>'...']");
         $this->line("  File:    ['file' => storage_path('phpclaw/skills/my-skill.md')]");
         $this->line("  Class:   ['class' => \\App\\Skills\\MySkill::class]");
         $this->newLine();
-        $this->line('All discovered skills are always active and inject on keyword match, no per-skill toggle.');
+        $this->line('All discovered skills are always active and inject when your message names one, no per-skill toggle.');
         $this->line('Add remote HTTPS skills via PHPCLAW_REMOTE_SKILL_URLS (comma-separated).');
     }
 
@@ -358,7 +358,8 @@ final class GuideCommand extends Command
     private function sectionCli(): void
     {
         $this->line('Available Artisan commands:');
-        $this->line('  phpclaw {message}               : send a message to the agent');
+        $this->line('  phpclaw {message}               : send a message to the agent (--conv-id, --continue, --trace)');
+        $this->line('  phpclaw:chat                    : interactive session with a live tool trace and slash commands');
         $this->line('  phpclaw:about [--test]          : show adapter info + test connection');
         $this->line('  phpclaw:guide [--section=<name>]: show this documentation');
         $this->line('  phpclaw:stats                   : show conversation/message counts');
@@ -429,7 +430,7 @@ final class GuideCommand extends Command
         $this->line('  PHPCLAW_CLOUD_DISABLE : comma-separated cloud features to skip');
         $this->line('  PHPCLAW_EVENTS_BRIDGE : enable Laravel event bridge (default: true)');
         $this->line('  PHPCLAW_TELESCOPE     : enable Telescope watcher (default: true)');
-        $this->line('  PHPCLAW_REMOTE_SKILL_URLS, comma-separated HTTPS skill URLs (always-on, keyword-matched)');
+        $this->line('  PHPCLAW_REMOTE_SKILL_URLS, comma-separated HTTPS skill URLs (always-on, picked by name)');
         $this->line('  PHPCLAW_API_THROTTLE  : REST rate limit maxAttempts,decayMinutes (default: 60,1)');
         $this->line('  PHPCLAW_FALLBACK_PROVIDER, fallback provider slug tried when the primary fails (default: off)');
         $this->line('  PHPCLAW_FALLBACK_MODEL, fallback provider model override');

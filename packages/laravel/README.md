@@ -42,7 +42,11 @@ The agent from your terminal, scriptable and CI-friendly:
 ```bash
 php artisan phpclaw "how many users signed up this week?"
 php artisan phpclaw "check queue health" --stream
+php artisan phpclaw:chat
 ```
+
+`phpclaw:chat` opens an interactive session with slash commands; `--conv-id`, `--continue` and `--trace` are in the
+[Laravel guide](https://phpclaw.ai/docs/adapters/laravel/).
 
 ## Programmatic use
 

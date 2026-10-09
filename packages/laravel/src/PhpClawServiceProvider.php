@@ -22,6 +22,7 @@ use PhpClaw\Guards\GuardRegistry;
 use PhpClaw\Hooks\HookRegistry;
 use PhpClaw\Hooks\LifecycleEvent;
 use PhpClaw\Laravel\Console\AboutCommand;
+use PhpClaw\Laravel\Console\ChatCommand;
 use PhpClaw\Laravel\Console\GuideCommand;
 use PhpClaw\Laravel\Console\JobsListCommand;
 use PhpClaw\Laravel\Console\JobsStatusCommand;
@@ -150,6 +151,7 @@ final class PhpClawServiceProvider extends ServiceProvider
         if ($this->app->runningInConsole()) {
             $this->commands([
                 PhpClawCommand::class,
+                ChatCommand::class,
                 McpServerCommand::class,
                 StatsCommand::class,
                 AboutCommand::class,

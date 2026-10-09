@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace PhpClaw\Laravel\Console;
 
 use Illuminate\Console\Command;
-use PhpClaw\Agent\RunStatus;
 use PhpClaw\Contracts\ClawInterface as PhpClawInterface;
 use PhpClaw\Exceptions\GuardException;
 use PhpClaw\Exceptions\MaxIterationsException;
@@ -13,17 +12,27 @@ use PhpClaw\Exceptions\ProviderException;
 use PhpClaw\Exceptions\RunSuspendedException;
 use PhpClaw\Exceptions\TokenBudgetExceededException;
 use PhpClaw\Exceptions\ToolException;
+use PhpClaw\Laravel\Console\Concerns\RendersToolTrace;
+use PhpClaw\Laravel\Console\Concerns\ReportsAgentTurns;
+use PhpClaw\Laravel\Console\Concerns\TracksLastConversation;
 
 /**
- * Artisan command `php artisan phpclaw "<message>"`, sends a message to the agent and outputs the response (`--stream` for live tokens).
+ * Artisan command `php artisan phpclaw "<message>"`, sends one message to the agent and prints the response and a summary.
  */
 final class PhpClawCommand extends Command
 {
+    use RendersToolTrace;
+    use ReportsAgentTurns;
+    use TracksLastConversation;
+
     protected $signature = 'phpclaw
         {message : The message to send to the AI agent}
         {--stream : Stream tokens live to output}
         {--provider= : Override the LLM provider}
-        {--model= : Override the model}';
+        {--model= : Override the model}
+        {--conv-id= : Continue the stored conversation with this id}
+        {--continue : Continue the last conversation this command used}
+        {--trace : Print each tool call as it runs}';
 
     protected $description = 'Send a message to the phpClaw AI agent';
 
@@ -47,8 +56,12 @@ final class PhpClawCommand extends Command
 
         $phpclaw = $this->laravel->make(PhpClawInterface::class);
 
+        if ($this->option('trace') && ! $this->startToolTrace()) {
+            return self::FAILURE;
+        }
+
         try {
-            $conversation = $phpclaw->conversation();
+            $conversation = $this->openConversation($phpclaw, (string) $this->option('conv-id'), (bool) $this->option('continue'));
 
             if ($this->option('stream')) {
                 $turn = $phpclaw->streamInConversation(
@@ -64,59 +77,22 @@ final class PhpClawCommand extends Command
                 $this->line($turn->response->text);
             }
 
-            $response = $turn->response;
+            $this->rememberConversation($turn->conversation->id);
 
             $this->line('');
-            $this->comment(
-                "Provider: {$response->provider} | Model: {$response->model} | Tokens: {$response->inputTokens}→{$response->outputTokens}"
-            );
+            $this->comment($this->turnSummary($turn));
 
             return self::SUCCESS;
         } catch (RunSuspendedException $e) {
-            return $this->reportStoppedRun($e);
-        } catch (GuardException $e) {
-            report($e);
-            $this->error("Blocked: {$e->getMessage()}");
+            $this->reportStoppedRun($e);
+
+            return self::SUCCESS;
+        } catch (GuardException|ToolException|ProviderException|TokenBudgetExceededException|MaxIterationsException $e) {
+            $this->reportAgentError($e);
 
             return self::FAILURE;
-        } catch (ToolException $e) {
-            report($e);
-            $this->error('Tool error: a tool call failed during the agent run.');
-
-            return self::FAILURE;
-        } catch (ProviderException $e) {
-            report($e);
-            $this->error($e->statusCode === 429
-                ? 'Rate limit reached, try again shortly.'
-                : 'Provider error: the LLM provider returned an error.');
-
-            return self::FAILURE;
-        } catch (TokenBudgetExceededException $e) {
-            report($e);
-            $this->error('Token budget reached for this run.');
-
-            return self::FAILURE;
-        } catch (MaxIterationsException $e) {
-            report($e);
-            $this->error('Agent hit iteration limit.');
-
-            return self::FAILURE;
+        } finally {
+            $this->stopToolTrace();
         }
-    }
-
-    /**
-     * Name the run that stopped and the command that finishes it.
-     *
-     * @param  RunSuspendedException  $e  The pause.
-     * @return int Artisan exit code.
-     */
-    private function reportStoppedRun(RunSuspendedException $e): int
-    {
-        $this->warn(sprintf('Run %s stopped: %s. Next: %s', $e->runId, $e->status->value, match ($e->status) {
-            RunStatus::Suspended => "php artisan phpclaw:runs resume {$e->runId}",
-            default => 'php artisan phpclaw:runs list, then approve or deny the paused call',
-        }));
-
-        return self::SUCCESS;
     }
 }
