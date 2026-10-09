@@ -222,7 +222,7 @@ $escape    = static fn ($value): string => htmlspecialchars((string) $value, ENT
             <td>
               <textarea id="phpclaw-remote-skill-urls" name="remote_skill_urls" rows="3" class="phpclaw-input phpclaw-input--textarea"
                         placeholder="https://example.com/skills/seo.md, https://example.com/skills/tone.json"><?= $escape($values['remote_skill_urls']) ?></textarea>
-              <p class="phpclaw-field-help">Comma-separated HTTPS SKILL.md / JSON URLs, always-on and keyword-matched. Skills inject curated context snippets automatically when their keywords match the user message.</p>
+              <p class="phpclaw-field-help">Comma-separated HTTPS SKILL.md / JSON URLs, always-on. The agent loads a skill by name when a task needs it, or straight away when your message names it.</p>
             </td>
           </tr>
 

@@ -168,7 +168,7 @@ class PhpClawRegistrar
     }
 
     /**
-     * Activate all discovered skills so every #[Skill] is always-on and keyword-matched per turn.
+     * Activate all discovered skills so every #[Skill] is always-on and loadable by name.
      *
      * @return void
      */

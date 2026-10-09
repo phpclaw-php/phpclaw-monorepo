@@ -41,7 +41,7 @@ Same agent, three ways in: the Admin panel, your terminal, or your own app over 
 
 A chat panel inside Magento admin, next to Sales and Catalog. Ask a question, the agent picks a tool, runs it against your store, and answers in the same panel. No new tab, no separate app to learn.
 
-## CLI Experience
+## CLI
 
 <img alt="phpClaw Magento CLI in action" src=".github/assets/screenshots/cli.png" width="800">
 

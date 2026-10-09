@@ -306,7 +306,7 @@ declare(strict_types=1);
     <div class="tab-pane" id="guide-skills">
       <h4 class="phpclaw-section-title">Skills</h4>
       <p class="phpclaw-body-text">
-        Skills inject curated context snippets into the prompt when their keywords match the user message.
+        Skills give the agent curated guidance: it sees each skill's name and description and loads the full text when a task needs it, or straight away when your message names the skill.
         Skills are always-on; add extra ones via the <em>Remote Skill URLs</em> field in <em>phpClaw &rarr; Settings</em>.
       </p>
 
@@ -564,10 +564,6 @@ data: {"text":"Here are 2 products...","provider":"ollama","model":"qwen2.5:7b",
           <tr>
             <td><code>bin/magento cache:clean</code></td>
             <td>Clear all Magento caches.</td>
-          </tr>
-          <tr>
-            <td><code>bin/magento config:set phpclaw/general/provider anthropic</code></td>
-            <td>Set a phpClaw config value from the command line.</td>
           </tr>
         </tbody>
       </table>
