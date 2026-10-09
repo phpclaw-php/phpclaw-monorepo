@@ -228,6 +228,7 @@ final class EngineFactory
 
         $discoveredConfig = [
             'workspaceRoot' => (string) config('phpclaw.workspace_root', storage_path('phpclaw')),
+            'projectRoot' => base_path(),
             'allowlist' => (array) config('phpclaw.shell_allowlist', []),
             'allowPhpWrite' => $allowPhpWrite,
         ];
