@@ -78,6 +78,7 @@ final class PhpClawServiceFactory
             foreach (ToolCatalogue::instantiateDefaults([
                 'allowlist' => $shellAllowlist,
                 'workspaceRoot' => null,
+                'projectRoot' => defined('DRUPAL_ROOT') ? (string) DRUPAL_ROOT : null,
                 'allowPhpWrite' => DrupalConsole::isActive(),
             ]) as $coreTool) {
                 $byName[$coreTool->name()] ??= $coreTool;
@@ -138,6 +139,7 @@ final class PhpClawServiceFactory
             foreach (ToolCatalogue::instantiateDefaults([
                 'allowlist' => $shellAllowlist,
                 'workspaceRoot' => null,
+                'projectRoot' => defined('DRUPAL_ROOT') ? (string) DRUPAL_ROOT : null,
                 'allowPhpWrite' => false,
             ]) as $coreTool) {
                 $byName[$coreTool->name()] ??= $coreTool;

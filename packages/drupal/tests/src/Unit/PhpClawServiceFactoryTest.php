@@ -28,6 +28,8 @@ use PhpClaw\Drupal\Tests\Unit\Fixtures\BootsDrupalContainer;
 use PhpClaw\Drupal\Tools\LogTool;
 use PhpClaw\Memory\PrivacyAwareMemory;
 use PhpClaw\Tools\FileWriteTool;
+use PHPUnit\Framework\Attributes\PreserveGlobalState;
+use PHPUnit\Framework\Attributes\RunInSeparateProcess;
 use PHPUnit\Framework\TestCase;
 
 final class PhpClawServiceFactoryTest extends TestCase
@@ -496,6 +498,31 @@ final class PhpClawServiceFactoryTest extends TestCase
         $this->assertSame($this->queueFactory, $ctx->queueFactory);
         $this->assertSame($this->queueWorkerManager, $ctx->queueWorkerManager);
         $this->assertSame($this->time, $ctx->time);
+    }
+
+    /**
+     * @runInSeparateProcess
+     *
+     * @preserveGlobalState disabled
+     */
+    #[RunInSeparateProcess]
+    #[PreserveGlobalState(false)]
+    public function test_project_info_describes_the_drupal_root_when_the_process_starts_at_the_filesystem_root(): void
+    {
+        ini_set('error_log', '/dev/null');
+        $this->assertTrue(defined('DRUPAL_ROOT'), 'Drupal core defines DRUPAL_ROOT when it loads.');
+        $startDirectory = (string) getcwd();
+        chdir('/');
+
+        try {
+            $registry = PhpClawServiceFactory::buildToolRegistry($this->buildContext($this->buildFactory(['api_key' => 'sk-test-key', 'provider' => 'anthropic'])));
+            $result = json_decode($registry->get('project_info')->execute([]), true, flags: JSON_THROW_ON_ERROR);
+        } finally {
+            chdir($startDirectory);
+        }
+
+        $this->assertTrue($result['success']);
+        $this->assertSame(DRUPAL_ROOT, $result['data']['root']);
     }
 
     private function buildRegistrar(): PhpClawRegistrar
