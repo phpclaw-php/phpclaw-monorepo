@@ -4,11 +4,14 @@ declare(strict_types=1);
 
 namespace PhpClaw\Tests\Unit\Providers;
 
+use PhpClaw\Agent\Agent;
 use PhpClaw\Agent\Message;
 use PhpClaw\Http\RawHttpClient;
 use PhpClaw\Http\StreamParser;
 use PhpClaw\Providers\GeminiProvider;
 use PhpClaw\Providers\Tools\WebSearch;
+use PhpClaw\Tools\Contracts\ToolInterface;
+use PhpClaw\Tools\ToolRegistry;
 use PHPUnit\Framework\TestCase;
 
 final class GeminiProviderTest extends TestCase
@@ -665,5 +668,116 @@ final class GeminiProviderTest extends TestCase
 
         $this->assertSame('text', $result['type']);
         $this->assertSame('PHP 8.4 released November 2024.', $result['text']);
+    }
+
+    private static function reply(array $parts): array
+    {
+        return [
+            'candidates' => [['content' => ['parts' => $parts], 'finishReason' => 'STOP']],
+            'usageMetadata' => ['promptTokenCount' => 1, 'candidatesTokenCount' => 1],
+        ];
+    }
+
+    private function captureNextBody(?array &$captured): void
+    {
+        $this->mockHttp->method('post')->willReturnCallback(function (string $url, array $headers, array $body) use (&$captured): array {
+            $captured = $body;
+
+            return self::reply([['text' => 'ok']]);
+        });
+    }
+
+    public function test_a_thought_signature_on_a_function_call_is_kept(): void
+    {
+        $this->mockHttp->method('post')->willReturn(self::reply([
+            ['functionCall' => ['name' => 'project_info', 'args' => []], 'thoughtSignature' => 'sig-A'],
+        ]));
+
+        $call = $this->provider->send([Message::user('hi')])['calls'][0];
+
+        $this->assertSame('sig-A', $call['thought_signature']);
+    }
+
+    public function test_a_function_call_without_a_signature_keeps_today_shape(): void
+    {
+        $this->mockHttp->method('post')->willReturn(self::reply([
+            ['functionCall' => ['name' => 'project_info', 'args' => []]],
+        ]));
+
+        $call = $this->provider->send([Message::user('hi')])['calls'][0];
+
+        $this->assertSame(['tool_use_id', 'tool_name', 'tool_input'], array_keys($call));
+    }
+
+    public function test_the_signature_is_sent_back_on_its_own_function_call_part_only(): void
+    {
+        $captured = null;
+        $this->captureNextBody($captured);
+        $calls = [
+            ['tool_use_id' => 'a', 'tool_name' => 'project_info', 'tool_input' => [], 'thought_signature' => 'sig-A'],
+            ['tool_use_id' => 'b', 'tool_name' => 'code_search', 'tool_input' => ['pattern' => 'x']],
+        ];
+
+        $this->provider->send([Message::user('hi'), Message::toolBatch($calls, ['a' => 'one', 'b' => 'two'])]);
+
+        $modelParts = $captured['contents'][1]['parts'];
+        $this->assertSame('sig-A', $modelParts[0]['thoughtSignature']);
+        $this->assertSame(['functionCall'], array_keys($modelParts[1]));
+    }
+
+    public function test_a_batch_without_signatures_is_sent_exactly_as_before(): void
+    {
+        $captured = null;
+        $this->captureNextBody($captured);
+        $calls = [['tool_use_id' => 'a', 'tool_name' => 'code_search', 'tool_input' => ['pattern' => 'x']]];
+
+        $this->provider->send([Message::user('hi'), Message::toolBatch($calls, ['a' => 'one'])]);
+
+        $this->assertSame(
+            [['functionCall' => ['name' => 'code_search', 'args' => ['pattern' => 'x']]]],
+            $captured['contents'][1]['parts'],
+        );
+    }
+
+    public function test_an_agent_run_sends_the_signature_back_on_the_next_request(): void
+    {
+        $bodies = [];
+        $this->mockHttp->method('post')->willReturnCallback(function (string $url, array $headers, array $body) use (&$bodies): array {
+            $bodies[] = $body;
+
+            return count($bodies) === 1
+                ? self::reply([['functionCall' => ['name' => 'site_info', 'args' => []], 'thoughtSignature' => 'sig-A']])
+                : self::reply([['text' => 'done']]);
+        });
+        $registry = new ToolRegistry;
+        $registry->register([new class implements ToolInterface
+        {
+            public function name(): string
+            {
+                return 'site_info';
+            }
+
+            public function description(): string
+            {
+                return 'site info';
+            }
+
+            public function inputSchema(): array
+            {
+                return ['type' => 'object', 'properties' => []];
+            }
+
+            public function execute(array $input): string
+            {
+                return '{"success":true,"data":{"name":"shop"},"meta":{},"warnings":[]}';
+            }
+        }]);
+
+        $response = (new Agent(provider: $this->provider, tools: $registry, maxIterations: 4))->run('what is the site name');
+
+        $this->assertSame('done', $response->text);
+        $this->assertCount(2, $bodies);
+        $this->assertSame('sig-A', $bodies[1]['contents'][1]['parts'][0]['thoughtSignature']);
+        $this->assertSame('site_info', $bodies[1]['contents'][1]['parts'][0]['functionCall']['name']);
     }
 }

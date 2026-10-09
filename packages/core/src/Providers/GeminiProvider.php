@@ -326,7 +326,7 @@ final class GeminiProvider implements ProviderInterface, SupportsWebSearchInterf
     }
 
     /**
-     * Convert a batch tool-use Message into the model + user content pair for the Gemini wire format.
+     * Convert a batch tool-use Message into the model + user content pair, returning each call's thought signature on its part.
      *
      * @param  Message  $message  A batch tool-use message containing batchCalls and batchResults.
      * @return array<int, array<string, mixed>> Two entries: model functionCall parts followed by user functionResponse parts.
@@ -335,12 +335,18 @@ final class GeminiProvider implements ProviderInterface, SupportsWebSearchInterf
     {
         $parts = [];
         foreach ($message->batchCalls ?? [] as $call) {
-            $parts[] = [
+            $part = [
                 'functionCall' => [
                     'name' => $call['tool_name'],
                     'args' => ($call['tool_input'] ?? null) === null || $call['tool_input'] === [] ? new \stdClass : $call['tool_input'],
                 ],
             ];
+
+            if (isset($call['thought_signature']) && is_string($call['thought_signature'])) {
+                $part['thoughtSignature'] = $call['thought_signature'];
+            }
+
+            $parts[] = $part;
         }
 
         $callsByToolUseId = array_column($message->batchCalls ?? [], null, 'tool_use_id');
@@ -459,7 +465,7 @@ final class GeminiProvider implements ProviderInterface, SupportsWebSearchInterf
     }
 
     /**
-     * Extract every functionCall part into PhpClaw's canonical batch shape.
+     * Extract every functionCall part into PhpClaw's canonical batch shape, keeping any thought signature with its call.
      *
      * @param  array<int, array<string, mixed>>  $parts  Response content parts.
      * @return array<int, array<string, mixed>>
@@ -472,11 +478,17 @@ final class GeminiProvider implements ProviderInterface, SupportsWebSearchInterf
                 continue;
             }
             $functionCall = $part['functionCall'];
-            $calls[] = [
+            $call = [
                 'tool_use_id' => 'gemini-'.uniqid(),
                 'tool_name' => (string) ($functionCall['name'] ?? ''),
                 'tool_input' => (array) ($functionCall['args'] ?? []),
             ];
+
+            if (isset($part['thoughtSignature']) && is_string($part['thoughtSignature'])) {
+                $call['thought_signature'] = $part['thoughtSignature'];
+            }
+
+            $calls[] = $call;
         }
 
         return $calls;
