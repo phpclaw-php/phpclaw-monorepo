@@ -38,7 +38,7 @@ Same agent, three ways in: the admin chat, the CLI, or the store's own admin rou
 
 A chat panel inside the admin, reached from **Extensions → Extensions → Modules → phpClaw**. Identical UI on OC3 and OC4. Both ship the full 5-page set (Settings, Chat, Analytics, Guide, About).
 
-## CLI Experience
+## CLI
 
 <img alt="phpClaw OpenCart CLI in action" src=".github/assets/screenshots/cli.png" width="800">
 
