@@ -107,6 +107,32 @@ final class PhpClawMcpServerTest extends TestCase
         self::assertSame($defaultCount, GuardRegistry::count());
     }
 
+    public function test_guards_env_logs_a_class_that_does_not_exist(): void
+    {
+        GuardRegistry::reset();
+        putenv('PHPCLAW_GUARDS');
+        new PhpClawMcpServer($this->registry);
+        $defaultCount = GuardRegistry::count();
+
+        $log = tempnam(sys_get_temp_dir(), 'phpclaw-mcp-log');
+        $previousLog = ini_set('error_log', $log);
+        GuardRegistry::reset();
+        putenv('PHPCLAW_GUARDS=[{"class":"App\\\\Guards\\\\MissingGuard"}]');
+
+        try {
+            new PhpClawMcpServer($this->registry);
+        } finally {
+            putenv('PHPCLAW_GUARDS');
+            ini_set('error_log', (string) $previousLog);
+        }
+
+        $logged = (string) file_get_contents($log);
+        @unlink($log);
+
+        self::assertStringContainsString('PHPCLAW_GUARDS class App\\Guards\\MissingGuard does not exist, skipped.', $logged);
+        self::assertSame($defaultCount, GuardRegistry::count());
+    }
+
     public function test_hooks_env_rejects_non_hook_handler(): void
     {
         HookRegistry::reset();

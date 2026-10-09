@@ -136,6 +136,8 @@ final class PhpClawMcpServer
             }
 
             if (! class_exists($entry['class'])) {
+                error_log("phpClaw: PHPCLAW_GUARDS class {$entry['class']} does not exist, skipped.");
+
                 continue;
             }
 
