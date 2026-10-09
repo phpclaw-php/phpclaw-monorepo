@@ -4,6 +4,11 @@ An AI agent inside your Laravel application. Ask it in plain English about your 
 values, cache store, queue health, application log and database, from Artisan, from your own code,
 or over REST. Works on Laravel 10, 11, 12 and 13.
 
+## 0.1.3 (2026-10-09)
+
+### Added
+- Interactive phpclaw:chat command and conversation flags on phpclaw (#123)
+
 ## 0.1.2 (2026-10-07)
 
 ### Added
