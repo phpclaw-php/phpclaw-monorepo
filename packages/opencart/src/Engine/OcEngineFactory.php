@@ -316,12 +316,12 @@ final class OcEngineFactory
     }
 
     /**
-     * Compute the workspace root, shell allowlist and CLI-only PHP-write rule shared by the
+     * Compute the workspace root, store root, shell allowlist and CLI-only PHP-write rule shared by the
      * extras loop and {@see ToolCatalogue::instantiateDefaults()}.
      *
      * @param  array<string, mixed>  $config  Package default config.
      * @param  bool|null  $interactive  Whether the tools serve an interactive console session; null reads the console marker.
-     * @return array{workspaceRoot: ?string, allowlist: array<int, string>, allowPhpWrite: bool}
+     * @return array{workspaceRoot: ?string, projectRoot: ?string, allowlist: array<int, string>, allowPhpWrite: bool}
      */
     private function configuredToolValues(array $config, ?bool $interactive): array
     {
@@ -329,6 +329,7 @@ final class OcEngineFactory
 
         return [
             'workspaceRoot' => $workspaceRoot !== '' ? $workspaceRoot : null,
+            'projectRoot' => defined('DIR_SYSTEM') ? dirname(rtrim((string) constant('DIR_SYSTEM'), '/')) : null,
             'allowlist' => (array) ($config['shell_allowlist'] ?? []),
             'allowPhpWrite' => $interactive ?? (defined('PHPCLAW_OC_CONSOLE') && constant('PHPCLAW_OC_CONSOLE') === true),
         ];
@@ -339,7 +340,7 @@ final class OcEngineFactory
      * `FileWriteTool` and `FileEditTool` by class name get the configured values, any other no-arg class name is instantiated, everything else is dropped.
      *
      * @param  array<array-key, mixed>  $extra  Raw bucket from the extension event.
-     * @param  array{workspaceRoot: ?string, allowlist: array<int, string>, allowPhpWrite: bool}  $toolConfig  Values from {@see configuredToolValues()}.
+     * @param  array{workspaceRoot: ?string, projectRoot: ?string, allowlist: array<int, string>, allowPhpWrite: bool}  $toolConfig  Values from {@see configuredToolValues()}.
      * @return list<ToolInterface>
      */
     private function resolveExtraTools(array $extra, array $toolConfig): array

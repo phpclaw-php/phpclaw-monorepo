@@ -10,6 +10,7 @@ use PhpClaw\OpenCart\OcEventFirer;
 use PhpClaw\Tools\Contracts\ToolInterface;
 use PhpClaw\Tools\FileEditTool;
 use PhpClaw\Tools\FileWriteTool;
+use PhpClaw\Tools\ProjectTool;
 use PhpClaw\Tools\ShellTool;
 use PhpClaw\Tools\ZipPackagerTool;
 use PHPUnit\Framework\Attributes\PreserveGlobalState;
@@ -197,6 +198,31 @@ final class OcEngineFactoryToolsTest extends TestCase
 
         foreach ($tools as $tool) {
             self::assertNotInstanceOf(\stdClass::class, $tool);
+        }
+    }
+
+    #[RunInSeparateProcess]
+    #[PreserveGlobalState(false)]
+    public function test_project_info_describes_the_store_root_when_the_process_starts_at_the_filesystem_root(): void
+    {
+        ini_set('error_log', '/dev/null');
+        $store = sys_get_temp_dir().'/phpclaw_oc_root_'.uniqid();
+        mkdir($store.'/system', 0777, true);
+        file_put_contents($store.'/system/startup.php', "<?php\n");
+        define('DIR_SYSTEM', $store.'/system/');
+        chdir('/');
+
+        try {
+            $tools = (new OcEngineFactory)->buildTools([], null, 'oc_', $this->firerWithExtras([]), true, true, false);
+            $result = json_decode((string) $this->findTool($tools, ProjectTool::class)?->execute([]), true, flags: JSON_THROW_ON_ERROR);
+
+            self::assertTrue($result['success']);
+            self::assertSame($store, $result['data']['root']);
+            self::assertSame('opencart', $result['data']['framework']);
+        } finally {
+            @unlink($store.'/system/startup.php');
+            @rmdir($store.'/system');
+            @rmdir($store);
         }
     }
 
