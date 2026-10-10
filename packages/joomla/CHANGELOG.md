@@ -3,6 +3,28 @@
 An AI agent inside your Joomla administrator. Ask it in plain English about articles, categories,
 users and installed extensions, and it answers from your own site data. Works on Joomla 4, 5 and 6.
 
+## 0.1.4 (2026-10-09)
+
+### Added
+- Pipelines, graphs and graph fan-out (#90)
+- Trace payloads for graph events and parent run ids (#103)
+- File_read line ranges and line numbers (#105)
+- Optional redaction of personal data in tool results (#107)
+- Classifier approval gate and model router (#144)
+- Open the system prompt with a default phpClaw AI Agent identity (#146)
+
+### Fixed
+- File_edit approval prompt shows the file path (#91)
+- A shell command the tool refuses no longer asks for approval first (#92)
+- Code_search skips .env and secret files, the same as file_read (#93)
+- Keep PHP tags in tool results so a PHP file read and written again stays valid (#94)
+- Send Gemini thought signatures back with tool calls (#95)
+- Gemini stream API key and skill docblocks (#109)
+- Skill text says skills are picked by name, not keywords (#113)
+- Log a PHPCLAW_GUARDS class that does not exist (#140)
+- Treat http://[::1] as loopback (#141)
+- Keep cloud off when storeMessages is false (#156)
+
 ## 0.1.3 (2026-10-07)
 
 ### Added
