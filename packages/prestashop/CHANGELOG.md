@@ -4,6 +4,10 @@ An AI agent inside your PrestaShop back office. Ask it in plain English about pr
 customers, categories, carts, coupons, stock, manufacturers, employees, modules, configuration and
 sales reports, and it answers from your own store data. Works on PrestaShop 8.0 and later, and 9.x.
 
+## 0.1.5 (2026-10-12)
+
+- Dependency update: core 0.1.5.
+
 ## 0.1.4 (2026-10-09)
 
 ### Added
