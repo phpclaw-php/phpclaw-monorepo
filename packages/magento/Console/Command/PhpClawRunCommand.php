@@ -9,8 +9,10 @@ use PhpClaw\Exceptions\GuardException;
 use PhpClaw\Exceptions\MaxIterationsException;
 use PhpClaw\Exceptions\ProviderException;
 use PhpClaw\Exceptions\TokenBudgetExceededException;
+use PhpClaw\Magento\Console\Command\Concerns\RendersToolTrace;
+use PhpClaw\Magento\Console\Command\Concerns\ReportsAgentTurns;
+use PhpClaw\Magento\Console\Command\Concerns\TracksLastConversation;
 use PhpClaw\Magento\Factory\PhpClawFactoryInterface;
-use PhpClaw\Magento\Service\LimitResponse;
 use PhpClaw\Magento\Service\ToolCallCollectorFactory;
 use PhpClaw\Magento\Service\ToolHistorySplicer;
 use Psr\Log\LoggerInterface;
@@ -26,6 +28,10 @@ use Symfony\Component\Console\Output\OutputInterface;
 // non-final: Magento interceptor required
 class PhpClawRunCommand extends Command
 {
+    use RendersToolTrace;
+    use ReportsAgentTurns;
+    use TracksLastConversation;
+
     protected static $defaultName = 'phpclaw:run';
 
     protected static $defaultDescription = 'Send a message to the PhpClaw AI agent.';
@@ -38,6 +44,7 @@ class PhpClawRunCommand extends Command
      * @param  ToolHistorySplicer  $splicer  Splices tool-call entries into conversation history.
      * @param  ToolCallCollectorFactory  $toolCallCollectorFactory  Builds a fresh tool-call collector per turn.
      * @param  string|null  $name  Optional command name override (Magento interceptor use).
+     * @param  string  $varDirectory  Folder for the last conversation id; '' uses the Magento var folder.
      * @return void
      */
     public function __construct(
@@ -46,6 +53,7 @@ class PhpClawRunCommand extends Command
         private readonly ToolHistorySplicer $splicer,
         private readonly ToolCallCollectorFactory $toolCallCollectorFactory,
         ?string $name = null,
+        private readonly string $varDirectory = '',
     ) {
         parent::__construct($name ?? static::$defaultName);
     }
@@ -60,12 +68,14 @@ class PhpClawRunCommand extends Command
         $this->addArgument('message', InputArgument::REQUIRED, 'The message to send to the AI agent.');
         $this->addOption('stream', null, InputOption::VALUE_NONE, 'Stream the response token by token.');
         $this->addOption('conv-id', null, InputOption::VALUE_REQUIRED, 'Continue an existing conversation by ID (omit to start a new one).');
+        $this->addOption('continue', null, InputOption::VALUE_NONE, 'Continue the last conversation.');
+        $this->addOption('trace', null, InputOption::VALUE_NONE, 'Print one line per tool call.');
     }
 
     /**
      * Run the agent with the provided message argument and write the reply to output.
      *
-     * @param  InputInterface  $input  Console input (provides the message argument, --stream, and --conv-id).
+     * @param  InputInterface  $input  Console input (the message argument, --stream, --conv-id, --continue and --trace).
      * @param  OutputInterface  $output  Console output to write the agent reply to.
      * @return int Cli::RETURN_SUCCESS on success, Cli::RETURN_FAILURE on error.
      */
@@ -73,18 +83,19 @@ class PhpClawRunCommand extends Command
     {
         $message = (string) $input->getArgument('message');
         $stream = (bool) $input->getOption('stream');
-        $convId = (string) ($input->getOption('conv-id') ?? '');
         $agent = $this->phpClawFactory->create();
 
+        if ($input->getOption('trace')) {
+            $this->startToolTrace($output);
+        }
+
         try {
-            $conversation = $convId !== ''
-                ? $agent->conversation($convId)
-                : $agent->conversation();
+            $conversation = $this->openConversation($output, $agent, (string) ($input->getOption('conv-id') ?? ''), (bool) $input->getOption('continue'));
 
             if ($stream) {
                 $collector = $this->toolCallCollectorFactory->create();
                 $collector->listen();
-                $agent->streamInConversation(
+                $turn = $agent->streamInConversation(
                     $conversation,
                     $message,
                     function (string $token) use ($output): void {
@@ -101,7 +112,6 @@ class PhpClawRunCommand extends Command
                     },
                 );
                 $output->writeln('');
-                $output->writeln(sprintf('<comment>conv-id=%s</comment>', $conversation->id));
             } else {
                 $turn = $agent->sendInConversation($conversation, $message);
                 $text = $turn->response->text;
@@ -109,30 +119,18 @@ class PhpClawRunCommand extends Command
                 $text = preg_replace('#\s*</tool_call>\s*#', '', $text) ?? $text;
                 $text = trim($text);
                 $output->writeln($text);
-                $output->writeln(sprintf('<comment>conv-id=%s</comment>', $turn->conversation->id));
             }
-        } catch (GuardException $e) {
-            $this->logger->error('phpClaw guard blocked', ['exception' => $e]);
-            $output->writeln('<error>Prompt injection detected.</error>');
+        } catch (GuardException|ProviderException|TokenBudgetExceededException|MaxIterationsException $e) {
+            $this->reportAgentError($output, $e);
 
             return Cli::RETURN_FAILURE;
-        } catch (ProviderException|TokenBudgetExceededException $e) {
-            $limitMessage = LimitResponse::message($e);
-            if ($limitMessage !== null) {
-                $output->writeln('<error>'.$limitMessage.'</error>');
-
-                return Cli::RETURN_FAILURE;
-            }
-
-            $this->logger->error('phpClaw provider error', ['exception' => $e]);
-            $output->writeln('<error>AI provider error. Check configuration and try again.</error>');
-
-            return Cli::RETURN_FAILURE;
-        } catch (MaxIterationsException) {
-            $output->writeln('<error>Could not complete the request. Try a simpler question.</error>');
-
-            return Cli::RETURN_FAILURE;
+        } finally {
+            $this->stopToolTrace();
         }
+
+        $this->rememberConversation($turn->conversation->id);
+        $output->writeln('<comment>'.$this->turnSummary($turn).'</comment>');
+        $output->writeln(sprintf('<comment>conv-id=%s</comment>', $turn->conversation->id));
 
         return Cli::RETURN_SUCCESS;
     }

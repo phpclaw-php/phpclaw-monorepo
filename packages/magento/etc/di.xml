@@ -6,6 +6,7 @@
         <arguments>
             <argument name="commands" xsi:type="array">
                 <item name="phpclaw_run"        xsi:type="object">PhpClaw\Magento\Console\Command\PhpClawRunCommand</item>
+                <item name="phpclaw_chat"       xsi:type="object">PhpClaw\Magento\Console\Command\PhpClawChatCommand</item>
                 <item name="phpclaw_mcp_server" xsi:type="object">PhpClaw\Magento\Console\Command\PhpClawMcpServerCommand</item>
             </argument>
         </arguments>

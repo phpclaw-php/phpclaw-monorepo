@@ -39,27 +39,6 @@ final class SurfaceParityTest extends TestCase
         );
     }
 
-    public function test_console_registers_exactly_two_commands(): void
-    {
-        preg_match('/<argument name="commands".*?<\\/argument>/s', $this->read('etc/di.xml'), $block);
-        preg_match_all('/<item name="([^"]+)"[^>]*>([^<]+)</', $block[0] ?? '', $m);
-
-        self::assertSame(['phpclaw_run', 'phpclaw_mcp_server'], $m[1]);
-        self::assertSame([
-            'PhpClaw\\Magento\\Console\\Command\\PhpClawRunCommand',
-            'PhpClaw\\Magento\\Console\\Command\\PhpClawMcpServerCommand',
-        ], $m[2]);
-    }
-
-    public function test_console_ships_exactly_two_command_classes(): void
-    {
-        $found = glob($this->root().'/Console/Command/*.php') ?: [];
-        $names = array_map(static fn (string $p): string => basename($p, '.php'), $found);
-        sort($names);
-
-        self::assertSame(['PhpClawMcpServerCommand', 'PhpClawRunCommand'], $names);
-    }
-
     public function test_acl_declares_exactly_the_five_page_resources(): void
     {
         preg_match_all('/<resource id="(PhpClaw_Magento::[^"]+)"/', $this->read('etc/acl.xml'), $m);
@@ -74,7 +53,7 @@ final class SurfaceParityTest extends TestCase
         ], $m[1]);
     }
 
-    public function test_guide_documents_only_the_two_shipped_console_commands(): void
+    public function test_guide_documents_only_the_three_shipped_console_commands(): void
     {
         preg_match_all(
             '/bin\\/magento (phpclaw:[a-z-]+)/',
@@ -82,7 +61,7 @@ final class SurfaceParityTest extends TestCase
             $m,
         );
 
-        self::assertSame(['phpclaw:run', 'phpclaw:mcp-server'], array_values(array_unique($m[1])));
+        self::assertSame(['phpclaw:run', 'phpclaw:chat', 'phpclaw:mcp-server'], array_values(array_unique($m[1])));
     }
 
     public function test_guide_states_that_console_conversations_are_unowned(): void

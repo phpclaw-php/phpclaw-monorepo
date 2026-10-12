@@ -698,6 +698,9 @@ namespace PhpClaw {
             public function build(): Claw
             {
                 $config = new ClawConfig;
+                $config->providerName = $this->provider !== '' ? $this->provider : $config->providerName;
+                $config->model = $this->model;
+                $config->tools = $this->tools;
                 $config->fallbacks = $this->fallbacks;
                 $config->requestsPerMinute = $this->requestsPerMinute;
                 $config->rateLimitStore = $this->rateLimitStore;
@@ -733,6 +736,8 @@ namespace PhpClaw {
             public string $model = '';
 
             public string $providerName;
+
+            public array $tools = [];
 
             public array $fallbacks = [];
 
@@ -800,7 +805,7 @@ namespace PhpClaw {
 
             public function conversation(string $id = '', array $metadata = []): Conversation
             {
-                return new Conversation($id, $metadata);
+                return $id !== '' ? new Conversation($id, [], new \DateTimeImmutable, $metadata) : Conversation::start($metadata);
             }
 
             public function sendInConversation(Conversation $conversation, string $message): ConversationTurn

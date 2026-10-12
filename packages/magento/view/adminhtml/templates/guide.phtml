@@ -530,6 +530,18 @@ data: {"text":"Here are 2 products...","provider":"ollama","model":"qwen2.5:7b",
             <td>Stream the response token by token, useful for long answers.</td>
           </tr>
           <tr>
+            <td><code>bin/magento phpclaw:run "prompt" --continue</code></td>
+            <td>Continue the last conversation. <code>--conv-id=&lt;id&gt;</code> continues a given one.</td>
+          </tr>
+          <tr>
+            <td><code>bin/magento phpclaw:run "prompt" --trace</code></td>
+            <td>Print one line per tool call, never its result.</td>
+          </tr>
+          <tr>
+            <td><code>bin/magento phpclaw:chat</code></td>
+            <td>Open an interactive session in one conversation. Type <code>/help</code> for commands; <code>/exit</code> or Ctrl+D leaves. Needs a terminal.</td>
+          </tr>
+          <tr>
             <td><code>bin/magento phpclaw:mcp-server</code></td>
             <td>Start the phpClaw MCP server (stdio transport).</td>
           </tr>

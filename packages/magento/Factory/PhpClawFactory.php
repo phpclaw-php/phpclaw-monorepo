@@ -95,6 +95,18 @@ class PhpClawFactory implements PhpClawFactoryInterface
      */
     public function create(): PhpClawInterface
     {
+        return $this->createForSession();
+    }
+
+    /**
+     * Build the agent for one console session, with a provider or model that applies to this session only.
+     *
+     * @param  string  $provider  Provider slug; '' uses the saved setting.
+     * @param  string  $model  Model identifier; '' uses the saved setting.
+     * @return PhpClawInterface Configured and ready-to-use agent instance.
+     */
+    public function createForSession(string $provider = '', string $model = ''): PhpClawInterface
+    {
         $memory = $this->resolveMemory();
         if (! $this->config->isStoreMessages()) {
             $memory = $this->wrapWithoutMessagePersistence($memory);
@@ -102,7 +114,12 @@ class PhpClawFactory implements PhpClawFactoryInterface
 
         $tools = $this->assembleTools($this->isConsole());
 
-        return $this->buildClaw($memory, $tools);
+        return $this->buildClaw(
+            $memory,
+            $tools,
+            $provider !== '' ? $provider : $this->config->getProvider(),
+            $model !== '' ? $model : $this->config->getModel(),
+        );
     }
 
     /**
@@ -257,20 +274,22 @@ class PhpClawFactory implements PhpClawFactoryInterface
      *
      * @param  MemoryInterface  $memory  Resolved (and optionally privacy-wrapped) memory driver.
      * @param  array<int, ToolInterface>  $tools  Filtered tool list for the current provider/model.
+     * @param  string  $provider  Provider slug the agent runs on.
+     * @param  string  $model  Model identifier the agent runs on.
      * @return PhpClawInterface Fully configured agent ready for use.
      */
-    private function buildClaw(MemoryInterface $memory, array $tools): PhpClawInterface
+    private function buildClaw(MemoryInterface $memory, array $tools, string $provider, string $model): PhpClawInterface
     {
         $builder = Claw::builder()
             ->apiKey($this->config->getApiKey())
-            ->provider($this->config->getProvider())
-            ->model($this->config->getModel())
+            ->provider($provider)
+            ->model($model)
             ->cloudKey($this->config->isStoreMessages() ? $this->config->getCloudKey() : '')
             ->cloudDisable(CsvList::parse($this->config->getCloudDisable()))
             ->cloudSigningSecret($this->config->getCloudSigningSecret())
             ->storeMessages($this->config->isStoreMessages())
             ->maxIterations($this->config->getMaxIterations())
-            ->maxToolsPerTurn(ToolProfileResolver::maxTools(ToolProfileResolver::resolve($this->config->getProvider(), $this->config->getModel())))
+            ->maxToolsPerTurn(ToolProfileResolver::maxTools(ToolProfileResolver::resolve($provider, $model)))
             ->tools($tools)
             ->memory($memory)
             ->systemPrompt($this->config->getSystemPrompt());
@@ -282,14 +301,14 @@ class PhpClawFactory implements PhpClawFactoryInterface
             }
         }
 
-        $override = $this->customProviderOverride();
+        $override = $this->customProviderOverride($provider, $model);
         if ($override !== null) {
             $builder->providerOverride($override);
         }
 
         $builder->approvalGate(new CliApprovalGate);
 
-        $this->applyAgentPrimitives($builder);
+        $this->applyAgentPrimitives($builder, $provider);
 
         return $builder->build();
     }
@@ -299,11 +318,11 @@ class PhpClawFactory implements PhpClawFactoryInterface
      * Custom or uses another tool format than the main provider is skipped and logged.
      *
      * @param  ClawBuilder  $builder  Builder being configured.
+     * @param  string  $main  Provider slug the agent runs on.
      * @return void
      */
-    private function applyAgentPrimitives(ClawBuilder $builder): void
+    private function applyAgentPrimitives(ClawBuilder $builder, string $main): void
     {
-        $main = $this->config->getProvider();
         $fallback = $this->config->getFallbackProvider();
         $fallbackCompatible = $fallback !== ''
             && $fallback !== self::PROVIDER_CUSTOM
@@ -333,13 +352,15 @@ class PhpClawFactory implements PhpClawFactoryInterface
     }
 
     /**
-     * Build an OpenAIProvider override when provider=custom and base_url is a valid URL.
+     * Build an OpenAIProvider override when the provider is custom and base_url is a valid URL.
      *
+     * @param  string  $provider  Provider slug the agent runs on; '' uses the saved setting.
+     * @param  string  $model  Model identifier the agent runs on; '' uses the saved setting.
      * @return ?OpenAIProvider
      */
-    private function customProviderOverride(): ?OpenAIProvider
+    private function customProviderOverride(string $provider = '', string $model = ''): ?OpenAIProvider
     {
-        $provider = $this->config->getProvider();
+        $provider = $provider !== '' ? $provider : $this->config->getProvider();
         $baseUrl = trim($this->config->getBaseUrl());
 
         if ($provider !== 'custom' || $baseUrl === '') {
@@ -352,7 +373,7 @@ class PhpClawFactory implements PhpClawFactoryInterface
 
         return new OpenAIProvider(
             apiKey: $this->config->getApiKey(),
-            model: $this->config->getModel(),
+            model: $model !== '' ? $model : $this->config->getModel(),
             systemPrompt: $this->config->getSystemPrompt(),
             endpoint: $baseUrl,
             name: 'custom',

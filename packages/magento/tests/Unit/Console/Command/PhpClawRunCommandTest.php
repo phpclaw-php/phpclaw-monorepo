@@ -13,6 +13,7 @@ use PhpClaw\Exceptions\GuardException;
 use PhpClaw\Exceptions\MaxIterationsException;
 use PhpClaw\Exceptions\ProviderException;
 use PhpClaw\Exceptions\TokenBudgetExceededException;
+use PhpClaw\Hooks\HookRegistry;
 use PhpClaw\Magento\Console\Command\PhpClawRunCommand;
 use PhpClaw\Magento\Factory\PhpClawFactoryInterface;
 use PhpClaw\Magento\Service\ToolCallCollectorFactory;
@@ -33,14 +34,41 @@ final class PhpClawRunCommandTest extends TestCase
 
     private PhpClawRunCommand $command;
 
+    private string $varDirectory = '';
+
     protected function setUp(): void
     {
+        HookRegistry::reset();
+        $this->varDirectory = sys_get_temp_dir().'/phpclaw-mg-run-'.uniqid();
+        mkdir($this->varDirectory, 0777, true);
         $this->agent = $this->createMock(PhpClawInterface::class);
         $this->factory = $this->createMock(PhpClawFactoryInterface::class);
         $this->logger = $this->createMock(LoggerInterface::class);
         $this->factory->method('create')->willReturn($this->agent);
 
-        $this->command = new PhpClawRunCommand($this->factory, $this->logger, new ToolHistorySplicer, new ToolCallCollectorFactory);
+        $this->command = new PhpClawRunCommand($this->factory, $this->logger, new ToolHistorySplicer, new ToolCallCollectorFactory, varDirectory: $this->varDirectory);
+    }
+
+    protected function tearDown(): void
+    {
+        HookRegistry::reset();
+        @unlink($this->varDirectory.'/phpclaw/.last-conversation');
+        @rmdir($this->varDirectory.'/phpclaw');
+        @rmdir($this->varDirectory);
+    }
+
+    private function runWith(array $input): array
+    {
+        $output = new BufferedOutput;
+        $code = $this->command->run(new ArrayInput($input, $this->command->getDefinition()), $output);
+
+        return [$code, $output->fetch()];
+    }
+
+    private function saveLastConversation(string $id): void
+    {
+        mkdir($this->varDirectory.'/phpclaw');
+        file_put_contents($this->varDirectory.'/phpclaw/.last-conversation', $id);
     }
 
     private function runCommand(string $message): array
@@ -217,5 +245,166 @@ final class PhpClawRunCommandTest extends TestCase
 
         self::assertSame(Cli::RETURN_FAILURE, $code);
         self::assertSame('Rate limit reached, try again shortly.', trim($out));
+    }
+
+    public function test_continue_resumes_the_last_saved_conversation(): void
+    {
+        $this->saveLastConversation('01MGLASTCONVERSATION00000A');
+        $this->agent->expects(self::once())
+            ->method('conversation')
+            ->with('01MGLASTCONVERSATION00000A')
+            ->willReturn($this->makeConversation('01MGLASTCONVERSATION00000A'));
+        $this->agent->method('sendInConversation')->willReturn($this->makeTurn('ok'));
+
+        [$code, $out] = $this->runWith(['message' => 'and then?', '--continue' => true]);
+
+        self::assertSame(Cli::RETURN_SUCCESS, $code);
+        self::assertStringNotContainsString('No previous conversation', $out);
+    }
+
+    public function test_continue_without_a_saved_conversation_starts_a_new_one(): void
+    {
+        $this->agent->expects(self::once())->method('conversation')->with('')->willReturn($this->makeConversation());
+        $this->agent->method('sendInConversation')->willReturn($this->makeTurn('ok'));
+
+        [, $out] = $this->runWith(['message' => 'hello', '--continue' => true]);
+
+        self::assertStringContainsString('No previous conversation to continue; starting a new one.', $out);
+    }
+
+    public function test_conv_id_wins_over_continue(): void
+    {
+        $this->saveLastConversation('01MGOLDER0000000000000000A');
+        $this->agent->expects(self::once())->method('conversation')->with('01MGGIVEN0000000000000000A')->willReturn($this->makeConversation('01MGGIVEN0000000000000000A'));
+        $this->agent->method('sendInConversation')->willReturn($this->makeTurn('ok'));
+
+        $this->runWith(['message' => 'hello', '--conv-id' => '01MGGIVEN0000000000000000A', '--continue' => true]);
+    }
+
+    public function test_an_unknown_conv_id_says_a_new_conversation_was_started(): void
+    {
+        $this->agent->method('conversation')->willReturn($this->makeConversation());
+        $this->agent->method('sendInConversation')->willReturn($this->makeTurn('ok'));
+
+        [, $out] = $this->runWith(['message' => 'hello', '--conv-id' => '01MGMISSING00000000000000A']);
+
+        self::assertStringContainsString('No stored conversation 01MGMISSING00000000000000A; started conv-id-01234567890123.', $out);
+    }
+
+    public function test_a_run_saves_its_conversation_for_continue(): void
+    {
+        $this->agent->method('conversation')->willReturn($this->makeConversation());
+        $this->agent->method('sendInConversation')->willReturn($this->makeTurn('ok'));
+
+        $this->runCommand('hello');
+
+        self::assertSame('conv-id-01234567890123', file_get_contents($this->varDirectory.'/phpclaw/.last-conversation'));
+    }
+
+    public function test_a_sync_run_prints_the_summary_line_and_keeps_the_conv_id_line(): void
+    {
+        $this->agent->method('conversation')->willReturn($this->makeConversation());
+        $this->agent->method('sendInConversation')->willReturn($this->makeTurn('ok'));
+
+        [, $out] = $this->runCommand('hello');
+
+        self::assertStringContainsString('Provider: anthropic | Model: claude-haiku-4-5-20251001 | Tokens: ?→? | Conversation: conv-id-01234567890123', $out);
+        self::assertStringContainsString('conv-id=conv-id-01234567890123', $out);
+    }
+
+    public function test_a_stream_run_prints_the_summary_line(): void
+    {
+        $this->agent->method('conversation')->willReturn($this->makeConversation());
+        $this->agent->method('streamInConversation')->willReturn($this->makeTurn('ok'));
+
+        [, $out] = $this->runWith(['message' => 'hello', '--stream' => true]);
+
+        self::assertStringContainsString('Provider: anthropic | Model: claude-haiku-4-5-20251001 | Tokens: ?→? | Conversation: conv-id-01234567890123', $out);
+    }
+
+    public function test_trace_prints_one_line_per_tool_call_and_never_the_result(): void
+    {
+        $this->agent->method('conversation')->willReturn($this->makeConversation());
+        $this->agent->method('sendInConversation')->willReturnCallback(function (): ConversationTurn {
+            HookRegistry::fire('tool.before', ['tool_name' => 'file_read', 'tool_input' => ['path' => 'app/etc/config.php']]);
+            HookRegistry::fire('tool.after', ['tool_name' => 'file_read', 'tool_result' => 'SECRET FILE BODY']);
+            HookRegistry::fire('tool.before', ['tool_name' => 'magento_orders', 'tool_input' => ['limit' => 5]]);
+
+            return $this->makeTurn('two tools used');
+        });
+
+        [, $out] = $this->runWith(['message' => 'look around', '--trace' => true]);
+
+        self::assertStringContainsString('> file_read: app/etc/config.php', $out);
+        self::assertStringContainsString('> magento_orders', $out);
+        self::assertStringNotContainsString('SECRET FILE BODY', $out);
+    }
+
+    public function test_without_trace_no_tool_line_is_printed(): void
+    {
+        $this->agent->method('conversation')->willReturn($this->makeConversation());
+        $this->agent->method('sendInConversation')->willReturnCallback(function (): ConversationTurn {
+            HookRegistry::fire('tool.before', ['tool_name' => 'magento_orders', 'tool_input' => []]);
+
+            return $this->makeTurn('ok');
+        });
+
+        [, $out] = $this->runCommand('look around');
+
+        self::assertStringNotContainsString('> magento_orders', $out);
+    }
+
+    public function test_the_trace_listener_is_removed_even_when_the_run_fails(): void
+    {
+        $before = HookRegistry::count();
+        $this->agent->method('conversation')->willReturn($this->makeConversation());
+        $this->agent->method('sendInConversation')->willThrowException(new GuardException('injection'));
+
+        [$code] = $this->runWith(['message' => 'hello', '--trace' => true]);
+
+        self::assertSame(Cli::RETURN_FAILURE, $code);
+        self::assertSame($before, HookRegistry::count());
+    }
+
+    public function test_long_tool_input_is_cut_in_the_trace(): void
+    {
+        $this->agent->method('conversation')->willReturn($this->makeConversation());
+        $this->agent->method('sendInConversation')->willReturnCallback(function (): ConversationTurn {
+            HookRegistry::fire('tool.before', ['tool_name' => 'shell_exec', 'tool_input' => ['command' => str_repeat('a', 100)."\nrm"]]);
+
+            return $this->makeTurn('ok');
+        });
+
+        [, $out] = $this->runWith(['message' => 'run it', '--trace' => true]);
+
+        self::assertStringContainsString('> shell_exec: '.str_repeat('a', 80).'...', $out);
+    }
+
+    public function test_file_write_trace_shows_the_path_and_size_only(): void
+    {
+        $this->agent->method('conversation')->willReturn($this->makeConversation());
+        $this->agent->method('sendInConversation')->willReturnCallback(function (): ConversationTurn {
+            HookRegistry::fire('tool.before', ['tool_name' => 'file_write', 'tool_input' => ['path' => 'var/notes.txt', 'content' => 'hello']]);
+
+            return $this->makeTurn('ok');
+        });
+
+        [, $out] = $this->runWith(['message' => 'write', '--trace' => true]);
+
+        self::assertStringContainsString('> file_write: var/notes.txt (5 bytes)', $out);
+        self::assertStringNotContainsString('hello', $out);
+    }
+
+    public function test_the_summary_line_lists_each_tool_the_turn_used_once(): void
+    {
+        $this->agent->method('conversation')->willReturn($this->makeConversation());
+        $this->agent->method('sendInConversation')->willReturn(new ConversationTurn(
+            response: new AgentResponse(text: 'ok', provider: 'ollama', model: 'qwen2.5:7b', iterations: 2, toolsCalled: ['magento_orders', 'magento_orders', 'db_query']),
+            conversation: $this->makeConversation(),
+        ));
+
+        [, $out] = $this->runCommand('orders?');
+
+        self::assertStringContainsString('Provider: ollama | Model: qwen2.5:7b | Tokens: ?→? | Tools: magento_orders, db_query | Conversation: conv-id-01234567890123', $out);
     }
 }
