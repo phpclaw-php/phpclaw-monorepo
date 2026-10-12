@@ -49,7 +49,12 @@ The same agent from your terminal, scriptable and CI-friendly:
 ```bash
 drush phpclaw:run "show unpublished nodes"
 drush pc "check module updates" --stream
+drush phpclaw:run "and the drafts?" --continue --trace
+drush phpclaw:chat
 ```
+
+`drush phpclaw:chat` keeps one conversation open, streams each reply and prints each tool call; type
+`/help` for its commands. Both commands take `--conv-id=<id>` and `--continue`.
 
 ## REST API
 

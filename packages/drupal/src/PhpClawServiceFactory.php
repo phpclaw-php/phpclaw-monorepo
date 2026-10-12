@@ -58,7 +58,19 @@ final class PhpClawServiceFactory
      */
     public static function create(DrupalAgentContext $ctx): ?Claw
     {
+        return self::createForSession($ctx);
+    }
 
+    /**
+     * Full agent for one console session, with a provider or model that applies to this session only.
+     *
+     * @param  DrupalAgentContext  $ctx  All Drupal dependencies bundled as a context object.
+     * @param  string  $provider  Provider slug; '' uses the saved setting.
+     * @param  string  $model  Model identifier; '' uses the saved setting.
+     * @return Claw|null Configured agent instance with all tools, or null if these settings can't build one.
+     */
+    public static function createForSession(DrupalAgentContext $ctx, string $provider = '', string $model = ''): ?Claw
+    {
         $config = $ctx->configFactory->get('phpclaw.settings');
 
         $rawAllowlist = (array) ($config->get('shell_allowlist') ?? []);
@@ -87,7 +99,7 @@ final class PhpClawServiceFactory
         }
 
         try {
-            return self::build($config, $tools, $shellAllowlist);
+            return self::build($config, $tools, $shellAllowlist, $provider, $model);
         } catch (\Throwable) {
             return null;
         }
@@ -185,15 +197,19 @@ final class PhpClawServiceFactory
      * @param  ImmutableConfig  $config  Immutable Drupal config object.
      * @param  array  $tools  Resolved tool instances.
      * @param  array  $shellAllowlist  Shell command allowlist.
+     * @param  string  $provider  Provider slug; '' uses the saved setting.
+     * @param  string  $model  Model identifier; '' uses the saved setting.
      * @return Claw Fully configured agent instance.
      */
     private static function build(
         ImmutableConfig $config,
         array $tools,
         array $shellAllowlist = [],
+        string $provider = '',
+        string $model = '',
     ): Claw {
-        $provider = (string) ($config->get('provider') ?? '');
-        $model = (string) ($config->get('model') ?? '');
+        $provider = $provider !== '' ? $provider : (string) ($config->get('provider') ?? '');
+        $model = $model !== '' ? $model : (string) ($config->get('model') ?? '');
 
         $apiKey = (string) ($config->get('api_key') ?? '');
 

@@ -11,6 +11,8 @@ final class DrupalConsole
 {
     public const MARKER = 'PHPCLAW_DRUPAL_CONSOLE';
 
+    public const LAST_CONVERSATION_STATE_KEY = 'phpclaw.cli_last_conversation';
+
     /**
      * Mark this process as a phpClaw console run. Safe to call more than once.
      *

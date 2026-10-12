@@ -10,7 +10,16 @@ namespace Drush\Commands;
 
 abstract class DrushCommands
 {
+    const REQ = \Symfony\Component\Console\Input\InputOption::VALUE_REQUIRED;
+
+    const OPT = \Symfony\Component\Console\Input\InputOption::VALUE_OPTIONAL;
+
     public function __construct() {}
+
+    /**
+     * @return \Symfony\Component\Console\Input\InputInterface
+     */
+    protected function input(): \Symfony\Component\Console\Input\InputInterface {}
 
     /**
      * @return \Symfony\Component\Console\Style\SymfonyStyle

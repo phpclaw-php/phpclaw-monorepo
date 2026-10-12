@@ -5,6 +5,12 @@ services:
       - '@phpclaw.agent_context'
     tags:
       - { name: drush.command }
+  phpclaw.chat_commands:
+    class: PhpClaw\Drupal\Commands\PhpClawChatCommands
+    arguments:
+      - '@phpclaw.agent_context'
+    tags:
+      - { name: drush.command }
   phpclaw.mcp_commands:
     class: PhpClaw\Drupal\Commands\PhpClawMcpServerCommands
     arguments:

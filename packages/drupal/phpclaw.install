@@ -15,6 +15,7 @@ declare(strict_types=1);
 function phpclaw_uninstall(): void
 {
     \Drupal::queue('phpclaw_agent')->deleteQueue();
+    \Drupal::state()->delete(\PhpClaw\Drupal\DrupalConsole::LAST_CONVERSATION_STATE_KEY);
 
     $fileStorage = DRUPAL_ROOT . '/../storage/phpclaw';
     if (is_dir($fileStorage)) {

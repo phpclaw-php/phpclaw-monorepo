@@ -389,7 +389,10 @@ data: {"text":"Here are 3 articles...","provider":"ollama","model":"qwen2.5:7b",
         <tbody>
           <tr><td><code>drush phpclaw:run "your prompt"</code></td><td>Send a prompt and print the response.</td></tr>
           <tr><td><code>drush phpclaw:run "prompt" --stream</code></td><td>Stream the response token by token.</td></tr>
+          <tr><td><code>drush phpclaw:run "prompt" --continue</code></td><td>Continue the last conversation. <code>--conv-id=&lt;id&gt;</code> continues a given one.</td></tr>
+          <tr><td><code>drush phpclaw:run "prompt" --trace</code></td><td>Print one line per tool call, never its result.</td></tr>
           <tr><td><code>drush pc "prompt"</code></td><td>Short alias for drush phpclaw:run.</td></tr>
+          <tr><td><code>drush phpclaw:chat</code></td><td>Open an interactive session in one conversation. Type <code>/help</code> for commands; <code>/exit</code> or Ctrl+D leaves. Needs a terminal.</td></tr>
           <tr><td><code>drush phpclaw:mcp-server</code></td><td>Start the phpClaw MCP server (stdio transport).</td></tr>
           <tr><td><code>drush phpclaw-mcp</code></td><td>Short alias for drush phpclaw:mcp-server.</td></tr>
         </tbody>
