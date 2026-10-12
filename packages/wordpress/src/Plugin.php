@@ -34,6 +34,7 @@ use PhpClaw\WordPress\Admin\DashboardWidget;
 use PhpClaw\WordPress\Admin\GuidePage;
 use PhpClaw\WordPress\Admin\SettingsPage;
 use PhpClaw\WordPress\Admin\SiteHealth;
+use PhpClaw\WordPress\CLI\ChatCommand;
 use PhpClaw\WordPress\CLI\McpServerCommand;
 use PhpClaw\WordPress\CLI\PhpClawCommand;
 use PhpClaw\WordPress\Engine\EngineFactory;
@@ -1071,7 +1072,7 @@ class Plugin
     }
 
     /**
-     * Register all WP-CLI commands: send and mcp-server.
+     * Register all WP-CLI commands: send, chat and mcp-server.
      *
      * @return void
      */
@@ -1108,6 +1109,46 @@ class Plugin
                         'type' => 'flag',
                         'name' => 'stream',
                         'description' => 'Stream the response token-by-token.',
+                        'optional' => true,
+                    ],
+                    [
+                        'type' => 'assoc',
+                        'name' => 'conv-id',
+                        'description' => 'Continue the stored conversation with this id.',
+                        'optional' => true,
+                    ],
+                    [
+                        'type' => 'flag',
+                        'name' => 'continue',
+                        'description' => 'Continue the last conversation.',
+                        'optional' => true,
+                    ],
+                    [
+                        'type' => 'flag',
+                        'name' => 'trace',
+                        'description' => 'Print one line per tool call.',
+                        'optional' => true,
+                    ],
+                ],
+            ],
+        );
+
+        \WP_CLI::add_command(
+            'phpclaw chat',
+            ChatCommand::class,
+            [
+                'shortdesc' => 'Open an interactive phpClaw agent session.',
+                'synopsis' => [
+                    [
+                        'type' => 'assoc',
+                        'name' => 'conv-id',
+                        'description' => 'Continue the stored conversation with this id.',
+                        'optional' => true,
+                    ],
+                    [
+                        'type' => 'flag',
+                        'name' => 'continue',
+                        'description' => 'Continue the last conversation.',
                         'optional' => true,
                     ],
                 ],

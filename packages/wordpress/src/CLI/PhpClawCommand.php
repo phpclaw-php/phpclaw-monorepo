@@ -4,20 +4,26 @@ declare(strict_types=1);
 
 namespace PhpClaw\WordPress\CLI;
 
+use PhpClaw\Agent\Conversation;
+use PhpClaw\Agent\ConversationTurn;
 use PhpClaw\Contracts\ClawInterface as PhpClawInterface;
-use PhpClaw\Exceptions\GuardException;
-use PhpClaw\Exceptions\ProviderException;
-use PhpClaw\Exceptions\TokenBudgetExceededException;
-use PhpClaw\WordPress\Engine\EngineFactory;
-use PhpClaw\WordPress\Plugin;
+use PhpClaw\WordPress\CLI\Concerns\RendersToolTrace;
+use PhpClaw\WordPress\CLI\Concerns\ReportsAgentTurns;
+use PhpClaw\WordPress\CLI\Concerns\ResolvesEngine;
+use PhpClaw\WordPress\CLI\Concerns\TracksLastConversation;
 use PhpClaw\WordPress\Rest\PhpClawRestController;
 use PhpClaw\WordPress\Support\ToolHistorySplicer;
 
 /**
- * WP-CLI command: wp phpclaw send <message> [--stream] [--provider=<p>] [--model=<m>]
+ * WP-CLI command: wp phpclaw send <message> [--stream] [--provider=<p>] [--model=<m>] [--conv-id=<id>] [--continue] [--trace]
  */
 final class PhpClawCommand
 {
+    use RendersToolTrace;
+    use ReportsAgentTurns;
+    use ResolvesEngine;
+    use TracksLastConversation;
+
     /**
      * Run a phpClaw AI agent prompt.
      *
@@ -35,11 +41,21 @@ final class PhpClawCommand
      * [--model=<model>]
      * : Model override, e.g. gpt-4o, claude-haiku-4-5-20251001.
      *
+     * [--conv-id=<id>]
+     * : Continue the stored conversation with this id.
+     *
+     * [--continue]
+     * : Continue the last conversation.
+     *
+     * [--trace]
+     * : Print one line per tool call.
+     *
      * ## EXAMPLES
      *
      *     wp phpclaw send "How many published posts do I have?"
      *     wp phpclaw send "Write a 50-word intro for a recipe post" --stream
      *     wp phpclaw send "Check error logs" --provider=groq --model=llama-3.1-8b-instant
+     *     wp phpclaw send "and the drafts?" --continue --trace
      *
      * @when after_wp_load
      *
@@ -57,165 +73,85 @@ final class PhpClawCommand
             return;
         }
 
-        $engine = $this->resolveEngine($assocArgs);
-        $doStream = isset($assocArgs['stream']);
+        $stream = isset($assocArgs['stream']);
 
-        if ($doStream) {
-            $this->runStream($engine, $message);
-        } else {
-            $this->runSync($engine, $message);
+        if (isset($assocArgs['trace'])) {
+            $this->startToolTrace(static fn (string $line) => \WP_CLI::log($line));
         }
+
+        try {
+            $engine = $this->resolveEngine((string) ($assocArgs['provider'] ?? ''), (string) ($assocArgs['model'] ?? ''));
+            $conversation = $this->openConversation(static fn (string $line) => \WP_CLI::log($line), $engine, (string) ($assocArgs['conv-id'] ?? ''), continue: isset($assocArgs['continue']));
+            $turn = $this->sendTurn($engine, $conversation, $message, stream: $stream);
+        } catch (\Throwable $e) {
+            \WP_CLI::error($this->agentErrorMessage($e, $stream ? 'stream' : 'send'));
+
+            return;
+        } finally {
+            $this->stopToolTrace();
+        }
+
+        $this->rememberConversation($turn->conversation->id);
+        \WP_CLI::success($this->doneLine($turn));
     }
 
     /**
-     * Resolve the PhpClaw engine, applying any provider/model overrides from CLI args.
+     * The one-shot success line: provider, model, total tokens, iterations and the conversation id.
      *
-     * @param  string[]  $assocArgs  Named CLI arguments.
-     * @return PhpClawInterface
+     * @param  ConversationTurn  $turn  The finished turn.
+     * @return string
      */
-    private function resolveEngine(array $assocArgs): PhpClawInterface
+    private function doneLine(ConversationTurn $turn): string
     {
-        if (empty($assocArgs['provider']) && empty($assocArgs['model'])) {
-            return Plugin::getInstance()->engine();
-        }
-
-        $config = Plugin::getInstance()->config();
-        $saved = (array) get_option('phpclaw_settings', []);
-
-        if (! empty($assocArgs['provider'])) {
-            $saved['provider'] = (string) $assocArgs['provider'];
-        }
-        if (! empty($assocArgs['model'])) {
-            $saved['model'] = (string) $assocArgs['model'];
-        }
-
-        return EngineFactory::build(
-            config: $config,
-            saved: $saved,
-            skills: [],
-            extraToolClasses: Plugin::extraToolClasses(),
+        return sprintf(
+            'Done. Provider: %s | Model: %s | Tokens: %d | Iterations: %d | Conversation: %s',
+            $turn->response->provider,
+            $turn->response->model,
+            $turn->response->totalTokens() ?? 0,
+            $turn->response->iterations,
+            $turn->conversation->id,
         );
     }
 
     /**
-     * Run the prompt synchronously and print the full response to WP-CLI output.
+     * Send one message and print the reply: all at once, or token by token when streaming.
      *
      * @param  PhpClawInterface  $engine  The resolved phpClaw engine.
+     * @param  Conversation  $conversation  Conversation the turn belongs to.
      * @param  string  $message  The prompt to send.
-     * @return void
+     * @param  bool  $stream  Whether to write each token to STDOUT as it arrives.
+     * @return ConversationTurn
      */
-    private function runSync(PhpClawInterface $engine, string $message): void
+    private function sendTurn(PhpClawInterface $engine, Conversation $conversation, string $message, bool $stream): ConversationTurn
     {
-        try {
-            $conversation = $engine->conversation();
+        $toolCalls = [];
+        ToolHistorySplicer::collect($toolCalls);
+        $streamed = false;
 
-            $toolCalls = [];
-            ToolHistorySplicer::collect($toolCalls);
+        \WP_CLI::log('');
 
-            $turn = $engine->streamInConversation(
-                $conversation,
-                $message,
-                static function (string $token): void {
-                    unset($token);
-                },
-                ToolHistorySplicer::beforePersist($toolCalls),
-            );
-            $response = $turn->response;
+        $turn = $engine->streamInConversation(
+            $conversation,
+            $message,
+            static function (string $chunk) use ($stream, &$streamed): void {
+                if (! $stream || $chunk === '') {
+                    return;
+                }
 
-            \WP_CLI::log('');
-            \WP_CLI::log($response->text !== '' ? $response->text : PhpClawRestController::EMPTY_RESPONSE_TEXT);
-            \WP_CLI::log('');
-            \WP_CLI::success(sprintf(
-                'Done. Provider: %s | Model: %s | Tokens: %d | Iterations: %d | Conversation: %s',
-                $response->provider,
-                $response->model,
-                $response->totalTokens() ?? 0,
-                $response->iterations,
-                $turn->conversation->id,
-            ));
-        } catch (GuardException $e) {
-            error_log('phpClaw: guard blocked CLI send: '.$e->getMessage());
-            \WP_CLI::error('Your message was blocked by a security guard. Rephrase your prompt and try again.');
-        } catch (TokenBudgetExceededException $e) {
-            error_log('phpClaw: CLI send token budget exceeded: '.$e->getMessage());
-            \WP_CLI::error('Token budget reached for this run.');
-        } catch (ProviderException $e) {
-            if ($e->statusCode === 429) {
-                error_log('phpClaw: CLI send rate limited: '.$e->getMessage());
-                \WP_CLI::error('Rate limit reached, try again shortly.');
+                $streamed = true;
+                fwrite(STDOUT, $chunk);
+            },
+            ToolHistorySplicer::beforePersist($toolCalls),
+        );
 
-                return;
-            }
-
-            error_log('phpClaw: CLI send error: '.$e->getMessage());
-            \WP_CLI::error('An error occurred. Check your API key and provider settings.');
-        } catch (\Throwable $e) {
-            error_log('phpClaw: CLI send error: '.$e->getMessage());
-            \WP_CLI::error('An error occurred. Check your API key and provider settings.');
+        if (! $stream) {
+            \WP_CLI::log($turn->response->text !== '' ? $turn->response->text : PhpClawRestController::EMPTY_RESPONSE_TEXT);
+        } elseif (! $streamed && $turn->response->text === '') {
+            \WP_CLI::log(PhpClawRestController::EMPTY_RESPONSE_TEXT);
         }
-    }
 
-    /**
-     * Run the prompt in streaming mode, writing each token chunk to STDOUT as it arrives.
-     *
-     * @param  PhpClawInterface  $engine  The resolved phpClaw engine.
-     * @param  string  $message  The prompt to send.
-     * @return void
-     */
-    private function runStream(PhpClawInterface $engine, string $message): void
-    {
-        try {
-            \WP_CLI::log('');
+        \WP_CLI::log('');
 
-            $conversation = $engine->conversation();
-
-            $toolCalls = [];
-            ToolHistorySplicer::collect($toolCalls);
-
-            $streamed = false;
-
-            $turn = $engine->streamInConversation(
-                $conversation,
-                $message,
-                static function (string $chunk) use (&$streamed): void {
-                    if ($chunk !== '') {
-                        $streamed = true;
-                    }
-
-                    fwrite(STDOUT, $chunk);
-                },
-                ToolHistorySplicer::beforePersist($toolCalls),
-            );
-
-            if (! $streamed && $turn->response->text === '') {
-                \WP_CLI::log(PhpClawRestController::EMPTY_RESPONSE_TEXT);
-            }
-
-            \WP_CLI::log('');
-            \WP_CLI::log('');
-            \WP_CLI::success(sprintf(
-                'Streaming complete. Conversation: %s',
-                $turn->conversation->id,
-            ));
-        } catch (GuardException $e) {
-            error_log('phpClaw: guard blocked CLI stream: '.$e->getMessage());
-            \WP_CLI::error('Your message was blocked by a security guard. Rephrase your prompt and try again.');
-        } catch (TokenBudgetExceededException $e) {
-            error_log('phpClaw: CLI stream token budget exceeded: '.$e->getMessage());
-            \WP_CLI::error('Token budget reached for this run.');
-        } catch (ProviderException $e) {
-            if ($e->statusCode === 429) {
-                error_log('phpClaw: CLI stream rate limited: '.$e->getMessage());
-                \WP_CLI::error('Rate limit reached, try again shortly.');
-
-                return;
-            }
-
-            error_log('phpClaw: CLI stream error: '.$e->getMessage());
-            \WP_CLI::error('An error occurred. Check your API key and provider settings.');
-        } catch (\Throwable $e) {
-            error_log('phpClaw: CLI stream error: '.$e->getMessage());
-            \WP_CLI::error('An error occurred. Check your API key and provider settings.');
-        }
+        return $turn;
     }
 }

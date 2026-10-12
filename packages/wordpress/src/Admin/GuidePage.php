@@ -1074,6 +1074,9 @@ data: {"text":"Here are the 3 most recent posts...","provider":"ollama","model":
             ['cmd' => 'wp phpclaw send "prompt" --provider=anthropic',           'desc' => 'Override provider for one call.'],
             ['cmd' => 'wp phpclaw send "prompt" --model=claude-opus-4-8',        'desc' => 'Override model for one call.'],
             ['cmd' => 'wp phpclaw send "prompt" --stream',                       'desc' => 'Stream the response token-by-token.'],
+            ['cmd' => 'wp phpclaw send "prompt" --continue',                     'desc' => 'Continue the last conversation. --conv-id=<id> continues a given one.'],
+            ['cmd' => 'wp phpclaw send "prompt" --trace',                        'desc' => 'Print one line per tool call, never its result.'],
+            ['cmd' => 'wp phpclaw chat',                                         'desc' => 'Open an interactive session in one conversation. Type /help for commands; /exit or Ctrl+D leaves. Needs a terminal.'],
             ['cmd' => 'wp phpclaw mcp-server',                                   'desc' => 'Start the phpClaw MCP server (stdio transport).'],
         ];
         ?>

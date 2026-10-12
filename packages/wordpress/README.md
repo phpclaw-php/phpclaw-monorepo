@@ -48,6 +48,8 @@ The same agent from your terminal, scriptable and CI-friendly:
 ```bash
 wp phpclaw send "show today's failed orders"
 wp phpclaw send "check plugin update status" --stream
+wp phpclaw send "and the pending ones?" --continue --trace
+wp phpclaw chat
 ```
 
 ## REST API

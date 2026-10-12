@@ -375,6 +375,9 @@ final class GuidePageTest extends TestCase
 
         self::assertStringContainsString('wp phpclaw send', $html);
         self::assertStringContainsString('wp phpclaw mcp-server', $html);
+        self::assertStringContainsString('wp phpclaw send "prompt" --continue', $html);
+        self::assertStringContainsString('wp phpclaw send "prompt" --trace', $html);
+        self::assertStringContainsString('wp phpclaw chat', $html);
         self::assertStringContainsString('owned by nobody', $html);
 
         unset($_GET['tab']);

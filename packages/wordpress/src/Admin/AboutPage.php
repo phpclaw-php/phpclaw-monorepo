@@ -104,7 +104,7 @@ final class AboutPage
             ['icon' => '💬', 'title' => 'Chat UI',             'text' => 'Chat-style conversation interface in wp-admin. Conversation history, searchable sidebar, multi-turn context. Ask anything, and the agent picks the right tool.'],
             ['icon' => '⚡', 'title' => 'Live Tool Streaming', 'text' => 'See the agent work in real time via Server-Sent Events. Spinner placeholders appear the moment a tool fires, typed result cards (posts, users, plugins, SQL tables) replace them as soon as data is back, and the assistant reply streams token-by-token.'],
             ['icon' => '🔌', 'title' => 'REST API',           'text' => 'POST /wp-json/phpclaw/send to integrate the AI agent into any frontend, mobile app, chatbot, or external service.'],
-            ['icon' => '🖥',  'title' => 'WP-CLI',            'text' => 'wp phpclaw send, wp phpclaw mcp-server: full terminal access. Script automations, run in CI/CD, or pipe output.'],
+            ['icon' => '🖥',  'title' => 'WP-CLI',            'text' => 'wp phpclaw send, wp phpclaw chat, wp phpclaw mcp-server: full terminal access. Script automations, run in CI/CD, or pipe output.'],
             ['icon' => '🔒', 'title' => 'Enterprise-Grade Security',  'text' => 'Multi-layered protection against prompt injection, unsafe commands, and data leakage. Your data stays safe. Your agent stays under control.'],
         ];
         foreach ($features as $f) { ?>

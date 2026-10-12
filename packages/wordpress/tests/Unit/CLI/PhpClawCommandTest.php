@@ -47,6 +47,7 @@ final class PhpClawCommandTest extends TestCase
         \WP_CLI::$log = [];
         \WP_CLI::$error = null;
         \WP_CLI::$success = null;
+        Functions\when('update_option')->justReturn(true);
     }
 
     protected function tearDown(): void
@@ -224,7 +225,8 @@ final class PhpClawCommandTest extends TestCase
 
         (new PhpClawCommand)(['stream me'], ['stream' => true]);
 
-        self::assertStringContainsString('Streaming complete', \WP_CLI::$success ?? '');
+        self::assertStringContainsString('Provider: ', \WP_CLI::$success ?? '');
+        self::assertStringContainsString('| Conversation: ', \WP_CLI::$success ?? '');
         self::assertNull(\WP_CLI::$error);
     }
 

@@ -399,6 +399,7 @@ final class PluginCoverageTest extends TestCase
         $names = array_column($GLOBALS['phpclaw_test_cli_commands'], 'name');
 
         self::assertContains('phpclaw send', $names);
+        self::assertContains('phpclaw chat', $names);
         self::assertContains('phpclaw mcp-server', $names);
     }
 
