@@ -30,6 +30,7 @@ final class ShippedConfigEnvBindingTest extends TestCase
         'PHPCLAW_RESPONSE_CACHE' => ['response_cache', 'true', false],
         'PHPCLAW_RESPONSE_CACHE_TTL' => ['response_cache_ttl', '120', 3600],
         'PHPCLAW_MAX_TOKEN_BUDGET' => ['max_token_budget', '5000', 0],
+        'PHPCLAW_MAX_TOOLS_PER_TURN' => ['max_tools_per_turn', '3', 0],
         'PHPCLAW_DURABLE_RUNS' => ['durable_runs', 'true', false],
         'PHPCLAW_DURABLE_STEP_BUDGET' => ['durable_step_budget', '2', 0],
         'PHPCLAW_DURABLE_DEADLINE_SECONDS' => ['durable_deadline_seconds', '45', null],
@@ -55,6 +56,7 @@ final class ShippedConfigEnvBindingTest extends TestCase
         'response_cache' => true,
         'response_cache_ttl' => 120,
         'max_token_budget' => 5000,
+        'max_tools_per_turn' => 3,
         'durable_runs' => true,
         'durable_step_budget' => 2,
         'durable_deadline_seconds' => 45,
@@ -105,6 +107,21 @@ final class ShippedConfigEnvBindingTest extends TestCase
         $kernel->shutdown();
 
         self::assertSame([], $toolDeny);
+    }
+
+    #[RunInSeparateProcess]
+    #[PreserveGlobalState(false)]
+    public function test_always_include_tools_stays_a_yaml_list_because_symfony_cannot_bind_it(): void
+    {
+        putenv('PHPCLAW_ALWAYS_INCLUDE_TOOLS=file_read');
+        $_ENV['PHPCLAW_ALWAYS_INCLUDE_TOOLS'] = 'file_read';
+
+        $kernel = new ShippedConfigKernel('alwaysinclude', false);
+        $kernel->boot();
+        $alwaysInclude = $kernel->getContainer()->getParameter('phpclaw.always_include_tools');
+        $kernel->shutdown();
+
+        self::assertSame([], $alwaysInclude);
     }
 
     private function bootAndRead(string $environment): array

@@ -18,6 +18,7 @@ parameters:
     env(PHPCLAW_RESPONSE_CACHE): 'false'
     env(PHPCLAW_RESPONSE_CACHE_TTL): 3600
     env(PHPCLAW_MAX_TOKEN_BUDGET): 0
+    env(PHPCLAW_MAX_TOOLS_PER_TURN): 0
     env(PHPCLAW_DURABLE_RUNS): 'false'
     env(PHPCLAW_DURABLE_STEP_BUDGET): 0
 
@@ -54,6 +55,9 @@ phpclaw:
         - whoami
     # Symfony cannot feed an env var into a prototyped array node, so this one stays YAML-only.
     tool_deny: []   # Tool names or group references to exclude from the registry, the MCP server and the phpclaw:guide listing.
+    max_tools_per_turn: '%env(int:PHPCLAW_MAX_TOOLS_PER_TURN)%'  # tools sent to the model per turn: 0 keeps the automatic limit, -1 sends every tool, N sends N
+    # YAML-only like tool_deny: Symfony cannot feed an env var into a list node.
+    always_include_tools: []   # tool names sent on every turn, outside max_tools_per_turn, e.g. [file_read, file_edit]
     cloud_key: '%env(PHPCLAW_CLOUD_KEY)%'
     cloud_signing_secret: '%env(PHPCLAW_CLOUD_SIGNING_SECRET)%' # verify signed cloud scan responses; copy from your phpClaw Cloud dashboard (empty = skip verification)
     cloud_disable: []

@@ -129,6 +129,7 @@ final class GuideCommandTest extends TestCase
             'PHPCLAW_RESPONSE_CACHE',
             'PHPCLAW_RESPONSE_CACHE_TTL',
             'PHPCLAW_MAX_TOKEN_BUDGET',
+            'PHPCLAW_MAX_TOOLS_PER_TURN',
         ] as $key) {
             self::assertStringContainsString($key, $display);
         }

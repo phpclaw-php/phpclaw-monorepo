@@ -450,6 +450,7 @@ final class GuideCommand extends Command
         $io->writeln('  PHPCLAW_RESPONSE_CACHE    : cache provider responses on the cache.app pool (default: false)');
         $io->writeln('  PHPCLAW_RESPONSE_CACHE_TTL: response cache lifetime in seconds (default: 3600)');
         $io->writeln('  PHPCLAW_MAX_TOKEN_BUDGET  : total token spend ceiling per run, 0 disables (default: 0)');
+        $io->writeln('  PHPCLAW_MAX_TOOLS_PER_TURN: tools sent per turn; 0 = automatic limit, -1 = every tool (default: 0)');
         $io->writeln('  PHPCLAW_DURABLE_RUNS      : save runs after each step; web runs pause for approval (default: false)');
         $io->writeln('  PHPCLAW_DURABLE_STEP_BUDGET: steps per process before a run is suspended, 0 = no limit (default: 0)');
         $io->writeln('  PHPCLAW_DURABLE_DEADLINE_SECONDS: seconds per process; blank = half of max_execution_time');
