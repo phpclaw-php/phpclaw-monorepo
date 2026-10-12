@@ -35,6 +35,8 @@ services:
             $skills:            '%phpclaw.skills%'
             $baseUrl:           '%phpclaw.base_url%'
             $toolDeny:          '%phpclaw.tool_deny%'
+            $maxToolsPerTurn:   '%phpclaw.max_tools_per_turn%'
+            $alwaysIncludeTools: '%phpclaw.always_include_tools%'
             $remoteSkillUrls:   '%phpclaw.remote_skill_urls%'
             $extensions:        '@PhpClaw\Symfony\Extension\PhpClawExtensions'
             $connection:        '@?Doctrine\DBAL\Connection'

@@ -20,6 +20,9 @@ use PhpClaw\Symfony\Http\StreamEventBridge;
 use PhpClaw\Symfony\PhpClawBundle;
 use PhpClaw\Symfony\Tests\Integration\IntegrationKernel;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
+use Symfony\Component\Config\Definition\Exception\InvalidConfigurationException;
+use Symfony\Component\Config\Definition\Processor;
+use Symfony\Component\DependencyInjection\ContainerBuilder;
 
 final class PhpClawBundleBootTest extends KernelTestCase
 {
@@ -425,5 +428,36 @@ final class PhpClawBundleBootTest extends KernelTestCase
         foreach (array_reverse($target) as $h) {
             set_exception_handler($h);
         }
+    }
+
+    public function test_bundle_config_accepts_both_tool_routing_nodes(): void
+    {
+        IntegrationKernel::configure(['memory_driver' => 'file', 'store_messages' => false, 'event_bridge' => false, 'max_tools_per_turn' => -1, 'always_include_tools' => ['file_read', 'file_edit']]);
+
+        $container = self::bootKernel()->getContainer();
+
+        $this->assertSame(-1, $container->getParameter('phpclaw.max_tools_per_turn'));
+        $this->assertSame(['file_read', 'file_edit'], $container->getParameter('phpclaw.always_include_tools'));
+    }
+
+    public function test_bundle_config_defaults_keep_todays_routing(): void
+    {
+        IntegrationKernel::configure(['memory_driver' => 'file', 'store_messages' => false, 'event_bridge' => false]);
+
+        $container = self::bootKernel()->getContainer();
+
+        $this->assertSame(0, $container->getParameter('phpclaw.max_tools_per_turn'));
+        $this->assertSame([], $container->getParameter('phpclaw.always_include_tools'));
+    }
+
+    public function test_bundle_config_rejects_a_limit_below_minus_one(): void
+    {
+        $extension = (new PhpClawBundle)->getContainerExtension();
+        $configuration = $extension->getConfiguration([], new ContainerBuilder);
+
+        $this->expectException(InvalidConfigurationException::class);
+        $this->expectExceptionMessage('greater than or equal to -1');
+
+        (new Processor)->processConfiguration($configuration, [['max_tools_per_turn' => -2]]);
     }
 }

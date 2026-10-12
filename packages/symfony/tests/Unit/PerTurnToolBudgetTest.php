@@ -35,33 +35,65 @@ final class PerTurnToolBudgetTest extends TestCase
         self::assertSame(8, $this->budgetFor('ollama', 'qwen2.5:32b'));
     }
 
-    public function test_a_cloud_provider_stays_uncapped(): void
+    public function test_a_cloud_provider_gets_the_model_derived_limit(): void
     {
         self::assertSame(
             0,
             $this->budgetFor('openai', 'gpt-4o'),
-            'a cloud model must not be capped by the local-provider profile',
+            'a cloud model is not capped by the local-provider profile; 0 lets ToolRouter derive the limit from the model id',
         );
+    }
+
+    public function test_max_tools_per_turn_from_config_overrides_the_profile(): void
+    {
+        self::assertSame(3, $this->factory('ollama', 'qwen2.5:7b', ['maxToolsPerTurn' => 3])->create()->config()->maxToolsPerTurn);
+    }
+
+    public function test_minus_one_from_config_removes_the_cap(): void
+    {
+        self::assertSame(-1, $this->factory('openai', 'gpt-4o-mini', ['maxToolsPerTurn' => -1])->create()->config()->maxToolsPerTurn);
+    }
+
+    public function test_zero_keeps_the_profile_limit(): void
+    {
+        self::assertSame(5, $this->factory('ollama', 'qwen2.5:7b', ['maxToolsPerTurn' => 0])->create()->config()->maxToolsPerTurn);
+    }
+
+    public function test_always_include_tools_from_config_reach_the_engine(): void
+    {
+        $config = $this->factory('openai', 'gpt-4o-mini', ['alwaysIncludeTools' => ['file_read', 'code_search']])->create()->config();
+
+        self::assertSame(['file_read', 'code_search'], $config->alwaysIncludeTools);
+    }
+
+    public function test_always_include_and_tool_deny_on_the_same_name_keeps_it_denied(): void
+    {
+        $config = $this->factory('openai', 'gpt-4o-mini', ['toolDeny' => ['file_read'], 'alwaysIncludeTools' => ['file_read']])->create()->config();
+
+        self::assertNotContains('file_read', array_map(static fn ($tool): string => $tool->name(), $config->tools));
     }
 
     private function budgetFor(string $provider, string $model): int
     {
-        $factory = new PhpClawFactory(
-            apiKey: 'sk-test-budget',
-            provider: $provider,
-            model: $model,
-            storeMessages: false,
-            maxIterations: 10,
-            shellAllowlist: ['ls'],
-            tools: [],
-            memory: new ArrayMemory,
-            workspaceRoot: sys_get_temp_dir(),
-            systemPrompt: '',
-            maxTokens: 0,
-            promptCache: false,
-            thinkingBudget: 0,
-        );
+        return $this->factory($provider, $model)->create()->config()->maxToolsPerTurn;
+    }
 
-        return $factory->create()->config()->maxToolsPerTurn;
+    private function factory(string $provider, string $model, array $extra = []): PhpClawFactory
+    {
+        return new PhpClawFactory(...array_merge([
+            'apiKey' => 'sk-test-budget',
+            'provider' => $provider,
+            'model' => $model,
+            'storeMessages' => false,
+            'maxIterations' => 10,
+            'shellAllowlist' => ['ls'],
+            'tools' => [],
+            'memory' => new ArrayMemory,
+            'workspaceRoot' => sys_get_temp_dir(),
+            'systemPrompt' => '',
+            'maxTokens' => 0,
+            'promptCache' => false,
+            'thinkingBudget' => 0,
+        ], $extra));
     }
 }

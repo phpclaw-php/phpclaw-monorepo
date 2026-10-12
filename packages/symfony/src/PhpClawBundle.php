@@ -105,6 +105,11 @@ final class PhpClawBundle extends AbstractBundle
             ->scalarPrototype()->end()
             ->defaultValue([])
             ->end()
+            ->integerNode('max_tools_per_turn')->defaultValue(0)->min(-1)->end()
+            ->arrayNode('always_include_tools')
+            ->scalarPrototype()->end()
+            ->defaultValue([])
+            ->end()
             ->scalarNode('system_prompt')->defaultValue('')->end()
             ->integerNode('max_tokens')->defaultValue(0)->end()
             ->booleanNode('prompt_cache')->defaultFalse()->end()
@@ -183,6 +188,8 @@ final class PhpClawBundle extends AbstractBundle
         $container->setParameter('phpclaw.hooks', $config['hooks']);
         $container->setParameter('phpclaw.tools', $config['tools']);
         $container->setParameter('phpclaw.tool_deny', $config['tool_deny']);
+        $container->setParameter('phpclaw.max_tools_per_turn', $config['max_tools_per_turn']);
+        $container->setParameter('phpclaw.always_include_tools', $config['always_include_tools']);
         $container->setParameter('phpclaw.system_prompt', $config['system_prompt']);
         $container->setParameter('phpclaw.max_tokens', $config['max_tokens']);
         $container->setParameter('phpclaw.prompt_cache', $config['prompt_cache']);

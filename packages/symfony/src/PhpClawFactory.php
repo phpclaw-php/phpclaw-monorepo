@@ -87,6 +87,8 @@ final class PhpClawFactory
      * @param  int  $durableStepBudget  Steps one process runs before the run is suspended; 0 = no limit.
      * @param  int|null  $durableDeadlineSeconds  Seconds one process runs before the run is suspended; null = half of max_execution_time.
      * @param  string  $environment  Kernel environment; `prod` refuses the console-only test_run tool.
+     * @param  int  $maxToolsPerTurn  Tools sent to the model per turn: 0 uses the profile and model limit, -1 sends every tool, N sends N.
+     * @param  string[]  $alwaysIncludeTools  Tool names sent on every turn, outside the per-turn cap.
      */
     public function __construct(
         private readonly string $apiKey,
@@ -125,6 +127,8 @@ final class PhpClawFactory
         private readonly int $durableStepBudget = 0,
         private readonly ?int $durableDeadlineSeconds = null,
         private readonly string $environment = '',
+        private readonly int $maxToolsPerTurn = 0,
+        private readonly array $alwaysIncludeTools = [],
     ) {}
 
     /**
@@ -181,7 +185,8 @@ final class PhpClawFactory
             ->model($model)
             ->storeMessages($this->storeMessages)
             ->maxIterations($this->maxIterations)
-            ->maxToolsPerTurn(ToolProfileResolver::maxTools(ToolProfileResolver::resolve($provider, $model)))
+            ->maxToolsPerTurn($this->resolveMaxToolsPerTurn($provider, $model))
+            ->alwaysIncludeTools($this->alwaysIncludeTools)
             ->tools(ToolProfileResolver::filter($this->resolveTools($isConsole)))
             ->shellAllowlist($this->shellAllowlist)
             ->memory($memory)
@@ -448,5 +453,19 @@ final class PhpClawFactory
             $resolved,
             fn (ToolInterface $t): bool => ! in_array($t->name(), $denyNames, true),
         ));
+    }
+
+    /**
+     * Per-turn tool cap: the configured max_tools_per_turn, or the provider and model profile limit when it is 0.
+     *
+     * @param  string  $provider  Provider in use.
+     * @param  string  $model  Model in use.
+     * @return int Cap passed to the builder.
+     */
+    private function resolveMaxToolsPerTurn(string $provider, string $model): int
+    {
+        return $this->maxToolsPerTurn === 0
+            ? ToolProfileResolver::maxTools(ToolProfileResolver::resolve($provider, $model))
+            : $this->maxToolsPerTurn;
     }
 }
