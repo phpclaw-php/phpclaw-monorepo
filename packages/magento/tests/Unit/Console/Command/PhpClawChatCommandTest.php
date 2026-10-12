@@ -221,23 +221,61 @@ final class PhpClawChatCommandTest extends TestCase
         $this->assertStringContainsString('Usage: /provider <slug>', $out);
     }
 
-    public function test_a_provider_that_cannot_be_built_keeps_the_current_engine(): void
+    public function test_an_unknown_provider_names_the_cause_and_keeps_the_current_engine(): void
     {
+        $calls = [];
         $engine = $this->agent();
-        $this->factory->method('createForSession')->willReturnCallback(static function (string $provider = '') use ($engine): PhpClawInterface {
+        $this->factory->method('createForSession')->willReturnCallback(static function (string $provider = '', string $model = '') use ($engine, &$calls): PhpClawInterface {
+            $calls[] = [$provider, $model];
             if ($provider === 'nope') {
                 throw new AdapterException("No provider registered under name 'nope'.");
             }
 
             return $engine;
         });
-        $this->logger->expects($this->once())->method('error');
+        $this->logger->expects($this->never())->method('error');
 
-        $out = $this->session($this->tester(), ['/provider nope', 'still here', '/exit']);
+        $out = $this->session($this->tester(), ['/provider nope', 'still here', '/model qwen2.5:7b-16k', '/exit']);
 
-        $this->assertStringContainsString('An internal error occurred. Check the Magento log.', $out);
+        $this->assertStringContainsString('Cannot switch to provider nope: the provider name is unknown or its API key is not saved in phpClaw settings.', $out);
+        $this->assertStringNotContainsString("No provider registered under name 'nope'", $out);
         $this->assertStringNotContainsString('Provider for this session: nope', $out);
         $this->assertSame([[self::CONVERSATION_ID, 'still here']], $this->sent);
+        $this->assertSame([['', ''], ['nope', ''], ['', 'qwen2.5:7b-16k']], $calls);
+    }
+
+    public function test_a_model_that_cannot_be_built_names_the_model(): void
+    {
+        $engine = $this->agent();
+        $this->factory->method('createForSession')->willReturnCallback(static function (string $provider = '', string $model = '') use ($engine): PhpClawInterface {
+            if ($model === 'broken') {
+                throw new AdapterException('No API key found.');
+            }
+
+            return $engine;
+        });
+
+        $out = $this->session($this->tester(), ['/model broken', '/exit']);
+
+        $this->assertStringContainsString('Cannot switch to model broken: the provider name is unknown or its API key is not saved in phpClaw settings.', $out);
+    }
+
+    public function test_any_other_failure_while_switching_is_logged_with_the_generic_message(): void
+    {
+        $engine = $this->agent();
+        $this->factory->method('createForSession')->willReturnCallback(static function (string $provider = '') use ($engine): PhpClawInterface {
+            if ($provider === 'openai') {
+                throw new ToolException('tool registry broke at /var/secret');
+            }
+
+            return $engine;
+        });
+        $this->logger->expects($this->once())->method('error')->with('phpClaw agent error');
+
+        $out = $this->session($this->tester(), ['/provider openai', '/exit']);
+
+        $this->assertStringContainsString('An internal error occurred. Check the Magento log.', $out);
+        $this->assertStringNotContainsString('/var/secret', $out);
     }
 
     public function test_an_unknown_slash_command_is_not_sent_to_the_agent(): void

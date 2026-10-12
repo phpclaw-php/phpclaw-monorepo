@@ -10,6 +10,7 @@ use PhpClaw\Agent\Conversation;
 use PhpClaw\Agent\ConversationTurn;
 use PhpClaw\Claw;
 use PhpClaw\Contracts\ClawInterface as PhpClawInterface;
+use PhpClaw\Exceptions\AdapterException;
 use PhpClaw\Exceptions\PhpClawException;
 use PhpClaw\Hooks\HookRegistry;
 use PhpClaw\Hooks\LifecycleEvent;
@@ -487,7 +488,7 @@ ART;
     }
 
     /**
-     * Rebuild the engine with a new model or provider for this session only; the admin settings are never written.
+     * Switch the model or provider for this session only; settings are never written and a failed switch keeps the engine.
      *
      * @param  SymfonyStyle  $io  Console style.
      * @param  string|null  $provider  New provider, or null when only the model changes.
@@ -504,6 +505,13 @@ ART;
 
         try {
             $claw = $this->phpClawFactory->createForSession(provider: $provider ?? $this->sessionProvider, model: $model ?? $this->sessionModel);
+        } catch (AdapterException) {
+            $io->warning(sprintf(
+                'Cannot switch to %s: the provider name is unknown or its API key is not saved in phpClaw settings.',
+                $provider !== null ? "provider {$provider}" : "model {$model}",
+            ));
+
+            return;
         } catch (PhpClawException $e) {
             $this->reportAgentError($io, $e);
 
