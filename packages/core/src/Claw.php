@@ -519,7 +519,7 @@ final class Claw implements ClawInterface
             outputSanitiser: new OutputSanitiser($this->config->sanitiseOutput),
             compactHistory: $this->config->compactHistory,
             approvalGate: $this->config->approvalGate,
-            toolRouter: new ToolRouter($this->config->maxToolsPerTurn, $this->profile() === ToolProfileResolver::PROFILE_MINIMAL ? 0.2 : 0.0),
+            toolRouter: new ToolRouter($this->config->maxToolsPerTurn, $this->profile() === ToolProfileResolver::PROFILE_MINIMAL ? 0.2 : 0.0, $this->config->alwaysIncludeTools),
             maxHistoryTokens: $this->config->maxHistoryTokens,
             maxToolResultTokens: $this->config->maxToolResultTokens,
             leanToolSchemas: $this->profile() === ToolProfileResolver::PROFILE_MINIMAL,

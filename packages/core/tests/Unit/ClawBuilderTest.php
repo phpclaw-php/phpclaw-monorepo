@@ -399,4 +399,25 @@ final class ClawBuilderTest extends TestCase
 
         return $tool;
     }
+
+    public function test_max_tools_per_turn_keeps_unlimited(): void
+    {
+        $config = Claw::builder()->provider('anthropic')->apiKey('x')->maxToolsPerTurn(-1)->build()->config();
+
+        $this->assertSame(-1, $config->maxToolsPerTurn);
+    }
+
+    public function test_max_tools_per_turn_clamps_other_negatives_to_zero(): void
+    {
+        $config = Claw::builder()->provider('anthropic')->apiKey('x')->maxToolsPerTurn(-4)->build()->config();
+
+        $this->assertSame(0, $config->maxToolsPerTurn);
+    }
+
+    public function test_always_include_tools_reach_the_config(): void
+    {
+        $config = Claw::builder()->provider('anthropic')->apiKey('x')->alwaysIncludeTools(['file_read', 'file_edit'])->build()->config();
+
+        $this->assertSame(['file_read', 'file_edit'], $config->alwaysIncludeTools);
+    }
 }

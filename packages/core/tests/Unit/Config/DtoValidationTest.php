@@ -45,4 +45,16 @@ final class DtoValidationTest extends TestCase
         $this->assertSame(ToolConfig::DEFAULT_SHELL_ALLOWLIST, (new ToolConfig)->shellAllowlist);
         $this->assertSame(['ls', 'pwd'], (new ToolConfig(shellAllowlist: ['ls', 'pwd']))->shellAllowlist);
     }
+
+    public function test_loop_config_keeps_unlimited_and_clamps_other_negatives(): void
+    {
+        $this->assertSame(-1, (new LoopConfig(maxToolsPerTurn: -1))->maxToolsPerTurn);
+        $this->assertSame(0, (new LoopConfig(maxToolsPerTurn: -2))->maxToolsPerTurn);
+    }
+
+    public function test_tool_config_reindexes_the_always_include_list(): void
+    {
+        $this->assertSame(['file_read'], (new ToolConfig(alwaysIncludeTools: ['x' => 'file_read']))->alwaysIncludeTools);
+        $this->assertSame([], (new ToolConfig)->alwaysIncludeTools);
+    }
 }

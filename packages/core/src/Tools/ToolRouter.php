@@ -53,12 +53,24 @@ final class ToolRouter
      *
      * @param  int  $maxToolsPerTurn  Explicit per-turn budget; 0 derives it from the model id, UNLIMITED disables the cap.
      * @param  float  $minScoreShare  Drop ranked tools scoring below this share of the best score; 0 keeps today's fill-to-cap.
+     * @param  string[]  $alwaysInclude  Tool names sent on every turn, outside the per-turn budget.
      * @return void
      */
     public function __construct(
         private readonly int $maxToolsPerTurn = 0,
         private readonly float $minScoreShare = 0.0,
+        private readonly array $alwaysInclude = [],
     ) {}
+
+    /**
+     * Lowercased names of the tools sent on every turn.
+     *
+     * @return string[]
+     */
+    public function alwaysIncluded(): array
+    {
+        return array_values(array_unique(array_map(strtolower(...), $this->alwaysInclude)));
+    }
 
     /**
      * Tool names of the last filter() result in ranked order, pinned tools first.
@@ -77,13 +89,26 @@ final class ToolRouter
      * @param  string  $message  Current user message.
      * @param  string  $model  Provider model id.
      * @param  array<string, ToolRoutingMetadata>  $metadata  Routing metadata keyed by lowercased tool name.
-     * @return array<int, array<string, mixed>> Pinned schemas followed by the highest-ranked remainder.
+     * @return array<int, array<string, mixed>> Always-included and pinned schemas followed by the highest-ranked remainder.
      */
     public function filter(array $allSchemas, string $message, string $model = '', array $metadata = []): array
     {
         $limit = $this->resolveLimit($model);
+        $alwaysNames = $this->alwaysIncluded();
+        $always = [];
+        $routable = [];
 
-        if ($limit === self::UNLIMITED || count($allSchemas) <= $limit) {
+        foreach ($allSchemas as $schema) {
+            if (in_array($this->schemaName($schema), $alwaysNames, true)) {
+                $always[] = $schema;
+
+                continue;
+            }
+
+            $routable[] = $schema;
+        }
+
+        if ($limit === self::UNLIMITED || count($routable) <= $limit) {
             return $allSchemas;
         }
 
@@ -91,7 +116,7 @@ final class ToolRouter
         $pinned = [];
         $scorable = [];
 
-        foreach ($allSchemas as $schema) {
+        foreach ($routable as $schema) {
             if ($this->schemaName($schema) === LoadSkillTool::NAME || $this->isPinned($this->schemaName($schema), $explicit)) {
                 $pinned[] = $schema;
 
@@ -110,7 +135,7 @@ final class ToolRouter
 
         $ranked = array_map(static fn (array $row): array => $row['schema'], $rows);
         $slots = max(0, $limit - count($pinned));
-        $chosen = array_merge($pinned, array_slice($ranked, 0, $slots));
+        $chosen = array_merge($always, $pinned, array_slice($ranked, 0, $slots));
         $this->lastRankedNames = array_map(fn (array $s): string => $this->schemaName($s), $chosen);
 
         usort($chosen, fn (array $a, array $b): int => strcmp($this->schemaName($a), $this->schemaName($b)));

@@ -23,6 +23,7 @@ use PhpClaw\Skills\Contracts\SkillInterface;
 use PhpClaw\Skills\SkillRegistry;
 use PhpClaw\Tools\Contracts\ToolInterface;
 use PhpClaw\Tools\RemoteToolActivator;
+use PhpClaw\Tools\ToolRouter;
 use Psr\SimpleCache\CacheInterface;
 
 /**
@@ -114,6 +115,8 @@ final class ClawBuilder
     private bool $redactToolResultPii = false;
 
     private array $piiExemptTools = [];
+
+    private array $alwaysIncludeTools = [];
 
     private array $remoteToolProfileUrls = [];
 
@@ -276,14 +279,27 @@ final class ClawBuilder
     }
 
     /**
-     * Maximum tool schemas sent to the LLM per iteration. 0 = auto by model.
+     * Maximum tool schemas sent to the LLM per iteration. 0 = auto by model, ToolRouter::UNLIMITED = no cap.
      *
-     * @param  int  $limit  Per-turn tool cap; 0 lets ToolRouter pick a limit from the model id.
+     * @param  int  $limit  Per-turn tool cap; 0 lets ToolRouter pick a limit from the model id, ToolRouter::UNLIMITED sends every tool.
      * @return static Builder instance for fluent chaining.
      */
     public function maxToolsPerTurn(int $limit): static
     {
-        $this->maxToolsPerTurn = max(0, $limit);
+        $this->maxToolsPerTurn = $limit === ToolRouter::UNLIMITED ? ToolRouter::UNLIMITED : max(0, $limit);
+
+        return $this;
+    }
+
+    /**
+     * Tools sent to the LLM on every turn, outside the per-turn cap; names that are not registered are skipped.
+     *
+     * @param  list<string>  $names  Tool names, e.g. ['file_read', 'file_edit'].
+     * @return static Builder instance for fluent chaining.
+     */
+    public function alwaysIncludeTools(array $names): static
+    {
+        $this->alwaysIncludeTools = array_values($names);
 
         return $this;
     }
@@ -779,6 +795,7 @@ final class ClawBuilder
                 approvalGate: $this->approvalGate,
                 redactToolResultPii: $this->redactToolResultPii,
                 piiExemptTools: $this->piiExemptTools,
+                alwaysIncludeTools: $this->alwaysIncludeTools,
             ),
             skills: new SkillConfig(
                 skills: $this->skills,

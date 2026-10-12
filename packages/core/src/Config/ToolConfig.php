@@ -31,6 +31,8 @@ final class ToolConfig
 
     public readonly array $piiExemptTools;
 
+    public readonly array $alwaysIncludeTools;
+
     /**
      * Group and validate the tool-facing configuration.
      *
@@ -41,6 +43,7 @@ final class ToolConfig
      * @param  ApprovalGateInterface|null  $approvalGate  Approval gate checked before gated tools run; null disables gating.
      * @param  bool  $redactToolResultPii  True to redact personal data in tool results before the model sees them.
      * @param  list<string>  $piiExemptTools  Tool names whose results keep real values.
+     * @param  list<string>  $alwaysIncludeTools  Tool names sent on every turn, outside the per-turn budget.
      * @return void
      */
     public function __construct(
@@ -51,6 +54,7 @@ final class ToolConfig
         ?ApprovalGateInterface $approvalGate = null,
         bool $redactToolResultPii = false,
         array $piiExemptTools = [],
+        array $alwaysIncludeTools = [],
     ) {
         $this->tools = $tools;
         $this->shellAllowlist = $shellAllowlist !== [] ? $shellAllowlist : self::DEFAULT_SHELL_ALLOWLIST;
@@ -59,5 +63,6 @@ final class ToolConfig
         $this->approvalGate = $approvalGate;
         $this->redactToolResultPii = $redactToolResultPii;
         $this->piiExemptTools = array_values($piiExemptTools);
+        $this->alwaysIncludeTools = array_values($alwaysIncludeTools);
     }
 }

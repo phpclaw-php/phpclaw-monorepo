@@ -225,17 +225,19 @@ final class Agent
             $byName[strtolower((string) ($schema['name'] ?? ($schema['function']['name'] ?? '')))] = $schema;
         }
         uksort($byName, static fn (string $a, string $b): int => ($order[$a] ?? PHP_INT_MAX) <=> ($order[$b] ?? PHP_INT_MAX));
+        $always = array_intersect_key($byName, array_flip($this->toolRouter->alwaysIncluded()));
+        $byName = array_diff_key($byName, $always);
 
         $base = $this->fixedPromptTokens + $this->historyCompactor->estimateTokens($history);
         while (count($byName) > 1) {
-            $estimate = $base + (int) ceil(strlen((string) json_encode(array_values($byName))) / self::CHARS_PER_TOKEN_ESTIMATE);
+            $estimate = $base + (int) ceil(strlen((string) json_encode(array_merge(array_values($always), array_values($byName)))) / self::CHARS_PER_TOKEN_ESTIMATE);
             if ($estimate <= $this->requestBudgetTokens) {
                 break;
             }
             array_pop($byName);
         }
 
-        $kept = array_values($byName);
+        $kept = array_merge(array_values($always), array_values($byName));
         usort($kept, static fn (array $a, array $b): int => strcmp((string) ($a['name'] ?? $a['function']['name']), (string) ($b['name'] ?? $b['function']['name'])));
 
         return $kept;

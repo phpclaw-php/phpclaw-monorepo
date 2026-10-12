@@ -877,4 +877,66 @@ final class ClawTest extends TestCase
         $this->assertLessThan(5, count($offered));
         $this->assertContains('invoice_lookup', $offered);
     }
+
+    public function test_request_budget_never_drops_an_always_included_tool(): void
+    {
+        $withList = $this->offeredUnderRequestBudget(['epsilon_tool']);
+        $withoutList = $this->offeredUnderRequestBudget([]);
+
+        $this->assertNotContains('epsilon_tool', $withoutList);
+        $this->assertContains('epsilon_tool', $withList);
+        $this->assertContains('invoice_lookup', $withList);
+    }
+
+    private function offeredUnderRequestBudget(array $alwaysInclude): array
+    {
+        $offered = [];
+        $provider = $this->createMock(ProviderInterface::class);
+        $provider->method('name')->willReturn('ollama');
+        $provider->method('model')->willReturn('qwen2.5:7b');
+        $provider->method('send')->willReturnCallback(function (array $messages, array $tools) use (&$offered): array {
+            $offered = array_map(static fn (array $t): string => (string) $t['function']['name'], $tools);
+
+            return ['type' => 'text', 'text' => 'ok', 'input_tokens' => 1, 'output_tokens' => 1];
+        });
+
+        $tools = [];
+        foreach (['invoice_lookup', 'beta_tool', 'gamma_tool', 'delta_tool', 'epsilon_tool'] as $name) {
+            $tools[] = new class($name) implements ToolInterface
+            {
+                public function __construct(private readonly string $n) {}
+
+                public function name(): string
+                {
+                    return $this->n;
+                }
+
+                public function description(): string
+                {
+                    return str_repeat('x', 5000);
+                }
+
+                public function inputSchema(): array
+                {
+                    return ['type' => 'object', 'properties' => []];
+                }
+
+                public function execute(array $input): string
+                {
+                    return 'ok';
+                }
+            };
+        }
+
+        Claw::builder()
+            ->provider('ollama')
+            ->providerOverride($provider)
+            ->useDefaultGuards(false)
+            ->tools($tools)
+            ->alwaysIncludeTools($alwaysInclude)
+            ->build()
+            ->send('look up invoice_lookup');
+
+        return $offered;
+    }
 }

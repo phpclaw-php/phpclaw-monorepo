@@ -111,6 +111,8 @@ final class ClawConfig
 
     public readonly array $piiExemptTools;
 
+    public readonly array $alwaysIncludeTools;
+
     public readonly int $skillMatchLimit;
 
     public readonly int $maxToolsPerTurn;
@@ -194,6 +196,7 @@ final class ClawConfig
         $this->allowPhpWrite = $tools->allowPhpWrite;
         $this->redactToolResultPii = $tools->redactToolResultPii;
         $this->piiExemptTools = $tools->piiExemptTools;
+        $this->alwaysIncludeTools = $tools->alwaysIncludeTools;
         $this->remoteToolProfileUrls = $tools->remoteToolProfileUrls;
         $this->approvalGate = $tools->approvalGate;
 

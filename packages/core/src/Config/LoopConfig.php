@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace PhpClaw\Config;
 
 use PhpClaw\Agent\RunBudget;
+use PhpClaw\Tools\ToolRouter;
 
 /**
  * ReAct loop, retry, and history-window limits for ClawConfig.
@@ -40,7 +41,7 @@ final class LoopConfig
      * @param  int  $maxRetries  Retry attempts for transient provider failures; clamped to >=0.
      * @param  int  $maxHistoryLength  Fire context.overflow when history exceeds this length; 0 disables the check.
      * @param  int  $maxHistoryTokens  Estimated-token ceiling that triggers history compaction; 0 = count-based only.
-     * @param  int  $maxToolsPerTurn  Per-turn tool-schema cap; 0 lets ToolRouter derive a limit from the model id.
+     * @param  int  $maxToolsPerTurn  Per-turn tool-schema cap; 0 lets ToolRouter derive a limit from the model id, ToolRouter::UNLIMITED removes the cap.
      * @param  int  $maxToolResultTokens  Estimated-token ceiling on a single tool result before it is cut; 0 disables the cut.
      * @param  int  $maxTokenBudget  Total input+output token spend ceiling across the run, checked between provider calls only (one reply can overshoot) and excluding compaction summaries; 0 = unlimited; clamped to >=0.
      * @param  int  $maxParseRetries  Structured-output repair-retry attempts before StructuredOutputException; clamped to >=0.
@@ -62,7 +63,7 @@ final class LoopConfig
         $this->maxRetries = max(0, $maxRetries);
         $this->maxHistoryLength = max(0, $maxHistoryLength);
         $this->maxHistoryTokens = max(0, $maxHistoryTokens);
-        $this->maxToolsPerTurn = max(0, $maxToolsPerTurn);
+        $this->maxToolsPerTurn = $maxToolsPerTurn === ToolRouter::UNLIMITED ? ToolRouter::UNLIMITED : max(0, $maxToolsPerTurn);
         $this->maxToolResultTokens = max(0, $maxToolResultTokens);
         $this->maxTokenBudget = max(0, $maxTokenBudget);
         $this->maxParseRetries = max(0, $maxParseRetries);

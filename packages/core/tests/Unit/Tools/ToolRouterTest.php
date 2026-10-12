@@ -517,4 +517,116 @@ final class ToolRouterTest extends TestCase
         $this->assertLessThanOrEqual(2000, strlen($neutral.'List the latest posts. '.$neutral));
         $this->assertSame(['wp_query'], $this->names($out));
     }
+
+    public function test_always_included_tools_are_sent_even_when_they_rank_below_the_limit(): void
+    {
+        $message = 'list and search products in the store catalog';
+        $without = $this->names((new ToolRouter(0))->filter($this->schemas(), $message, 'claude-haiku-4-5'));
+        $with = $this->names((new ToolRouter(0, 0.0, ['zip_package', 'fixture_tool_5']))->filter($this->schemas(), $message, 'claude-haiku-4-5'));
+
+        $this->assertNotContains('zip_package', $without);
+        $this->assertNotContains('fixture_tool_5', $without);
+        $this->assertContains('zip_package', $with);
+        $this->assertContains('fixture_tool_5', $with);
+    }
+
+    public function test_always_included_tools_do_not_count_against_the_limit(): void
+    {
+        $out = (new ToolRouter(0, 0.0, ['zip_package', 'fixture_tool_5']))->filter($this->schemas(), 'do something generic', 'claude-haiku-4-5');
+
+        $this->assertCount(8, $out);
+    }
+
+    public function test_an_always_included_name_that_is_not_registered_is_skipped(): void
+    {
+        $without = $this->names((new ToolRouter(0))->filter($this->schemas(), 'do something generic', 'claude-haiku-4-5'));
+        $with = $this->names((new ToolRouter(0, 0.0, ['no_such_tool']))->filter($this->schemas(), 'do something generic', 'claude-haiku-4-5'));
+
+        $this->assertSame($without, $with);
+    }
+
+    public function test_no_always_include_list_keeps_todays_selection(): void
+    {
+        $default = $this->names((new ToolRouter(0))->filter($this->schemas(), 'manage discount coupons', 'claude-haiku-4-5'));
+        $empty = $this->names((new ToolRouter(0, 0.0, []))->filter($this->schemas(), 'manage discount coupons', 'claude-haiku-4-5'));
+
+        $this->assertSame($default, $empty);
+    }
+
+    public function test_always_include_with_unlimited_returns_every_schema_once(): void
+    {
+        $names = $this->names((new ToolRouter(ToolRouter::UNLIMITED, 0.0, ['file_read']))->filter($this->schemas(), 'anything', 'claude-haiku-4-5'));
+
+        $this->assertCount(15, $names);
+        $this->assertSame($names, array_values(array_unique($names)));
+    }
+
+    public function test_a_message_named_tool_that_is_also_always_included_is_sent_once(): void
+    {
+        $names = $this->names((new ToolRouter(0, 0.0, ['file_read']))->filter($this->schemas(), 'use file_read on the log', 'claude-haiku-4-5'));
+
+        $this->assertSame(1, count(array_keys($names, 'file_read', true)));
+        $this->assertCount(7, $names);
+    }
+
+    public function test_always_include_names_match_case_insensitively(): void
+    {
+        $names = $this->names((new ToolRouter(0, 0.0, ['ZIP_Package']))->filter($this->schemas(), 'list and search products in the store catalog', 'claude-haiku-4-5'));
+
+        $this->assertContains('zip_package', $names);
+    }
+
+    public function test_always_included_lists_each_name_once_in_lowercase(): void
+    {
+        $router = new ToolRouter(0, 0.0, ['File_Read', 'file_read', 'zip_package']);
+
+        $this->assertSame(['file_read', 'zip_package'], $router->alwaysIncluded());
+    }
+
+    public function test_always_included_tools_are_ranked_first_for_budget_trimming(): void
+    {
+        $router = new ToolRouter(0, 0.0, ['fixture_tool_5']);
+        $router->filter($this->schemas(), 'do something generic', 'claude-haiku-4-5');
+
+        $this->assertSame('fixture_tool_5', $router->lastRankedNames()[0]);
+    }
+
+    public function test_builder_unlimited_sends_every_tool_to_a_haiku_model(): void
+    {
+        $offered = $this->offeredByHaiku(static fn ($builder) => $builder->maxToolsPerTurn(ToolRouter::UNLIMITED), 'unrelated question');
+
+        $this->assertCount(10, $offered);
+    }
+
+    public function test_builder_always_include_reaches_the_router(): void
+    {
+        $offered = $this->offeredByHaiku(static fn ($builder) => $builder->alwaysIncludeTools(['tool_9']), 'unrelated question');
+
+        $this->assertContains('tool_9', $offered);
+        $this->assertCount(7, $offered);
+    }
+
+    private function offeredByHaiku(callable $configure, string $message): array
+    {
+        $offered = [];
+        $provider = $this->createMock(ProviderInterface::class);
+        $provider->method('name')->willReturn('anthropic');
+        $provider->method('model')->willReturn('claude-haiku-4-5-20251001');
+        $provider->method('send')->willReturnCallback(function (array $messages, array $tools) use (&$offered): array {
+            $offered = $this->names($tools);
+
+            return ['type' => 'text', 'text' => 'ok', 'input_tokens' => 1, 'output_tokens' => 1];
+        });
+
+        $tools = [];
+        for ($n = 0; $n < 10; $n++) {
+            $tools[] = $this->routedTool('tool_'.$n, 'generic helper', []);
+        }
+
+        $configure(Claw::builder()->providerOverride($provider)->useDefaultGuards(false)->tools($tools))
+            ->build()
+            ->send($message);
+
+        return $offered;
+    }
 }
