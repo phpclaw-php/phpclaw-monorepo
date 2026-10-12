@@ -73,6 +73,15 @@ return [
         explode(',', (string) env('PHPCLAW_TOOL_DENY', ''))
     ))),
 
+    // Tools sent to the model per turn: 0 uses the profile and model limit, -1 sends every tool, N sends N.
+    'max_tools_per_turn' => (int) env('PHPCLAW_MAX_TOOLS_PER_TURN', 0),
+
+    // Tool names sent on every turn, outside max_tools_per_turn, e.g. file_read,file_edit.
+    'always_include_tools' => array_values(array_filter(array_map(
+        'trim',
+        explode(',', (string) env('PHPCLAW_ALWAYS_INCLUDE_TOOLS', ''))
+    ))),
+
     'shell_allowlist' => ToolConfig::DEFAULT_SHELL_ALLOWLIST,
 
     'tools' => [],

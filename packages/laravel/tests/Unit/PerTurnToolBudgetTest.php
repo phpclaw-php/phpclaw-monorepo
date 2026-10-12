@@ -52,14 +52,56 @@ final class PerTurnToolBudgetTest extends TestCase
         self::assertSame(8, EngineFactory::build($this->app)->config()->maxToolsPerTurn);
     }
 
-    public function test_a_cloud_provider_stays_uncapped(): void
+    public function test_a_cloud_provider_gets_the_model_derived_limit(): void
     {
         config(['phpclaw.provider' => 'openai', 'phpclaw.model' => 'gpt-4o']);
 
         self::assertSame(
             0,
             EngineFactory::build($this->app)->config()->maxToolsPerTurn,
-            'a cloud model must not be capped by the local-provider profile',
+            'a cloud model is not capped by the local-provider profile; 0 lets ToolRouter derive the limit from the model id',
         );
+    }
+
+    public function test_max_tools_per_turn_from_config_overrides_the_profile(): void
+    {
+        config(['phpclaw.provider' => 'ollama', 'phpclaw.model' => 'qwen2.5:7b', 'phpclaw.max_tools_per_turn' => 3]);
+
+        self::assertSame(3, EngineFactory::build($this->app)->config()->maxToolsPerTurn);
+    }
+
+    public function test_minus_one_from_config_removes_the_cap(): void
+    {
+        config(['phpclaw.provider' => 'anthropic', 'phpclaw.model' => 'claude-haiku-5-5', 'phpclaw.max_tools_per_turn' => -1]);
+
+        self::assertSame(-1, EngineFactory::build($this->app)->config()->maxToolsPerTurn);
+    }
+
+    public function test_zero_keeps_the_profile_limit(): void
+    {
+        config(['phpclaw.provider' => 'ollama', 'phpclaw.model' => 'qwen2.5:7b', 'phpclaw.max_tools_per_turn' => 0]);
+
+        self::assertSame(5, EngineFactory::build($this->app)->config()->maxToolsPerTurn);
+    }
+
+    public function test_always_include_tools_from_config_reach_the_engine(): void
+    {
+        config(['phpclaw.provider' => 'anthropic', 'phpclaw.model' => 'claude-haiku-5-5', 'phpclaw.always_include_tools' => ['file_read', 'code_search']]);
+
+        self::assertSame(['file_read', 'code_search'], EngineFactory::build($this->app)->config()->alwaysIncludeTools);
+    }
+
+    public function test_always_include_and_tool_deny_on_the_same_name_keeps_it_denied(): void
+    {
+        config([
+            'phpclaw.provider' => 'anthropic',
+            'phpclaw.model' => 'claude-haiku-5-5',
+            'phpclaw.tool_deny' => ['file_read'],
+            'phpclaw.always_include_tools' => ['file_read'],
+        ]);
+
+        $names = array_map(static fn ($tool): string => $tool->name(), EngineFactory::build($this->app)->config()->tools);
+
+        self::assertNotContains('file_read', $names);
     }
 }

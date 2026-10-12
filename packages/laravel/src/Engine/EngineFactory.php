@@ -70,7 +70,8 @@ final class EngineFactory
             ->model((string) config('phpclaw.model', ''))
             ->storeMessages((bool) config('phpclaw.store_messages', true))
             ->maxIterations(max(1, min(50, (int) config('phpclaw.max_iterations', ClawConfig::DEFAULT_MAX_ITERATIONS))))
-            ->maxToolsPerTurn(ToolProfileResolver::maxTools(ToolProfileResolver::resolve($providerSlug, (string) config('phpclaw.model', ''))))
+            ->maxToolsPerTurn(self::resolveMaxToolsPerTurn($providerSlug))
+            ->alwaysIncludeTools((array) config('phpclaw.always_include_tools', []))
             ->tools(self::resolveTools($app))
             ->shellAllowlist((array) config('phpclaw.shell_allowlist', []))
             ->memory($memory)
@@ -321,5 +322,20 @@ final class EngineFactory
     private static function resolveSkills(): array
     {
         return SkillResolver::resolve((array) config('phpclaw.skills', []));
+    }
+
+    /**
+     * Per-turn tool cap: the configured max_tools_per_turn, or the provider and model profile limit when it is 0.
+     *
+     * @param  string  $providerSlug  Provider in use.
+     * @return int Cap passed to the builder.
+     */
+    private static function resolveMaxToolsPerTurn(string $providerSlug): int
+    {
+        $configured = (int) config('phpclaw.max_tools_per_turn', 0);
+
+        return $configured === 0
+            ? ToolProfileResolver::maxTools(ToolProfileResolver::resolve($providerSlug, (string) config('phpclaw.model', '')))
+            : $configured;
     }
 }
