@@ -3,6 +3,14 @@
 An AI agent inside your Symfony application. Ask it in plain English about your database and
 application logs, from the console, from your own code, or over REST. Works on Symfony 6.4, 7 and 8.
 
+## 0.1.4 (2026-10-12)
+
+### Added
+- Max tools per turn and always-include tools settings (#164)
+
+### Fixed
+- List max_tools_per_turn and always_include_tools in the shipped config (#168)
+
 ## 0.1.3 (2026-10-09)
 
 ### Added

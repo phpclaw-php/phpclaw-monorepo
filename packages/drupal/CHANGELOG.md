@@ -4,6 +4,11 @@ An AI agent inside your Drupal admin. Ask it in plain English about nodes, users
 media, menus, blocks, views, modules, roles, path aliases, webforms, configuration, cron and cache
 status, and it answers from your own site data. Works on Drupal 10 and 11.
 
+## 0.1.4 (2026-10-12)
+
+### Added
+- Add drush phpclaw:chat and --conv-id/--continue/--trace on phpclaw:run (#166)
+
 ## 0.1.3 (2026-10-09)
 
 ### Fixed
