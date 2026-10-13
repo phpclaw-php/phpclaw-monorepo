@@ -4,6 +4,12 @@ An AI agent inside your OpenCart admin. Ask it in plain English about products,
 categories, orders, customers, coupons, manufacturers, reviews and shipping, and
 it answers from your own store data. Works on OpenCart 3.x and 4.x.
 
+## 0.1.5 (2026-10-13)
+
+### Added
+- Configurable per-turn tool cap and always-include tools (#158)
+- Interactive CLI chat and session flags on send (#174)
+
 ## 0.1.4 (2026-10-09)
 
 ### Added
