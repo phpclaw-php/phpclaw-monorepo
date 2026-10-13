@@ -80,6 +80,10 @@ final class AdminPhpClawGuideController extends AdminPhpClawBaseController
             ['command' => 'php modules/phpclaw/cli/phpclaw.php send "prompt" --provider=anthropic',    'description' => 'Override provider for one call.'],
             ['command' => 'php modules/phpclaw/cli/phpclaw.php send "prompt" --model=claude-opus-4-8', 'description' => 'Override model for one call.'],
             ['command' => 'php modules/phpclaw/cli/phpclaw.php send "prompt" --stream',                'description' => 'Stream the response token-by-token.'],
+            ['command' => 'php modules/phpclaw/cli/phpclaw.php send "prompt" --continue',              'description' => 'Continue the last conversation.'],
+            ['command' => 'php modules/phpclaw/cli/phpclaw.php send "prompt" --conv-id=<id>',          'description' => 'Continue a specific conversation by id.'],
+            ['command' => 'php modules/phpclaw/cli/phpclaw.php chat',                                  'description' => 'Open an interactive phpClaw session.'],
+            ['command' => 'php modules/phpclaw/cli/phpclaw.php chat --continue',                       'description' => 'Resume the last conversation in chat.'],
             ['command' => 'php modules/phpclaw/cli/phpclaw.php mcp-server',                            'description' => 'Start the phpClaw MCP server (stdio transport).'],
         ];
     }

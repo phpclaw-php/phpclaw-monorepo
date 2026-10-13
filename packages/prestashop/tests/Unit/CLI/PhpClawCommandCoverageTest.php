@@ -126,7 +126,7 @@ final class PhpClawCommandCoverageTest extends TestCase
         $ref->setAccessible(true);
 
         ob_start();
-        $ref->invoke($command, $engine, 'test msg');
+        $ref->invoke($command, $engine, $this->makeConversation(), 'test msg');
         ob_get_clean();
 
         self::assertSame(1, $this->lastExitCode);
@@ -144,7 +144,7 @@ final class PhpClawCommandCoverageTest extends TestCase
         $ref->setAccessible(true);
 
         ob_start();
-        $ref->invoke($command, $engine, 'test msg');
+        $ref->invoke($command, $engine, $this->makeConversation(), 'test msg');
         ob_get_clean();
 
         self::assertSame(1, $this->lastExitCode);
@@ -162,7 +162,7 @@ final class PhpClawCommandCoverageTest extends TestCase
         $ref->setAccessible(true);
 
         ob_start();
-        $ref->invoke($command, $engine, 'test msg');
+        $ref->invoke($command, $engine, $this->makeConversation(), 'test msg');
         ob_get_clean();
 
         self::assertSame(1, $this->lastExitCode);
@@ -180,7 +180,7 @@ final class PhpClawCommandCoverageTest extends TestCase
         $ref->setAccessible(true);
 
         ob_start();
-        $ref->invoke($command, $engine, 'test msg');
+        $ref->invoke($command, $engine, $this->makeConversation(), 'test msg');
         ob_get_clean();
 
         self::assertSame(1, $this->lastExitCode);
@@ -198,7 +198,7 @@ final class PhpClawCommandCoverageTest extends TestCase
         $ref->setAccessible(true);
 
         ob_start();
-        $ref->invoke($command, $engine, 'test msg');
+        $ref->invoke($command, $engine, $this->makeConversation(), 'test msg');
         ob_get_clean();
 
         self::assertSame(1, $this->lastExitCode);
@@ -216,7 +216,7 @@ final class PhpClawCommandCoverageTest extends TestCase
         $ref->setAccessible(true);
 
         ob_start();
-        $ref->invoke($command, $engine, 'test msg');
+        $ref->invoke($command, $engine, $this->makeConversation(), 'test msg');
         ob_get_clean();
 
         self::assertSame(1, $this->lastExitCode);
@@ -237,7 +237,7 @@ final class PhpClawCommandCoverageTest extends TestCase
         $ref->setAccessible(true);
 
         ob_start();
-        $ref->invoke($command, $engine, 'What is my stock level?');
+        $ref->invoke($command, $engine, $this->makeConversation(), 'What is my stock level?');
         $output = ob_get_clean();
 
         self::assertStringContainsString('Hello from the agent.', $output);
@@ -258,7 +258,7 @@ final class PhpClawCommandCoverageTest extends TestCase
         $ref->setAccessible(true);
 
         ob_start();
-        $ref->invoke($command, $engine, 'test message');
+        $ref->invoke($command, $engine, $this->makeConversation(), 'test message');
         $output = ob_get_clean();
 
         self::assertStringEndsWith("\n", $output);
@@ -284,7 +284,7 @@ final class PhpClawCommandCoverageTest extends TestCase
         $ref->setAccessible(true);
 
         ob_start();
-        $ref->invoke($command, $engine, 'hello stream');
+        $ref->invoke($command, $engine, $this->makeConversation(), 'hello stream');
         ob_end_clean();
 
         self::assertSame('hello stream', $calledWith);
@@ -312,7 +312,7 @@ final class PhpClawCommandCoverageTest extends TestCase
         $ref->setAccessible(true);
 
         ob_start();
-        $ref->invoke($command, $engine, 'stream test');
+        $ref->invoke($command, $engine, $this->makeConversation(), 'stream test');
         ob_end_clean();
 
         self::assertSame(['part1', 'part2'], $tokensReceived);
@@ -494,7 +494,7 @@ final class PhpClawCommandCoverageTest extends TestCase
         $ref->setAccessible(true);
 
         ob_start();
-        $ref->invoke($command, $engine, 'revenue report');
+        $ref->invoke($command, $engine, $this->makeConversation(), 'revenue report');
         $output = ob_get_clean();
 
         self::assertStringContainsString('Revenue: €12,000', $output);
@@ -596,7 +596,7 @@ final class PhpClawCommandCoverageTest extends TestCase
         $command = $this->makeCommand($engine);
 
         ob_start();
-        (new \ReflectionMethod(PhpClawCommand::class, 'runSync'))->invoke($command, $engine, 'test msg');
+        (new \ReflectionMethod(PhpClawCommand::class, 'runSync'))->invoke($command, $engine, $this->makeConversation(), 'test msg');
         ob_get_clean();
 
         self::assertSame(1, $this->lastExitCode);
@@ -611,7 +611,7 @@ final class PhpClawCommandCoverageTest extends TestCase
         $command = $this->makeCommand($engine);
 
         ob_start();
-        (new \ReflectionMethod(PhpClawCommand::class, 'runStream'))->invoke($command, $engine, 'test msg');
+        (new \ReflectionMethod(PhpClawCommand::class, 'runStream'))->invoke($command, $engine, $this->makeConversation(), 'test msg');
         ob_get_clean();
 
         self::assertSame(1, $this->lastExitCode);
@@ -633,7 +633,7 @@ final class PhpClawCommandCoverageTest extends TestCase
         $engine->allows('streamInConversation')->andThrow(new ProviderException('rate limit wait exceeded', statusCode: 429));
 
         $stderr = $this->captureStderr(function () use ($engine, $method): void {
-            (new \ReflectionMethod(PhpClawCommand::class, $method))->invoke($this->makeCommand($engine), $engine, 'test msg');
+            (new \ReflectionMethod(PhpClawCommand::class, $method))->invoke($this->makeCommand($engine), $engine, $this->makeConversation(), 'test msg');
         });
 
         self::assertStringContainsString('phpClaw: Rate limit reached, try again shortly.', $stderr);
@@ -649,7 +649,7 @@ final class PhpClawCommandCoverageTest extends TestCase
         $engine->allows('streamInConversation')->andThrow(new TokenBudgetExceededException(1200, 1000));
 
         $stderr = $this->captureStderr(function () use ($engine, $method): void {
-            (new \ReflectionMethod(PhpClawCommand::class, $method))->invoke($this->makeCommand($engine), $engine, 'test msg');
+            (new \ReflectionMethod(PhpClawCommand::class, $method))->invoke($this->makeCommand($engine), $engine, $this->makeConversation(), 'test msg');
         });
 
         self::assertStringContainsString('phpClaw: Token budget reached for this run.', $stderr);
@@ -664,7 +664,7 @@ final class PhpClawCommandCoverageTest extends TestCase
         $engine->allows('streamInConversation')->andThrow(new ProviderException('provider down', statusCode: 500));
 
         $stderr = $this->captureStderr(function () use ($engine): void {
-            (new \ReflectionMethod(PhpClawCommand::class, 'runSync'))->invoke($this->makeCommand($engine), $engine, 'test msg');
+            (new \ReflectionMethod(PhpClawCommand::class, 'runSync'))->invoke($this->makeCommand($engine), $engine, $this->makeConversation(), 'test msg');
         });
 
         self::assertStringContainsString('phpClaw: provider error: provider down', $stderr);

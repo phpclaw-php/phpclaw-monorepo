@@ -5,6 +5,7 @@ declare(strict_types=1);
 use PhpClaw\Mcp\PhpClawMcpServer;
 use PhpClaw\Mcp\StdoutPurity;
 use PhpClaw\Mcp\Transport\StdioTransport;
+use PhpClaw\PrestaShop\CLI\ChatCommand;
 use PhpClaw\PrestaShop\CLI\PhpClawCommand;
 use PhpClaw\PrestaShop\Db\PsDbAdapter;
 use PhpClaw\PrestaShop\Plugin;
@@ -93,6 +94,10 @@ match ($sub) {
         ['args' => $args, 'flags' => $flags] = parseArgs($rest);
         (new PhpClawCommand($plugin))->run($args, $flags);
     })(),
+    'chat' => (static function () use ($plugin, $rest): void {
+        ['flags' => $flags] = parseArgs($rest);
+        (new ChatCommand($plugin))->run($flags);
+    })(),
     'mcp-server' => (static function () use ($plugin): void {
         $registry = new ToolRegistry;
         $registry->register($plugin->guideTools());
@@ -107,11 +112,16 @@ match ($sub) {
         echo "phpClaw CLI: AI agent runner for PrestaShop\n\n";
         echo "Usage:\n";
         echo "  php modules/phpclaw/cli/phpclaw.php send \"<prompt>\" [--stream] [--provider=<p>] [--model=<m>]\n";
+        echo "  php modules/phpclaw/cli/phpclaw.php send \"<prompt>\" [--conv-id=<id>] [--continue] [--trace]\n";
+        echo "  php modules/phpclaw/cli/phpclaw.php chat [--conv-id=<id>] [--continue]\n";
         echo "  php modules/phpclaw/cli/phpclaw.php mcp-server\n\n";
         echo "Examples:\n";
         echo "  php modules/phpclaw/cli/phpclaw.php send \"what are my top 5 products by revenue?\"\n";
         echo "  php modules/phpclaw/cli/phpclaw.php send \"check stock levels\" --stream\n";
         echo "  php modules/phpclaw/cli/phpclaw.php send \"summarise orders\" --provider=openai --model=gpt-4o\n";
+        echo "  php modules/phpclaw/cli/phpclaw.php send \"and the rest?\" --continue\n";
+        echo "  php modules/phpclaw/cli/phpclaw.php chat\n";
+        echo "  php modules/phpclaw/cli/phpclaw.php chat --continue\n";
         exit(0);
     })(),
 };
