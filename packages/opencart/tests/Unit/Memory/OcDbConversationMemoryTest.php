@@ -8,6 +8,7 @@ use PhpClaw\Exceptions\MemoryException;
 use PhpClaw\OpenCart\Exceptions\ConversationAccessDeniedException;
 use PhpClaw\OpenCart\Memory\OcDbConversationMemory;
 use PhpClaw\OpenCart\Tests\Helpers\OcDbTestCase;
+use PHPUnit\Framework\Attributes\RunInSeparateProcess;
 
 final class OcDbConversationMemoryTest extends OcDbTestCase
 {
@@ -341,6 +342,54 @@ final class OcDbConversationMemoryTest extends OcDbTestCase
         $result = $this->memory->get($id, 'default');
         self::assertIsArray($result);
         self::assertNull($result['metadata']);
+    }
+
+    public function test_the_console_reopens_its_own_conversation(): void
+    {
+        $console = new OcDbConversationMemory($this->db, $this->prefix, true, 0, false, console: true);
+        $console->set('conv-console-own-0001', ['title' => 'CLI', 'history' => []], 'default');
+
+        $loaded = $console->get('conv-console-own-0001', 'default');
+
+        self::assertIsArray($loaded);
+        self::assertSame('CLI', $loaded['title']);
+    }
+
+    #[RunInSeparateProcess]
+    public function test_the_console_marker_lets_the_cli_reopen_its_own_conversation(): void
+    {
+        define('PHPCLAW_OC_CONSOLE', true);
+        $cli = new OcDbConversationMemory($this->db, $this->prefix, true, 0, false);
+        $cli->set('conv-console-marker-01', ['title' => 'CLI', 'history' => []], 'default');
+
+        self::assertSame('CLI', $cli->get('conv-console-marker-01', 'default')['title']);
+    }
+
+    public function test_without_the_console_flag_an_owner_zero_conversation_stays_hidden(): void
+    {
+        (new OcDbConversationMemory($this->db, $this->prefix, true, 0, false, console: true))->set('conv-console-hidden-01', ['title' => 'CLI', 'history' => []], 'default');
+
+        $this->expectException(ConversationAccessDeniedException::class);
+
+        (new OcDbConversationMemory($this->db, $this->prefix, true, 0, false))->get('conv-console-hidden-01', 'default');
+    }
+
+    public function test_the_console_flag_never_opens_another_users_conversation(): void
+    {
+        $this->memory->set('conv-console-user1-001', ['title' => 'User1', 'history' => []], 'default');
+
+        $this->expectException(ConversationAccessDeniedException::class);
+
+        (new OcDbConversationMemory($this->db, $this->prefix, true, 0, false, console: true))->get('conv-console-user1-001', 'default');
+    }
+
+    public function test_the_console_flag_opens_owner_zero_only_for_acting_id_zero(): void
+    {
+        (new OcDbConversationMemory($this->db, $this->prefix, true, 0, false, console: true))->set('conv-console-actor-001', ['title' => 'CLI', 'history' => []], 'default');
+
+        $this->expectException(ConversationAccessDeniedException::class);
+
+        (new OcDbConversationMemory($this->db, $this->prefix, true, 5, false, console: true))->get('conv-console-actor-001', 'default');
     }
 
     public function test_all_scoped_to_current_user(): void

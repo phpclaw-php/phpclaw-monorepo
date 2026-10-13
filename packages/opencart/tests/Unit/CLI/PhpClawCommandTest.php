@@ -488,6 +488,121 @@ final class PhpClawCommandTest extends TestCase
         self::assertStringContainsString('phpClaw: provider error. provider down', $stderr);
     }
 
+    public function test_run_accepts_conv_id_flag_without_crashing(): void
+    {
+        $exitCode = null;
+        $cmd = $this->makeCommand($exitCode);
+
+        ob_start();
+        $cmd->run(['hello'], ['conv-id' => '01TESTCONVID0GHJKMNPQRST0']);
+        ob_end_clean();
+
+        self::assertTrue($exitCode === null || $exitCode === 1);
+    }
+
+    public function test_run_accepts_continue_flag_without_crashing(): void
+    {
+        $exitCode = null;
+        $cmd = $this->makeCommand($exitCode);
+
+        ob_start();
+        $cmd->run(['hello'], ['continue' => 'true']);
+        ob_end_clean();
+
+        self::assertTrue($exitCode === null || $exitCode === 1);
+    }
+
+    public function test_run_sync_with_tool_output_enabled_registers_a_listener_then_removes_it(): void
+    {
+        HookRegistry::reset();
+        $before = HookRegistry::count();
+        $hookCountDuringRun = null;
+
+        $engine = $this->createMock(ClawInterface::class);
+        $engine->method('conversation')->willReturn($this->makeConversation());
+        $engine->method('streamInConversation')->willReturnCallback(
+            function () use (&$hookCountDuringRun): ConversationTurn {
+                $hookCountDuringRun = HookRegistry::count();
+
+                return $this->makeTurn('ok');
+            },
+        );
+
+        $cmd = $this->makeCommand();
+
+        ob_start();
+        (new \ReflectionMethod($cmd, 'runSync'))->invoke($cmd, $engine, 'test', null, true);
+        ob_end_clean();
+
+        self::assertGreaterThan($before, $hookCountDuringRun ?? 0);
+        self::assertSame($before, HookRegistry::count());
+    }
+
+    public function test_run_stream_with_tool_output_enabled_registers_a_listener_then_removes_it(): void
+    {
+        HookRegistry::reset();
+        $before = HookRegistry::count();
+        $hookCountDuringRun = null;
+
+        $engine = $this->createMock(ClawInterface::class);
+        $engine->method('conversation')->willReturn($this->makeConversation());
+        $engine->method('streamInConversation')->willReturnCallback(
+            function (Conversation $c, string $m, callable $cb) use (&$hookCountDuringRun): ConversationTurn {
+                $hookCountDuringRun = HookRegistry::count();
+                $cb('token');
+
+                return $this->makeTurn('ok');
+            },
+        );
+
+        $cmd = $this->makeCommand();
+
+        ob_start();
+        (new \ReflectionMethod($cmd, 'runStream'))->invoke($cmd, $engine, 'test', null, true);
+        ob_end_clean();
+
+        self::assertGreaterThan($before, $hookCountDuringRun ?? 0);
+        self::assertSame($before, HookRegistry::count());
+    }
+
+    public function test_run_sync_summary_line_keeps_the_existing_format_with_the_conversation_id(): void
+    {
+        $conv = $this->makeConversation('any-id');
+        $engine = $this->createMock(ClawInterface::class);
+        $engine->method('conversation')->willReturn($conv);
+        $engine->method('streamInConversation')->willReturnCallback(
+            fn (Conversation $c): ConversationTurn => new ConversationTurn($this->makeResponse('answer'), $c),
+        );
+
+        $cmd = $this->makeCommand();
+        $stderr = $this->captureStderr(
+            static fn () => (new \ReflectionMethod($cmd, 'runSync'))->invoke($cmd, $engine, 'test'),
+        );
+
+        self::assertMatchesRegularExpression('/^\n\[provider:\S+ model:\S+ tokens:\d+ iterations:\d+ conversation:any-id\]\n$/', $stderr);
+    }
+
+    public function test_run_stream_writes_only_a_newline_to_stderr_on_success(): void
+    {
+        $conv = $this->makeConversation('any-stream-id');
+        $engine = $this->createMock(ClawInterface::class);
+        $engine->method('conversation')->willReturn($conv);
+        $engine->method('streamInConversation')->willReturnCallback(
+            function (Conversation $c, string $m, callable $cb): ConversationTurn {
+                $cb('token');
+
+                return new ConversationTurn($this->makeResponse('stream-answer'), $c);
+            },
+        );
+
+        $cmd = $this->makeCommand();
+        $stderr = $this->captureStderr(
+            static fn () => (new \ReflectionMethod($cmd, 'runStream'))->invoke($cmd, $engine, 'test'),
+        );
+
+        self::assertSame('', $stderr);
+    }
+
     private function captureStderr(callable $run): string
     {
         StderrCapture::$buffer = '';
@@ -507,6 +622,59 @@ final class PhpClawCommandTest extends TestCase
         }
 
         return StderrCapture::$buffer;
+    }
+
+    public function test_trace_summarises_each_tool_kind_and_cuts_a_long_input(): void
+    {
+        $cmd = $this->makeCommand();
+        $summarise = new \ReflectionMethod($cmd, 'summarizeToolCall');
+
+        self::assertSame('file_write: notes.txt (4 bytes)', $summarise->invoke($cmd, 'file_write', ['path' => 'notes.txt', 'content' => 'abcd']));
+        self::assertSame('file_read: config.php', $summarise->invoke($cmd, 'file_read', ['file' => 'config.php']));
+        self::assertSame('shell_exec: '.str_repeat('x', 80).'...', $summarise->invoke($cmd, 'shell_exec', ['command' => str_repeat('x', 90)."\nrm"]));
+        self::assertSame('oc_order', $summarise->invoke($cmd, 'oc_order', ['limit' => 5]));
+    }
+
+    public function test_starting_the_trace_twice_keeps_one_listener(): void
+    {
+        HookRegistry::reset();
+        $cmd = $this->makeCommand();
+        $start = new \ReflectionMethod($cmd, 'startToolTrace');
+
+        $start->invoke($cmd, static function (string $line): void {});
+        $start->invoke($cmd, static function (string $line): void {});
+
+        self::assertSame(1, HookRegistry::count(LifecycleEvent::ToolBefore->value));
+        (new \ReflectionMethod($cmd, 'stopToolTrace'))->invoke($cmd);
+        self::assertSame(0, HookRegistry::count(LifecycleEvent::ToolBefore->value));
+    }
+
+    public function test_the_stderr_trace_prints_one_line_per_tool_call(): void
+    {
+        HookRegistry::reset();
+        $cmd = $this->makeCommand();
+
+        $stderr = $this->captureStderr(static function () use ($cmd): void {
+            (new \ReflectionMethod($cmd, 'startStderrTrace'))->invoke($cmd, true);
+            HookRegistry::fire(LifecycleEvent::ToolBefore->value, ['tool_name' => 'shell_exec', 'tool_input' => ['command' => 'ls -la']]);
+            (new \ReflectionMethod($cmd, 'stopToolTrace'))->invoke($cmd);
+        });
+
+        self::assertSame("  > shell_exec: ls -la\n", $stderr);
+    }
+
+    public function test_the_tool_call_collector_keeps_only_named_calls(): void
+    {
+        HookRegistry::reset();
+        $cmd = $this->makeCommand();
+        $collected = [];
+
+        $listener = (new \ReflectionMethod($cmd, 'collectToolCalls'))->invokeArgs($cmd, [&$collected]);
+        HookRegistry::fire(LifecycleEvent::ToolAfter->value, ['tool_name' => '', 'tool_input' => []]);
+        HookRegistry::fire(LifecycleEvent::ToolAfter->value, ['tool_name' => 'oc_order', 'tool_input' => ['limit' => 2], 'tool_result' => 'ok']);
+        HookRegistry::off(LifecycleEvent::ToolAfter->value, $listener);
+
+        self::assertSame([['tool_name' => 'oc_order', 'tool_input' => ['limit' => 2], 'tool_result' => 'ok']], $collected);
     }
 }
 

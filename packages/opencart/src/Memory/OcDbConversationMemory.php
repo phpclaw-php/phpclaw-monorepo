@@ -34,6 +34,7 @@ final class OcDbConversationMemory implements MemoryInterface
      * @param  bool  $storeMessages  Whether to persist message history.
      * @param  int  $actingUserId  The authenticated user's ID. 0 means CLI/unowned sentinel.
      * @param  bool  $manageAll  Whether the caller holds the manage-all conversations grant.
+     * @param  bool|null  $console  Whether the caller is the CLI, which may open the owner-0 conversations it wrote; null reads the console marker.
      */
     public function __construct(
         private readonly ?OcDbInterface $db,
@@ -41,6 +42,7 @@ final class OcDbConversationMemory implements MemoryInterface
         private bool $storeMessages = true,
         private readonly int $actingUserId = 0,
         private readonly bool $manageAll = false,
+        private readonly ?bool $console = null,
     ) {
         $resolved = OcTablePrefix::resolve($tablePrefix);
         $this->convTable = $resolved.'phpclaw_conversations';
@@ -289,6 +291,10 @@ final class OcDbConversationMemory implements MemoryInterface
         }
 
         $rowOwnerId = (int) $rawOwnerId;
+
+        if ($rowOwnerId === 0 && $this->actingUserId === 0 && ($this->console ?? (defined('PHPCLAW_OC_CONSOLE') && constant('PHPCLAW_OC_CONSOLE') === true))) {
+            return;
+        }
 
         if ($rowOwnerId === 0 || $rowOwnerId !== $this->actingUserId) {
             throw new ConversationAccessDeniedException('Access denied.');

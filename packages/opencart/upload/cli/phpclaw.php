@@ -7,8 +7,10 @@ declare(strict_types=1);
  */
 
 use Opencart\System\Engine\Autoloader;
+use PhpClaw\Contracts\ClawInterface;
 use PhpClaw\Mcp\PhpClawMcpServer;
 use PhpClaw\Mcp\Transport\StdioTransport;
+use PhpClaw\OpenCart\CLI\ChatCommand;
 use PhpClaw\OpenCart\CLI\PhpClawCommand;
 use PhpClaw\OpenCart\Db\OcDbAdapter;
 use PhpClaw\OpenCart\Plugin;
@@ -122,6 +124,8 @@ $plugin = Plugin::getInstance($tablePrefix, null, $dbAdapter);
 $argv = $_SERVER['argv'] ?? [];
 $sub = $argv[1] ?? '';
 $rest = array_slice($argv, 2);
+$storageDir = defined('DIR_STORAGE') ? (string) DIR_STORAGE : '';
+$scriptPath = (string) ($argv[0] ?? 'phpclaw.php');
 
 /**
  * Split remaining argv into positional args and --key[=value] flags.
@@ -150,9 +154,23 @@ function parseArgs(array $argv): array
 }
 
 match ($sub) {
-    'send' => (static function () use ($rest, $plugin): void {
+    'send' => (static function () use ($rest, $plugin, $storageDir): void {
         ['args' => $args, 'flags' => $flags] = parseArgs($rest);
-        (new PhpClawCommand($plugin))->run($args, $flags);
+        (new PhpClawCommand($plugin, null, $storageDir))->run($args, $flags);
+    })(),
+    'chat' => (static function () use ($rest, $plugin, $storageDir, $scriptPath): void {
+        ['flags' => $flags] = parseArgs($rest);
+        $factory = static function (string $provider, string $model) use ($plugin): ClawInterface {
+            if ($provider === '' && $model === '') {
+                return $plugin->buildScopedEngine(0, false, callerMayUseModule: true, mayQueryRaw: true);
+            }
+
+            return $plugin->buildScopedEngineWithOverrides(0, false, overrides: array_filter(compact('provider', 'model'), static fn (string $value): bool => $value !== ''), callerMayUseModule: true, mayQueryRaw: true);
+        };
+        (new ChatCommand($factory, $storageDir, $scriptPath))->run(
+            conversationId: $flags['conv-id'] ?? '',
+            continue: isset($flags['continue']),
+        );
     })(),
     'mcp-server' => (static function () use ($plugin): void {
         $registry = new ToolRegistry;
@@ -162,10 +180,12 @@ match ($sub) {
     default => (static function (): void {
         echo "phpClaw CLI: AI agent runner for OpenCart\n\n";
         echo "Usage:\n";
-        echo "  php phpclaw.php send \"<prompt>\" [--stream] [--provider=<p>] [--model=<m>]\n";
+        echo "  php phpclaw.php chat [--conv-id=<id>] [--continue]\n";
+        echo "  php phpclaw.php send \"<prompt>\" [--stream] [--trace] [--conv-id=<id>] [--continue] [--provider=<p>] [--model=<m>]\n";
         echo "  php phpclaw.php mcp-server\n";
         echo "\n";
         echo "Examples:\n";
+        echo "  php phpclaw.php chat\n";
         echo "  php phpclaw.php send \"what are my top 5 products by revenue?\"\n";
         echo "  php phpclaw.php send \"summarise today's orders\" --stream\n";
         exit(0);

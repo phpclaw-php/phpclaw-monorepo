@@ -67,7 +67,10 @@
               <tr><th class="pc-th-cmd">Command</th><th>Description</th></tr>
             </thead>
             <tbody>
+              <tr><td><code>php system/library/phpclaw/cli/phpclaw.php chat</code></td><td>Open an interactive agent session.</td></tr>
+              <tr><td><code>php system/library/phpclaw/cli/phpclaw.php chat --continue</code></td><td>Resume the last conversation.</td></tr>
               <tr><td><code>php system/library/phpclaw/cli/phpclaw.php send "your prompt"</code></td><td>Send a prompt and print the response.</td></tr>
+              <tr><td><code>php system/library/phpclaw/cli/phpclaw.php send "prompt" --trace</code></td><td>Print one line per tool call to stderr.</td></tr>
               <tr><td><code>php system/library/phpclaw/cli/phpclaw.php send "prompt" --provider=anthropic</code></td><td>Override provider for one call.</td></tr>
               <tr><td><code>php system/library/phpclaw/cli/phpclaw.php send "prompt" --model=claude-sonnet-5</code></td><td>Override model for one call.</td></tr>
               <tr><td><code>php system/library/phpclaw/cli/phpclaw.php send "prompt" --stream</code></td><td>Stream the response token-by-token.</td></tr>
@@ -369,7 +372,13 @@ data: {"text":"Here are the 2 products...","provider":"ollama","model":"qwen2.5:
               <tr><th class="pc-th-cmd">Command</th><th>Description</th></tr>
             </thead>
             <tbody>
+              <tr><td><code>php system/library/phpclaw/cli/phpclaw.php chat</code></td><td>Open an interactive agent session. Type a message and press Enter; use /exit or Ctrl+D to leave.</td></tr>
+              <tr><td><code>php system/library/phpclaw/cli/phpclaw.php chat --conv-id=&lt;id&gt;</code></td><td>Resume a specific conversation.</td></tr>
+              <tr><td><code>php system/library/phpclaw/cli/phpclaw.php chat --continue</code></td><td>Resume the last conversation.</td></tr>
               <tr><td><code>php system/library/phpclaw/cli/phpclaw.php send "your prompt"</code></td><td>Send a prompt and print the response. Creates a new unowned conversation (not tied to any admin user).</td></tr>
+              <tr><td><code>php system/library/phpclaw/cli/phpclaw.php send "prompt" --conv-id=&lt;id&gt;</code></td><td>Send a prompt in an existing conversation.</td></tr>
+              <tr><td><code>php system/library/phpclaw/cli/phpclaw.php send "prompt" --continue</code></td><td>Send a prompt in the last conversation.</td></tr>
+              <tr><td><code>php system/library/phpclaw/cli/phpclaw.php send "prompt" --trace</code></td><td>Print one line per tool call to stderr.</td></tr>
               <tr><td><code>php system/library/phpclaw/cli/phpclaw.php send "prompt" --provider=anthropic</code></td><td>Override provider for one call.</td></tr>
               <tr><td><code>php system/library/phpclaw/cli/phpclaw.php send "prompt" --model=claude-sonnet-5</code></td><td>Override model for one call.</td></tr>
               <tr><td><code>php system/library/phpclaw/cli/phpclaw.php send "prompt" --stream</code></td><td>Stream the response token-by-token.</td></tr>
