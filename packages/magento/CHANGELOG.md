@@ -4,6 +4,11 @@ An AI agent inside your Magento admin. Ask it in plain English about products, o
 categories, inventory, store hierarchy, sales reports and cache status, and it answers from your own
 store data. Works on Magento 2.4.x and Adobe Commerce.
 
+## 0.1.4 (2026-10-13)
+
+### Added
+- Add phpclaw:chat and --continue/--trace on phpclaw:run (#160)
+
 ## 0.1.3 (2026-10-09)
 
 ### Fixed
