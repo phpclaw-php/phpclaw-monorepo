@@ -22,6 +22,29 @@ use PHPUnit\Framework\TestCase;
 
 final class EngineFactoryTest extends TestCase
 {
+    public function test_session_params_override_the_provider_and_the_model_and_leave_the_saved_params_alone(): void
+    {
+        $saved = new Registry(['provider' => 'ollama', 'model' => 'qwen2.5:7b', 'api_key' => 'k']);
+
+        $session = EngineFactory::sessionParams($saved, 'openai', 'gpt-4o');
+
+        self::assertSame('openai', $session->get('provider'));
+        self::assertSame('gpt-4o', $session->get('model'));
+        self::assertSame('k', $session->get('api_key'));
+        self::assertSame('ollama', $saved->get('provider'));
+        self::assertSame('qwen2.5:7b', $saved->get('model'));
+    }
+
+    public function test_session_params_keep_the_saved_value_for_an_empty_override(): void
+    {
+        $saved = new Registry(['provider' => 'ollama', 'model' => 'qwen2.5:7b']);
+
+        $session = EngineFactory::sessionParams($saved, '', '');
+
+        self::assertSame('ollama', $session->get('provider'));
+        self::assertSame('qwen2.5:7b', $session->get('model'));
+    }
+
     public function test_phpclaw_config_from_registry_resolves_api_key(): void
     {
         $params = new Registry(['api_key' => 'param-api-key']);

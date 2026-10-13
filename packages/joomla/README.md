@@ -46,6 +46,8 @@ The same agent from your terminal, scriptable and CI-friendly:
 ```bash
 php cli/joomla.php phpclaw "show unpublished articles"
 php cli/joomla.php phpclaw "check extension updates" --stream
+php cli/joomla.php phpclaw "and which of them are security fixes?" --continue --trace
+php cli/joomla.php phpclaw:chat
 ```
 
 ## Web Services API

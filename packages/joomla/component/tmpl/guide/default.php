@@ -371,6 +371,9 @@ data: {"text":"Here are 3 articles...","provider":"ollama","model":"qwen2.5:7b",
                     <?php
                         $commands = [
                             ['cmd' => 'php cli/joomla.php phpclaw "your prompt"',                  'desc' => Text::_('COM_PHPCLAW_GUIDE_CMD_SEND')],
+                            ['cmd' => 'php cli/joomla.php phpclaw "your prompt" --continue',       'desc' => Text::_('COM_PHPCLAW_GUIDE_CMD_CONTINUE')],
+                            ['cmd' => 'php cli/joomla.php phpclaw "your prompt" --trace',          'desc' => Text::_('COM_PHPCLAW_GUIDE_CMD_TRACE')],
+                            ['cmd' => 'php cli/joomla.php phpclaw:chat',                           'desc' => Text::_('COM_PHPCLAW_GUIDE_CMD_CHAT')],
                             ['cmd' => 'php cli/joomla.php phpclaw:mcp-server',                     'desc' => Text::_('COM_PHPCLAW_GUIDE_CMD_MCP_SERVER')],
                         ];
         foreach ($commands as $row) { ?>

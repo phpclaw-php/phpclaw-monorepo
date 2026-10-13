@@ -5,33 +5,33 @@ declare(strict_types=1);
 namespace PhpClaw\Joomla\Component\Administrator\Console;
 
 use Closure;
-use Joomla\CMS\Factory;
-use Joomla\CMS\Language\Text;
 use Joomla\Console\Command\AbstractCommand;
+use PhpClaw\Agent\Conversation;
+use PhpClaw\Agent\ConversationTurn;
 use PhpClaw\Contracts\ClawInterface;
-use PhpClaw\Exceptions\GuardException;
-use PhpClaw\Exceptions\MaxIterationsException;
-use PhpClaw\Exceptions\ProviderException;
-use PhpClaw\Exceptions\TokenBudgetExceededException;
+use PhpClaw\Exceptions\PhpClawException;
+use PhpClaw\Joomla\Component\Administrator\Console\Concerns\RendersToolTrace;
+use PhpClaw\Joomla\Component\Administrator\Console\Concerns\ReportsAgentTurns;
+use PhpClaw\Joomla\Component\Administrator\Console\Concerns\TracksLastConversation;
 use Symfony\Component\Console\Input\InputArgument;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
 
 /**
- * Joomla CLI command for the phpClaw AI agent.
+ * Joomla CLI command for the phpClaw AI agent: one message, sent or streamed, then a summary line.
  */
 final class PhpClawCommand extends AbstractCommand
 {
+    use RendersToolTrace;
+    use ReportsAgentTurns;
+    use TracksLastConversation;
+
     private const EXIT_SUCCESS = 0;
 
     private const EXIT_ERROR = 1;
 
-    private const HTTP_TOO_MANY_REQUESTS = 429;
-
     protected static $defaultName = 'phpclaw';
-
-    protected static $defaultDescription = 'Send a message to the PhpClaw AI agent.';
 
     private ?ClawInterface $agent = null;
 
@@ -39,49 +39,60 @@ final class PhpClawCommand extends AbstractCommand
      * Create a new PhpClawCommand instance.
      *
      * @param  Closure(): ClawInterface  $agentFactory  Builds the engine on first use.
+     * @param  string  $storageDirectory  Folder for the last conversation id; '' uses the component's storage folder.
      */
     public function __construct(
         private readonly Closure $agentFactory,
+        private readonly string $storageDirectory = '',
     ) {
         parent::__construct();
     }
 
     /**
-     * Define the `message` argument plus `--stream` and `--conv-id` options.
+     * Define the `message` argument plus the `--stream`, `--conv-id`, `--continue` and `--trace` options.
      *
      * @return void
      */
     protected function configure(): void
     {
+        $this->setDescription('Send a message to the PhpClaw AI agent.');
         $this->addArgument('message', InputArgument::REQUIRED, 'The message to send to the AI agent.');
         $this->addOption('stream', null, InputOption::VALUE_NONE, 'Stream response chunks to output.');
         $this->addOption('conv-id', null, InputOption::VALUE_OPTIONAL, 'Conversation ID for multi-turn chat.');
+        $this->addOption('continue', null, InputOption::VALUE_NONE, 'Continue the last conversation.');
+        $this->addOption('trace', null, InputOption::VALUE_NONE, 'Print one line per tool call.');
     }
 
     /**
      * Execute the CLI command.
      *
-     * @param  InputInterface  $input
-     * @param  OutputInterface  $output
+     * @param  InputInterface  $input  The message argument and the options.
+     * @param  OutputInterface  $output  Console output for the reply and the summary line.
      * @return int Exit code.
      */
     protected function doExecute(InputInterface $input, OutputInterface $output): int
     {
         $this->loadComponentLanguage();
 
-        $message = (string) $input->getArgument('message');
-        $stream = (bool) $input->getOption('stream');
-        $convId = (string) ($input->getOption('conv-id') ?? '');
-
-        if ($stream) {
-            return $this->runWithErrorHandling($output, fn (): bool => $this->runStreaming($message, $output));
+        if ($input->getOption('trace')) {
+            $this->startToolTrace($output);
         }
 
-        if ($convId !== '') {
-            return $this->runWithErrorHandling($output, fn (): bool => $this->runConversationTurn($convId, $message, $output));
+        try {
+            $conversation = $this->openConversation($output, $this->agent(), (string) ($input->getOption('conv-id') ?? ''), (bool) $input->getOption('continue'));
+            $turn = $this->sendTurn($conversation, (string) $input->getArgument('message'), $output, stream: (bool) $input->getOption('stream'));
+        } catch (PhpClawException $e) {
+            $this->reportAgentError($output, $e);
+
+            return self::EXIT_ERROR;
+        } finally {
+            $this->stopToolTrace();
         }
 
-        return $this->runWithErrorHandling($output, fn (): bool => $this->runSingleShot($message, $output));
+        $this->rememberConversation($turn->conversation->id);
+        $output->writeln('<comment>'.$this->turnSummary($turn).'</comment>');
+
+        return self::EXIT_SUCCESS;
     }
 
     /**
@@ -95,16 +106,24 @@ final class PhpClawCommand extends AbstractCommand
     }
 
     /**
-     * Stream the response token-by-token to STDOUT.
+     * Send one message and print the reply: all at once, or chunk by chunk when streaming.
      *
-     * @param  string  $message
-     * @param  OutputInterface  $output
-     * @return bool
+     * @param  Conversation  $conversation  Conversation the turn belongs to.
+     * @param  string  $message  The prompt to send.
+     * @param  OutputInterface  $output  Console output for the reply.
+     * @param  bool  $stream  Whether to write each chunk as it arrives.
+     * @return ConversationTurn
      */
-    private function runStreaming(string $message, OutputInterface $output): bool
+    private function sendTurn(Conversation $conversation, string $message, OutputInterface $output, bool $stream): ConversationTurn
     {
-        $conversation = $this->agent()->conversation();
-        $this->agent()->streamInConversation(
+        if (! $stream) {
+            $turn = $this->agent()->sendInConversation($conversation, $message);
+            $output->writeln($turn->response->text);
+
+            return $turn;
+        }
+
+        $turn = $this->agent()->streamInConversation(
             $conversation,
             $message,
             static function (string $chunk) use ($output): void {
@@ -113,96 +132,6 @@ final class PhpClawCommand extends AbstractCommand
         );
         $output->writeln('');
 
-        return true;
-    }
-
-    /**
-     * Continue an existing conversation by id, emit just the assistant text.
-     *
-     * @param  string  $convId
-     * @param  string  $message
-     * @param  OutputInterface  $output
-     * @return bool
-     */
-    private function runConversationTurn(string $convId, string $message, OutputInterface $output): bool
-    {
-        $conversation = $this->agent()->conversation($convId);
-        $turn = $this->agent()->sendInConversation($conversation, $message);
-        $output->writeln($turn->response->text);
-
-        return true;
-    }
-
-    /**
-     * Send a one-shot prompt in a fresh conversation and emit the assistant text.
-     *
-     * @param  string  $message
-     * @param  OutputInterface  $output
-     * @return bool
-     */
-    private function runSingleShot(string $message, OutputInterface $output): bool
-    {
-        $conversation = $this->agent()->conversation();
-        $turn = $this->agent()->sendInConversation($conversation, $message);
-        $output->writeln($turn->response->text);
-
-        return true;
-    }
-
-    /**
-     * Run $work, mapping the expected exception types to localised CLI errors.
-     *
-     * @param  OutputInterface  $output
-     * @param  callable(): bool  $work
-     * @return int Exit code.
-     */
-    private function runWithErrorHandling(OutputInterface $output, callable $work): int
-    {
-        try {
-            $work();
-
-            return self::EXIT_SUCCESS;
-        } catch (GuardException $e) {
-            return $this->reportError($output, $e, 'COM_PHPCLAW_CLI_ERROR_GUARD');
-        } catch (TokenBudgetExceededException $e) {
-            return $this->reportError($output, $e, 'COM_PHPCLAW_ERROR_BUDGET_EXCEEDED');
-        } catch (ProviderException $e) {
-            return $this->reportError($output, $e, $e->statusCode === self::HTTP_TOO_MANY_REQUESTS ? 'COM_PHPCLAW_ERROR_RATE_LIMITED' : 'COM_PHPCLAW_CLI_ERROR_PROVIDER');
-        } catch (MaxIterationsException $e) {
-            return $this->reportError($output, $e, 'COM_PHPCLAW_CLI_ERROR_MAX_ITER');
-        }
-    }
-
-    /**
-     * Log the exception and print the localised error message.
-     *
-     * @param  OutputInterface  $output
-     * @param  \Throwable  $e
-     * @param  string  $languageKey
-     * @return int Error exit code.
-     */
-    private function reportError(OutputInterface $output, \Throwable $e, string $languageKey): int
-    {
-        error_log('phpClaw CLI: '.$e->getMessage());
-        $output->writeln('<error>'.Text::_($languageKey).'</error>');
-
-        return self::EXIT_ERROR;
-    }
-
-    /**
-     * Load the component's language strings into the console application, which boots without
-     * a component context and would otherwise echo raw keys instead of translated messages.
-     *
-     * @return void
-     */
-    private function loadComponentLanguage(): void
-    {
-        $app = Factory::$application;
-
-        if ($app === null) {
-            return;
-        }
-
-        $app->getLanguage()->load('com_phpclaw', JPATH_ADMINISTRATOR);
+        return $turn;
     }
 }

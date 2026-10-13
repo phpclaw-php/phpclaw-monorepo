@@ -11,6 +11,7 @@ use Joomla\Event\Event;
 use Joomla\Event\SubscriberInterface;
 use PhpClaw\Cloud\CloudManager;
 use PhpClaw\Contracts\ClawInterface;
+use PhpClaw\Joomla\Component\Administrator\Console\ChatCommand;
 use PhpClaw\Joomla\Component\Administrator\Console\McpServerCommand;
 use PhpClaw\Joomla\Component\Administrator\Console\PhpClawCommand;
 use PhpClaw\Joomla\Component\Administrator\Engine\EngineFactory;
@@ -100,9 +101,10 @@ final class PhpClawPlugin extends CMSPlugin implements SubscriberInterface
             return;
         }
 
-        $agentFactory = static fn (): ClawInterface => (new EngineFactory)->build(EngineFactory::getPluginParams());
+        $agentFactory = static fn (string $provider = '', string $model = ''): ClawInterface => (new EngineFactory)->build(EngineFactory::sessionParams(EngineFactory::getPluginParams(), $provider, $model));
 
         $app->addCommand(new PhpClawCommand($agentFactory));
+        $app->addCommand(new ChatCommand($agentFactory));
         $app->addCommand(new McpServerCommand);
     }
 }

@@ -142,6 +142,29 @@ final class EngineFactory
     }
 
     /**
+     * A copy of the saved params with the session's provider and model; an empty value keeps the saved one.
+     *
+     * @param  Registry  $params  Saved plugin params, left unchanged.
+     * @param  string  $provider  Provider for this session, '' for the saved one.
+     * @param  string  $model  Model for this session, '' for the saved one.
+     * @return Registry
+     */
+    public static function sessionParams(Registry $params, string $provider, string $model): Registry
+    {
+        $session = new Registry($params->toArray());
+
+        if ($provider !== '') {
+            $session->set('provider', $provider);
+        }
+
+        if ($model !== '') {
+            $session->set('model', $model);
+        }
+
+        return $session;
+    }
+
+    /**
      * Build the wrapped memory driver for the agent.
      *
      * @param  PhpClawConfig  $config
