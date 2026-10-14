@@ -9,6 +9,8 @@ namespace PhpClaw\Mcp;
  */
 final class ResourceRegistry
 {
+    private const DEFAULT_MIME_TYPE = 'text/plain';
+
     private static array $resources = [];
 
     /**
@@ -26,7 +28,7 @@ final class ResourceRegistry
         string $name,
         string $description,
         callable $reader,
-        string $mimeType = 'text/plain',
+        string $mimeType = self::DEFAULT_MIME_TYPE,
     ): void {
         self::$resources[$uri] = [
             'name' => $name,
@@ -73,12 +75,12 @@ final class ResourceRegistry
     {
         $schemas = [];
 
-        foreach (self::$resources as $uri => $r) {
+        foreach (self::$resources as $uri => $resource) {
             $schemas[] = [
                 'uri' => $uri,
-                'name' => $r['name'],
-                'description' => $r['description'],
-                'mimeType' => $r['mimeType'],
+                'name' => $resource['name'],
+                'description' => $resource['description'],
+                'mimeType' => $resource['mimeType'],
             ];
         }
 

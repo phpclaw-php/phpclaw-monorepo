@@ -14,10 +14,10 @@ use PhpClaw\Mcp\McpResponse;
  */
 final class StdioTransport implements TransportInterface
 {
-    /** @var resource */
+    private const READ_TIMEOUT_SECONDS = 86400;
+
     private $input;
 
-    /** @var resource */
     private $output;
 
     private bool $open = true;
@@ -35,7 +35,7 @@ final class StdioTransport implements TransportInterface
         $this->output = $output ?? STDOUT;
 
         if (is_resource($this->input)) {
-            @stream_set_timeout($this->input, 86400);
+            @stream_set_timeout($this->input, self::READ_TIMEOUT_SECONDS);
         }
     }
 

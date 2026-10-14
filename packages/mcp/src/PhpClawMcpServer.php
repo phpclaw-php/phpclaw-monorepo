@@ -17,6 +17,18 @@ use PhpClaw\Tools\ToolRegistry;
  */
 final class PhpClawMcpServer
 {
+    private const ENV_TOOL_ALLOW = 'PHPCLAW_TOOL_ALLOW';
+
+    private const ENV_TOOL_DENY = 'PHPCLAW_TOOL_DENY';
+
+    private const ENV_GUARDS = 'PHPCLAW_GUARDS';
+
+    private const ENV_HOOKS = 'PHPCLAW_HOOKS';
+
+    private const DEFAULT_PRIORITY = 10;
+
+    private readonly ToolRegistry $registry;
+
     private readonly McpRouter $router;
 
     /**
@@ -25,9 +37,10 @@ final class PhpClawMcpServer
      * @param  ToolRegistry  $registry  The tool registry exposed via MCP methods.
      * @return void
      */
-    public function __construct(
-        private readonly ToolRegistry $registry,
-    ) {
+    public function __construct(ToolRegistry $registry)
+    {
+        $this->registry = $registry;
+
         GuardRegistry::registerDefaults();
         $this->bootUserGuards();
         $this->bootUserHooks();
@@ -35,8 +48,8 @@ final class PhpClawMcpServer
         $this->router = new McpRouter(
             registry: $this->registry,
             adapter: new McpToolAdapter,
-            allow: self::parseToolPolicy('PHPCLAW_TOOL_ALLOW'),
-            deny: self::parseToolPolicy('PHPCLAW_TOOL_DENY'),
+            allow: self::parseToolPolicy(self::ENV_TOOL_ALLOW),
+            deny: self::parseToolPolicy(self::ENV_TOOL_DENY),
         );
     }
 
@@ -67,21 +80,27 @@ final class PhpClawMcpServer
     }
 
     /**
-     * Parse a JSON array of tool names from an env var into a string list (C-2 tool policy).
+     * Parse a JSON array of tool names from an env var into a string list.
      *
      * @param  string  $envVar  Env var name holding a JSON array of tool names.
      * @return string[] Validated tool names ([] when unset/invalid).
      */
     private static function parseToolPolicy(string $envVar): array
     {
-        $raw = (string) (getenv($envVar) ?: '[]');
-        $list = json_decode($raw, associative: true);
+        return array_values(array_filter(self::decodeEnvList($envVar), 'is_string'));
+    }
 
-        if (! is_array($list)) {
-            return [];
-        }
+    /**
+     * Decode an env var holding a JSON array; unset, invalid or non-array JSON gives [].
+     *
+     * @param  string  $envVar  Env var name.
+     * @return array<array-key, mixed> The decoded array.
+     */
+    private static function decodeEnvList(string $envVar): array
+    {
+        $decoded = json_decode((string) (getenv($envVar) ?: '[]'), associative: true);
 
-        return array_values(array_filter($list, 'is_string'));
+        return is_array($decoded) ? $decoded : [];
     }
 
     /**
@@ -123,14 +142,7 @@ final class PhpClawMcpServer
      */
     private function bootUserGuards(): void
     {
-        $raw = (string) (getenv('PHPCLAW_GUARDS') ?: '[]');
-        $guards = json_decode($raw, associative: true) ?? [];
-
-        if (! is_array($guards)) {
-            return;
-        }
-
-        foreach ($guards as $entry) {
+        foreach (self::decodeEnvList(self::ENV_GUARDS) as $entry) {
             if (! is_array($entry) || ! isset($entry['class']) || ! is_string($entry['class'])) {
                 continue;
             }
@@ -147,7 +159,7 @@ final class PhpClawMcpServer
                 continue;
             }
 
-            $priority = (int) ($entry['priority'] ?? 10);
+            $priority = (int) ($entry['priority'] ?? self::DEFAULT_PRIORITY);
             GuardRegistry::register(new $entry['class'], $priority);
         }
     }
@@ -159,14 +171,7 @@ final class PhpClawMcpServer
      */
     private function bootUserHooks(): void
     {
-        $raw = (string) (getenv('PHPCLAW_HOOKS') ?: '[]');
-        $hooks = json_decode($raw, associative: true) ?? [];
-
-        if (! is_array($hooks)) {
-            return;
-        }
-
-        foreach ($hooks as $entry) {
+        foreach (self::decodeEnvList(self::ENV_HOOKS) as $entry) {
             if (! is_array($entry) || ! isset($entry['event'], $entry['handler'])) {
                 continue;
             }
@@ -181,7 +186,7 @@ final class PhpClawMcpServer
                 continue;
             }
 
-            $priority = (int) ($entry['priority'] ?? 10);
+            $priority = (int) ($entry['priority'] ?? self::DEFAULT_PRIORITY);
             HookRegistry::on($entry['event'], new $entry['handler'], $priority);
         }
     }

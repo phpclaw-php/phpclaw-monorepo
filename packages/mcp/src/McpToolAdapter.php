@@ -50,7 +50,7 @@ final class McpToolAdapter
     {
         return [
             'tools' => array_values(
-                array_map(fn (ToolInterface $t) => $this->toDescriptor($t), $tools)
+                array_map(fn (ToolInterface $tool) => $this->toDescriptor($tool), $tools)
             ),
         ];
     }

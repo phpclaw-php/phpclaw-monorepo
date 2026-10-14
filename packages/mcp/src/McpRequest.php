@@ -11,6 +11,8 @@ use PhpClaw\Mcp\Exceptions\McpException;
  */
 final class McpRequest
 {
+    private const JSONRPC_VERSION = '2.0';
+
     /**
      * Build an immutable JSON-RPC request value object.
      *
@@ -33,7 +35,7 @@ final class McpRequest
      * @param  string  $json  Raw JSON-RPC payload (single message).
      * @return self The parsed request value object.
      *
-     * @throws McpException On parse error (-32700) or invalid structure (-32600).
+     * @throws McpException On parse error (-32700), or a non-object message or invalid structure (-32600).
      */
     public static function fromJson(string $json): self
     {
@@ -41,6 +43,10 @@ final class McpRequest
             $data = json_decode($json, associative: true, flags: JSON_THROW_ON_ERROR);
         } catch (\JsonException) {
             throw new McpException('Parse error: invalid JSON', McpException::PARSE_ERROR);
+        }
+
+        if (! is_array($data)) {
+            throw new McpException('Invalid Request: message must be a JSON object', McpException::INVALID_REQUEST);
         }
 
         return self::fromArray($data);
@@ -56,7 +62,7 @@ final class McpRequest
      */
     public static function fromArray(array $data): self
     {
-        if (($data['jsonrpc'] ?? '') !== '2.0') {
+        if (($data['jsonrpc'] ?? '') !== self::JSONRPC_VERSION) {
             throw new McpException('Invalid Request: jsonrpc must be "2.0"', McpException::INVALID_REQUEST);
         }
 
