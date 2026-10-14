@@ -4,6 +4,11 @@ The Model Context Protocol server for phpClaw. Exposes your application's tools 
 Cursor and any other MCP client, over stdio or a token-authenticated localhost HTTP transport, with
 an allow and deny policy over which tools are reachable. PHP 8.1 and later.
 
+## 0.1.4 (2026-10-14)
+
+### Fixed
+- Apply code standard, reject non-object JSON-RPC messages with -32600 (#192)
+
 ## 0.1.3 (2026-10-09)
 
 ### Fixed
