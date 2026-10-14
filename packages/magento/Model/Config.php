@@ -9,6 +9,7 @@ use Magento\Framework\Encryption\EncryptorInterface;
 use PhpClaw\ClawConfig;
 use PhpClaw\Config\ToolConfig;
 use PhpClaw\Magento\Service\CsvList;
+use PhpClaw\Tools\ToolRouter;
 
 /**
  * Reads phpClaw configuration from Magento's system config store.
@@ -59,6 +60,10 @@ class Config
     private const XML_PATH_RESPONSE_CACHE_TTL = 'phpclaw/general/response_cache_ttl';
 
     private const XML_PATH_MAX_TOKEN_BUDGET = 'phpclaw/general/max_token_budget';
+
+    private const XML_PATH_MAX_TOOLS_PER_TURN = 'phpclaw/general/max_tools_per_turn';
+
+    private const XML_PATH_ALWAYS_INCLUDE_TOOLS = 'phpclaw/general/always_include_tools';
 
     private const MAX_RATE_LIMIT_RPM = 600;
 
@@ -306,6 +311,26 @@ class Config
     }
 
     /**
+     * Return the tools sent to the model per turn, -1 or higher; 0 keeps the automatic limit, -1 sends every tool.
+     *
+     * @return int
+     */
+    public function getMaxToolsPerTurn(): int
+    {
+        return self::clampMaxToolsPerTurn($this->scopeConfig->getValue(self::XML_PATH_MAX_TOOLS_PER_TURN));
+    }
+
+    /**
+     * Return the tool names sent on every turn, outside the per-turn limit.
+     *
+     * @return string[] Ordered list of tool names.
+     */
+    public function getAlwaysIncludeTools(): array
+    {
+        return CsvList::parse((string) $this->scopeConfig->getValue(self::XML_PATH_ALWAYS_INCLUDE_TOOLS));
+    }
+
+    /**
      * Hold a requests-per-minute value inside 0 to 600.
      *
      * @param  mixed  $raw  Stored or submitted value.
@@ -340,6 +365,17 @@ class Config
     public static function clampMaxTokenBudget(mixed $raw): int
     {
         return max(0, min(self::MAX_TOKEN_BUDGET, (int) $raw));
+    }
+
+    /**
+     * Hold a per-turn tool count at -1 or higher.
+     *
+     * @param  mixed  $raw  Stored or submitted value.
+     * @return int
+     */
+    public static function clampMaxToolsPerTurn(mixed $raw): int
+    {
+        return max(ToolRouter::UNLIMITED, (int) $raw);
     }
 
     /**

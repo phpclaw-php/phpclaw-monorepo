@@ -329,4 +329,39 @@ final class ConfigTest extends TestCase
         self::assertSame(0, Config::clampMaxTokenBudget('-1'));
         self::assertSame(5000, Config::clampMaxTokenBudget('5000'));
     }
+
+    public function test_the_tool_routing_settings_read_their_install_defaults_when_unset(): void
+    {
+        $this->withValues([]);
+
+        self::assertSame(0, $this->config->getMaxToolsPerTurn());
+        self::assertSame([], $this->config->getAlwaysIncludeTools());
+    }
+
+    public function test_the_tool_routing_settings_read_their_saved_values(): void
+    {
+        $this->withValues([
+            'phpclaw/general/max_tools_per_turn' => '3',
+            'phpclaw/general/always_include_tools' => 'magento_cache, ,magento_orders ',
+        ]);
+
+        self::assertSame(3, $this->config->getMaxToolsPerTurn());
+        self::assertSame(['magento_cache', 'magento_orders'], $this->config->getAlwaysIncludeTools());
+    }
+
+    public function test_max_tools_per_turn_is_held_at_minus_one_or_higher(): void
+    {
+        self::assertSame(-1, Config::clampMaxToolsPerTurn('-5'));
+        self::assertSame(-1, Config::clampMaxToolsPerTurn('-1'));
+        self::assertSame(0, Config::clampMaxToolsPerTurn(''));
+        self::assertSame(0, Config::clampMaxToolsPerTurn(null));
+        self::assertSame(12, Config::clampMaxToolsPerTurn('12'));
+    }
+
+    public function test_a_stored_value_below_minus_one_is_clamped_when_read(): void
+    {
+        $this->withValues(['phpclaw/general/max_tools_per_turn' => '-9']);
+
+        self::assertSame(-1, $this->config->getMaxToolsPerTurn());
+    }
 }

@@ -143,4 +143,24 @@ final class PhpClawFactoryPrimitivesTest extends TestCase
 
         return $agent->config();
     }
+
+    public function test_max_tools_per_turn_from_config_overrides_the_profile(): void
+    {
+        self::assertSame(3, $this->engineConfig(['getMaxToolsPerTurn' => 3])->maxToolsPerTurn);
+    }
+
+    public function test_minus_one_from_config_removes_the_cap(): void
+    {
+        self::assertSame(-1, $this->engineConfig(['getMaxToolsPerTurn' => -1])->maxToolsPerTurn);
+    }
+
+    public function test_zero_keeps_the_profile_limit(): void
+    {
+        self::assertSame(5, $this->engineConfig(['getMaxToolsPerTurn' => 0])->maxToolsPerTurn);
+    }
+
+    public function test_always_include_tools_from_config_reach_the_engine(): void
+    {
+        self::assertSame(['magento_cache', 'magento_orders'], $this->engineConfig(['getAlwaysIncludeTools' => ['magento_cache', 'magento_orders']])->alwaysIncludeTools);
+    }
 }

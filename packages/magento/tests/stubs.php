@@ -608,8 +608,21 @@ namespace PhpClaw {
                 return $this;
             }
 
+            private int $maxToolsPerTurn = 0;
+
+            private array $alwaysIncludeTools = [];
+
             public function maxToolsPerTurn(int $n): self
             {
+                $this->maxToolsPerTurn = $n;
+
+                return $this;
+            }
+
+            public function alwaysIncludeTools(array $names): self
+            {
+                $this->alwaysIncludeTools = array_values($names);
+
                 return $this;
             }
 
@@ -707,6 +720,8 @@ namespace PhpClaw {
                 $config->responseCache = $this->responseCache;
                 $config->responseCacheTtl = $this->responseCacheTtl;
                 $config->maxTokenBudget = $this->maxTokenBudget;
+                $config->maxToolsPerTurn = $this->maxToolsPerTurn;
+                $config->alwaysIncludeTools = $this->alwaysIncludeTools;
 
                 return new Claw(
                     apiKey: $this->apiKey,
@@ -750,6 +765,10 @@ namespace PhpClaw {
             public int $responseCacheTtl = 3600;
 
             public int $maxTokenBudget = 0;
+
+            public int $maxToolsPerTurn = 0;
+
+            public array $alwaysIncludeTools = [];
 
             public function __construct()
             {

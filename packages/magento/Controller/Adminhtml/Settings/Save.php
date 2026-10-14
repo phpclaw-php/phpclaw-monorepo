@@ -14,6 +14,7 @@ use Magento\Framework\Controller\Result\RedirectFactory;
 use Magento\Framework\Encryption\EncryptorInterface;
 use PhpClaw\ClawConfig;
 use PhpClaw\Magento\Model\Config;
+use PhpClaw\Magento\Service\CsvList;
 use PhpClaw\Magento\Service\RemoteSkillUrlFilter;
 use PhpClaw\Tools\ToolRegistry;
 
@@ -32,6 +33,7 @@ class Save extends Action
         'remote_skill_urls',
         'fallback_provider', 'fallback_model', 'fallback_api_key',
         'rate_limit_rpm', 'response_cache', 'response_cache_ttl', 'max_token_budget',
+        'max_tools_per_turn', 'always_include_tools',
     ];
 
     private const CHECKBOX_FIELDS = ['store_messages', 'response_cache'];
@@ -67,8 +69,7 @@ class Save extends Action
     }
 
     /**
-     * Persist allowlisted phpClaw settings from the POST request and redirect; a fallback provider with another tool
-     * format than the main provider, or Custom, saves nothing and shows an error instead.
+     * Save the allowlisted settings and redirect; an incompatible or Custom fallback saves nothing and shows an error.
      *
      * @return Redirect Redirect response pointing back to the settings index page.
      */
@@ -108,8 +109,7 @@ class Save extends Action
     }
 
     /**
-     * The value to store for one field: checkboxes as 1 or 0, numbers clamped to their range, skill URLs filtered,
-     * the system prompt cut to 8000 characters, any other text trimmed.
+     * The value to store for one field, normalised by type: checkbox, clamped number, filtered list or trimmed text.
      *
      * @param  RequestInterface  $request  The settings POST request.
      * @param  string  $field  Field name from FIELDS.
@@ -126,13 +126,14 @@ class Save extends Action
             'rate_limit_rpm' => (string) Config::clampRateLimitRpm($raw),
             'response_cache_ttl' => (string) Config::clampResponseCacheTtl($raw),
             'max_token_budget' => (string) Config::clampMaxTokenBudget($raw),
+            'max_tools_per_turn' => (string) Config::clampMaxToolsPerTurn($raw),
+            'always_include_tools' => implode(',', CsvList::parse($raw)),
             default => $raw,
         };
     }
 
     /**
-     * Whether the submitted fallback provider is off, or shares the main provider's tool format and is not Custom;
-     * the main provider is the posted one, else the saved one, and an empty one is the provider core auto-detects.
+     * Whether the submitted fallback is off, or is not Custom and shares the posted or saved main provider's format.
      *
      * @param  RequestInterface  $request  The settings POST request.
      * @return bool

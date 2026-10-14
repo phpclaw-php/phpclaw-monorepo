@@ -494,4 +494,24 @@ final class SaveTest extends TestCase
         self::assertSame([], $this->errors);
         self::assertSame('', $this->savedConfig['phpclaw/general/fallback_provider']);
     }
+
+    public function test_execute_saves_both_tool_routing_settings(): void
+    {
+        $this->post(['provider' => 'ollama', 'max_tools_per_turn' => '3', 'always_include_tools' => ' magento_cache , ,magento_orders ']);
+
+        $this->controller->execute();
+
+        self::assertSame('3', $this->savedConfig['phpclaw/general/max_tools_per_turn']);
+        self::assertSame('magento_cache,magento_orders', $this->savedConfig['phpclaw/general/always_include_tools']);
+    }
+
+    public function test_execute_holds_max_tools_per_turn_at_minus_one_or_higher(): void
+    {
+        $this->post(['provider' => 'ollama', 'max_tools_per_turn' => '-5', 'always_include_tools' => '']);
+
+        $this->controller->execute();
+
+        self::assertSame('-1', $this->savedConfig['phpclaw/general/max_tools_per_turn']);
+        self::assertSame('', $this->savedConfig['phpclaw/general/always_include_tools']);
+    }
 }

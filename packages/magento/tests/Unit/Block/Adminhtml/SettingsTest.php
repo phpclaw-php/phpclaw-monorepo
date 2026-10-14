@@ -53,6 +53,7 @@ final class SettingsTest extends TestCase
             'cloud_signing_secret', 'cloud_disable', 'remote_skill_urls',
             'fallback_provider', 'fallback_model', 'fallback_api_key', 'rate_limit_rpm',
             'response_cache', 'response_cache_ttl', 'max_token_budget',
+            'max_tools_per_turn', 'always_include_tools',
         ], array_keys($this->block->getValues()));
     }
 
@@ -335,5 +336,16 @@ final class SettingsTest extends TestCase
     {
         self::assertSame('anthropic', $this->withEnvProvider('anthropic', fn () => $this->block->getFallbackScriptData()['autoFormat']));
         self::assertSame('openai', $this->withEnvProvider('groq', fn () => $this->block->getFallbackScriptData()['autoFormat']));
+    }
+
+    public function test_get_values_returns_both_tool_routing_settings(): void
+    {
+        $this->config->method('getMaxToolsPerTurn')->willReturn(3);
+        $this->config->method('getAlwaysIncludeTools')->willReturn(['magento_cache', 'magento_orders']);
+
+        $values = $this->block->getValues();
+
+        self::assertSame(3, $values['max_tools_per_turn']);
+        self::assertSame('magento_cache, magento_orders', $values['always_include_tools']);
     }
 }

@@ -45,7 +45,7 @@ class Settings extends Template
     /**
      * Return all saved configuration values keyed by field name for the settings template.
      *
-     * @return array{provider: string, model: string, api_key: string, base_url: string, system_prompt: string, store_messages: bool, max_iterations: int, cloud_key: string, cloud_signing_secret: string, cloud_disable: string, remote_skill_urls: string, fallback_provider: string, fallback_model: string, fallback_api_key: string, rate_limit_rpm: int, response_cache: bool, response_cache_ttl: int, max_token_budget: int}
+     * @return array{provider: string, model: string, api_key: string, base_url: string, system_prompt: string, store_messages: bool, max_iterations: int, cloud_key: string, cloud_signing_secret: string, cloud_disable: string, remote_skill_urls: string, fallback_provider: string, fallback_model: string, fallback_api_key: string, rate_limit_rpm: int, response_cache: bool, response_cache_ttl: int, max_token_budget: int, max_tools_per_turn: int, always_include_tools: string}
      */
     public function getValues(): array
     {
@@ -68,6 +68,8 @@ class Settings extends Template
             'response_cache' => $this->config->isResponseCache(),
             'response_cache_ttl' => $this->config->getResponseCacheTtl(),
             'max_token_budget' => $this->config->getMaxTokenBudget(),
+            'max_tools_per_turn' => $this->config->getMaxToolsPerTurn(),
+            'always_include_tools' => implode(', ', $this->config->getAlwaysIncludeTools()),
         ];
     }
 
@@ -121,8 +123,7 @@ class Settings extends Template
     }
 
     /**
-     * Provider option list for the settings select: an empty "Select a provider" choice, which leaves the provider
-     * for core to auto-detect, then every option from the provider source model.
+     * Provider options: an empty "Select a provider" choice (core auto-detects), then every source model option.
      *
      * @return array<int, array{value: string, label: string}>
      */

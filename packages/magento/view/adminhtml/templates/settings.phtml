@@ -173,6 +173,26 @@ $escape    = static fn ($value): string => htmlspecialchars((string) $value, ENT
             </td>
           </tr>
 
+          <tr>
+            <th><label for="phpclaw-max-tools-per-turn">Max Tools Per Turn</label></th>
+            <td>
+              <input id="phpclaw-max-tools-per-turn" type="number" name="max_tools_per_turn" min="-1"
+                     class="phpclaw-input phpclaw-input--small"
+                     value="<?= $escape($values['max_tools_per_turn']) ?>"/>
+              <p class="phpclaw-field-help">Tools sent to the model per turn. 0 keeps the automatic limit, -1 sends every tool.</p>
+            </td>
+          </tr>
+
+          <tr>
+            <th><label for="phpclaw-always-include-tools">Always Include Tools</label></th>
+            <td>
+              <input id="phpclaw-always-include-tools" type="text" name="always_include_tools"
+                     class="phpclaw-input" placeholder="e.g. magento_cache, magento_orders"
+                     value="<?= $escape($values['always_include_tools']) ?>"/>
+              <p class="phpclaw-field-help">Comma-separated tool names sent on every turn, outside Max Tools Per Turn. A name that is not a tool on this site is skipped.</p>
+            </td>
+          </tr>
+
           <?php if ($block->isCloudAvailable()): ?>
           <tr id="phpclaw-cloud-off-notice"<?= $block->storeMessagesEnabled() ? ' style="display:none"' : '' ?>>
             <td colspan="2">

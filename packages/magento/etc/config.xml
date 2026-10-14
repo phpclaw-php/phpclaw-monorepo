@@ -27,6 +27,8 @@
                 <response_cache>0</response_cache>
                 <response_cache_ttl>3600</response_cache_ttl>
                 <max_token_budget>0</max_token_budget>
+                <max_tools_per_turn>0</max_tools_per_turn>
+                <always_include_tools/>
             </general>
             <security>
                 <shell_allowlist/>

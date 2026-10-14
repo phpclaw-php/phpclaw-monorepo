@@ -123,8 +123,7 @@ class PhpClawFactory implements PhpClawFactoryInterface
     }
 
     /**
-     * Expose the resolved tool list for the MCP server registry. MCP dispatches tool calls directly,
-     * bypassing the approval-gate loop, so PHP-file writes are always denied here regardless of console detection.
+     * Resolved tool list for the MCP server registry, with PHP-file writes always denied (MCP has no approval gate).
      *
      * @return array<int, ToolInterface>
      */
@@ -289,7 +288,8 @@ class PhpClawFactory implements PhpClawFactoryInterface
             ->cloudSigningSecret($this->config->getCloudSigningSecret())
             ->storeMessages($this->config->isStoreMessages())
             ->maxIterations($this->config->getMaxIterations())
-            ->maxToolsPerTurn(ToolProfileResolver::maxTools(ToolProfileResolver::resolve($provider, $model)))
+            ->maxToolsPerTurn($this->resolveMaxToolsPerTurn($provider, $model))
+            ->alwaysIncludeTools($this->config->getAlwaysIncludeTools())
             ->tools($tools)
             ->memory($memory)
             ->systemPrompt($this->config->getSystemPrompt());
@@ -314,8 +314,23 @@ class PhpClawFactory implements PhpClawFactoryInterface
     }
 
     /**
-     * Apply the fallback provider, rate limit, response cache and token budget from the settings; a fallback that is
-     * Custom or uses another tool format than the main provider is skipped and logged.
+     * Per-turn tool cap: the saved max_tools_per_turn, or the provider and model profile limit when it is 0.
+     *
+     * @param  string  $provider  Provider in use.
+     * @param  string  $model  Model in use.
+     * @return int Cap passed to the builder.
+     */
+    private function resolveMaxToolsPerTurn(string $provider, string $model): int
+    {
+        $configured = $this->config->getMaxToolsPerTurn();
+
+        return $configured === 0
+            ? ToolProfileResolver::maxTools(ToolProfileResolver::resolve($provider, $model))
+            : $configured;
+    }
+
+    /**
+     * Apply the saved fallback, rate limit, response cache and token budget; an incompatible fallback is skipped.
      *
      * @param  ClawBuilder  $builder  Builder being configured.
      * @param  string  $main  Provider slug the agent runs on.
