@@ -37,6 +37,7 @@ final class SettingsPageTest extends TestCase
             'cloud_key', 'cloud_signing_secret', 'cloud_disable',
             'remote_skill_urls', 'fallback_provider', 'fallback_model', 'fallback_api_key',
             'rate_limit_rpm', 'response_cache', 'response_cache_ttl', 'max_token_budget',
+            'max_tools_per_turn', 'always_include_tools',
         ];
 
         sort($expected);
@@ -681,5 +682,30 @@ final class SettingsPageTest extends TestCase
                 }
             }
         }
+    }
+
+    public function test_validate_holds_max_tools_per_turn_at_minus_one_or_higher(): void
+    {
+        self::assertSame(-1, SettingsPage::validate(['provider' => 'ollama', 'max_iterations' => '20', 'max_tools_per_turn' => '-5'])['data']['max_tools_per_turn']);
+        self::assertSame(-1, SettingsPage::validate(['provider' => 'ollama', 'max_iterations' => '20', 'max_tools_per_turn' => '-1'])['data']['max_tools_per_turn']);
+        self::assertSame(0, SettingsPage::validate(['provider' => 'ollama', 'max_iterations' => '20', 'max_tools_per_turn' => ''])['data']['max_tools_per_turn']);
+        self::assertSame(12, SettingsPage::validate(['provider' => 'ollama', 'max_iterations' => '20', 'max_tools_per_turn' => '12'])['data']['max_tools_per_turn']);
+    }
+
+    public function test_validate_trims_always_include_tools_and_drops_blanks(): void
+    {
+        self::assertSame(['oc_product', 'oc_order'], SettingsPage::validate(['provider' => 'ollama', 'max_iterations' => '20', 'always_include_tools' => ' oc_product , ,oc_order '])['data']['always_include_tools']);
+        self::assertSame([], SettingsPage::validate(['provider' => 'ollama', 'max_iterations' => '20', 'always_include_tools' => ''])['data']['always_include_tools']);
+    }
+
+    public function test_merge_passes_the_tool_routing_settings_through_with_defaults(): void
+    {
+        $saved = SettingsPage::merge(['max_tools_per_turn' => '3', 'always_include_tools' => ['oc_product', 'oc_order']]);
+        $defaults = SettingsPage::merge([]);
+
+        self::assertSame(3, $saved['max_tools_per_turn']);
+        self::assertSame(['oc_product', 'oc_order'], $saved['always_include_tools']);
+        self::assertSame(0, $defaults['max_tools_per_turn']);
+        self::assertSame([], $defaults['always_include_tools']);
     }
 }

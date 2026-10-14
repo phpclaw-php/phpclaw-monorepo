@@ -83,7 +83,6 @@ final class OcEngineFactory
             ->systemPrompt($resolved['systemPrompt'])
             ->storeMessages($resolved['storeMessages'])
             ->maxIterations($resolved['maxIterations'])
-            ->maxToolsPerTurn(ToolProfileResolver::maxTools(ToolProfileResolver::resolve((string) $resolved['provider'], (string) $resolved['model'])))
             ->tools($this->buildTools($config, $db, $prefix, $eventFirer, $callerMayUseModule, $mayQueryRaw))
             ->shellAllowlist((array) ($config['shell_allowlist'] ?? []))
             ->memory($memory)
@@ -102,9 +101,28 @@ final class OcEngineFactory
             $builder->withRemoteSkills($url);
         }
 
+        $this->applyToolRouting($builder, $saved, (string) $resolved['provider'], (string) $resolved['model']);
         $this->applyAgentPrimitives($builder, $saved);
 
         return $builder->build();
+    }
+
+    /**
+     * Apply the per-turn tool cap (the saved value, or the profile limit when it is 0) and the always-included tools.
+     *
+     * @param  ClawBuilder  $builder  Builder for the engine being assembled.
+     * @param  array<string, mixed>  $saved  Admin-saved settings.
+     * @param  string  $provider  Provider in use.
+     * @param  string  $model  Model in use.
+     * @return void
+     */
+    private function applyToolRouting(ClawBuilder $builder, array $saved, string $provider, string $model): void
+    {
+        $configured = (int) ($saved['max_tools_per_turn'] ?? 0);
+
+        $builder
+            ->maxToolsPerTurn($configured === 0 ? ToolProfileResolver::maxTools(ToolProfileResolver::resolve($provider, $model)) : $configured)
+            ->alwaysIncludeTools(array_values(array_map('strval', (array) ($saved['always_include_tools'] ?? []))));
     }
 
     /**
@@ -316,8 +334,7 @@ final class OcEngineFactory
     }
 
     /**
-     * Compute the workspace root, store root, shell allowlist and CLI-only PHP-write rule shared by the
-     * extras loop and {@see ToolCatalogue::instantiateDefaults()}.
+     * Workspace root, store root, shell allowlist and PHP-write rule shared by the extras and core tools.
      *
      * @param  array<string, mixed>  $config  Package default config.
      * @param  bool|null  $interactive  Whether the tools serve an interactive console session; null reads the console marker.
@@ -336,8 +353,7 @@ final class OcEngineFactory
     }
 
     /**
-     * Resolve the raw `phpclaw/extra/tools` bucket: an object passes through, `ShellTool`,
-     * `FileWriteTool` and `FileEditTool` by class name get the configured values, any other no-arg class name is instantiated, everything else is dropped.
+     * Resolve `phpclaw/extra/tools` into tool instances, configuring the shell and file tools; invalid entries are dropped.
      *
      * @param  array<array-key, mixed>  $extra  Raw bucket from the extension event.
      * @param  array{workspaceRoot: ?string, projectRoot: ?string, allowlist: array<int, string>, allowPhpWrite: bool}  $toolConfig  Values from {@see configuredToolValues()}.

@@ -208,6 +208,22 @@
               </div>
             </div>
 
+            <div class="row mb-3">
+              <label class="col-sm-2 col-form-label" for="phpclaw-max-tools-per-turn">{{ entry_max_tools_per_turn }}</label>
+              <div class="col-sm-2">
+                <input type="number" name="max_tools_per_turn" id="phpclaw-max-tools-per-turn" value="{{ settings.max_tools_per_turn }}" min="-1" class="form-control" />
+                <small class="text-muted">{{ help_max_tools_per_turn }}</small>
+              </div>
+            </div>
+
+            <div class="row mb-3">
+              <label class="col-sm-2 col-form-label" for="phpclaw-always-include-tools">{{ entry_always_include_tools }}</label>
+              <div class="col-sm-10">
+                <input type="text" name="always_include_tools" id="phpclaw-always-include-tools" value="{{ settings.always_include_tools|join(', ')|e }}" placeholder="e.g. oc_product, oc_order" class="form-control" />
+                <small class="text-muted">{{ help_always_include_tools }}</small>
+              </div>
+            </div>
+
             {% if cloud_installed %}
             <div class="row mb-3 is-hidden" id="row-cloud-inactive">
               <div class="col-sm-10 offset-sm-2">

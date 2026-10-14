@@ -8,6 +8,8 @@ use PhpClaw\Claw;
 use PhpClaw\ClawConfig;
 use PhpClaw\OpenCart\Engine\OcCache;
 use PhpClaw\OpenCart\Engine\OcEngineFactory;
+use PhpClaw\Tools\Contracts\ToolInterface;
+use PhpClaw\Tools\ToolProfileResolver;
 use PHPUnit\Framework\TestCase;
 
 final class OcEngineFactoryPrimitivesTest extends TestCase
@@ -95,5 +97,81 @@ final class OcEngineFactoryPrimitivesTest extends TestCase
         (new \ReflectionMethod(OcEngineFactory::class, 'applyAgentPrimitives'))->invoke(new OcEngineFactory, $builder, $saved);
 
         return $builder->build()->config();
+    }
+
+    public function test_max_tools_per_turn_from_config_overrides_the_profile(): void
+    {
+        self::assertSame(3, $this->configAfterToolRouting(['max_tools_per_turn' => '3'])->maxToolsPerTurn);
+    }
+
+    public function test_minus_one_from_config_removes_the_cap(): void
+    {
+        self::assertSame(-1, $this->configAfterToolRouting(['max_tools_per_turn' => '-1'])->maxToolsPerTurn);
+    }
+
+    public function test_zero_keeps_the_profile_limit(): void
+    {
+        self::assertSame(5, $this->configAfterToolRouting(['max_tools_per_turn' => '0'])->maxToolsPerTurn);
+    }
+
+    public function test_a_missing_max_tools_key_keeps_the_profile_limit(): void
+    {
+        self::assertSame(5, $this->configAfterToolRouting([])->maxToolsPerTurn);
+    }
+
+    public function test_always_include_tools_from_config_reach_the_engine(): void
+    {
+        self::assertSame(['oc_product', 'oc_order'], $this->configAfterToolRouting(['always_include_tools' => ['oc_product', 'oc_order']])->alwaysIncludeTools);
+    }
+
+    public function test_a_missing_always_include_key_means_an_empty_list(): void
+    {
+        self::assertSame([], $this->configAfterToolRouting([])->alwaysIncludeTools);
+    }
+
+    public function test_always_include_and_tool_deny_on_the_same_name_keeps_it_denied(): void
+    {
+        $tools = ToolProfileResolver::filter([$this->fakeTool('oc_product'), $this->fakeTool('oc_order')], deny: ['oc_product']);
+        $config = $this->configAfterToolRouting(['always_include_tools' => ['oc_product']], $tools);
+        $names = array_map(static fn ($tool): string => $tool->name(), $config->tools);
+
+        self::assertContains('oc_order', $names, 'precondition: oc_order is not denied, so the tool list is not empty');
+        self::assertNotContains('oc_product', $names);
+    }
+
+    private function configAfterToolRouting(array $saved, array $tools = []): ClawConfig
+    {
+        $builder = Claw::builder()->provider('ollama')->model('qwen2.5:7b')->apiKey('test-key')->tools($tools);
+        (new \ReflectionMethod(OcEngineFactory::class, 'applyToolRouting'))->invoke(new OcEngineFactory, $builder, $saved, 'ollama', 'qwen2.5:7b');
+
+        return $builder->build()->config();
+    }
+
+    private function fakeTool(string $name): ToolInterface
+    {
+        return new class($name) implements ToolInterface
+        {
+            public function __construct(private readonly string $toolName) {}
+
+            public function name(): string
+            {
+                return $this->toolName;
+            }
+
+            public function description(): string
+            {
+                return 'fake';
+            }
+
+            public function inputSchema(): array
+            {
+                return ['type' => 'object', 'properties' => []];
+            }
+
+            public function execute(array $input): string
+            {
+                return '';
+            }
+        };
     }
 }

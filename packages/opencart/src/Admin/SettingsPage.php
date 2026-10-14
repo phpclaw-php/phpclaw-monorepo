@@ -11,6 +11,7 @@ use PhpClaw\OpenCart\Plugin;
 use PhpClaw\Providers\ProviderCatalogue;
 use PhpClaw\Skills\SkillRegistry;
 use PhpClaw\Tools\ToolRegistry;
+use PhpClaw\Tools\ToolRouter;
 
 /**
  * Settings page helper for the phpClaw OpenCart admin module.
@@ -225,6 +226,8 @@ final class SettingsPage
         $ttl = trim((string) ($post['response_cache_ttl'] ?? ''));
         $data['response_cache_ttl'] = $ttl === '' ? self::DEFAULT_CACHE_TTL : self::clamp($ttl, self::MIN_CACHE_TTL, self::MAX_CACHE_TTL);
         $data['max_token_budget'] = self::clamp($post['max_token_budget'] ?? 0, 0, self::MAX_TOKEN_BUDGET);
+        $data['max_tools_per_turn'] = self::clamp($post['max_tools_per_turn'] ?? 0, ToolRouter::UNLIMITED, PHP_INT_MAX);
+        $data['always_include_tools'] = self::normaliseCloudDisable($post['always_include_tools'] ?? null);
 
         return ['errors' => $errors, 'data' => $data];
     }
@@ -260,6 +263,8 @@ final class SettingsPage
             'response_cache' => ($saved['response_cache'] ?? '0') === '1' ? '1' : '0',
             'response_cache_ttl' => (int) ($saved['response_cache_ttl'] ?? 0) ?: self::DEFAULT_CACHE_TTL,
             'max_token_budget' => (int) ($saved['max_token_budget'] ?? 0),
+            'max_tools_per_turn' => (int) ($saved['max_tools_per_turn'] ?? 0),
+            'always_include_tools' => self::normaliseCloudDisable($saved['always_include_tools'] ?? null),
         ];
     }
 
@@ -285,8 +290,7 @@ final class SettingsPage
     }
 
     /**
-     * Data the settings page script needs to rebuild the fallback dropdown when the primary provider changes: every
-     * provider except Custom, every provider's tool format, and the format of the auto-detected primary.
+     * Data the page script needs to rebuild the fallback dropdown when the primary provider changes.
      *
      * @return array{offLabel: string, providers: array<string, string>, formats: array<string, string>, autoFormat: string}
      */
@@ -315,7 +319,7 @@ final class SettingsPage
     }
 
     /**
-     * Normalise a raw cloud_disable value into a list of trimmed non-empty strings.
+     * Normalise a raw list value (cloud_disable, always_include_tools) into trimmed non-empty strings.
      *
      * @param  mixed  $raw  Raw value from form/import (string, array, or null).
      * @return list<string>
