@@ -4,6 +4,16 @@ An AI agent inside your PrestaShop back office. Ask it in plain English about pr
 customers, categories, carts, coupons, stock, manufacturers, employees, modules, configuration and
 sales reports, and it answers from your own store data. Works on PrestaShop 8.0 and later, and 9.x.
 
+## 0.1.5 (2026-10-14)
+
+### Added
+- Configurable per-turn tool cap and always-include tools (#158)
+- Interactive CLI chat and session flags on send (#176)
+- Max tools per turn and always-include tools settings (#186)
+
+### Fixed
+- Apply code standard, return null on non-object JSON responses (#190)
+
 ## 0.1.4 (2026-10-09)
 
 ### Added
