@@ -5,15 +5,15 @@ declare(strict_types=1);
 namespace PhpClaw\Drupal\Support;
 
 /**
- * Normalises the cloud_disable setting into a clean string[].
+ * Normalises a list setting (cloud_disable, always_include_tools) into a clean string[].
  */
 final class CloudDisableParser
 {
     /**
-     * Parse raw cloud_disable config value into a clean string array.
+     * Parse a raw list setting, array or comma-separated string, into a clean string array.
      *
      * @param  mixed  $raw  Array or comma-separated string from config.
-     * @return string[] Normalised list of feature names to disable.
+     * @return string[] Trimmed names, blanks dropped.
      */
     public static function parse(mixed $raw): array
     {

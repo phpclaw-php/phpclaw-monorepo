@@ -73,6 +73,15 @@ phpclaw.settings:
       sequence:
         type: string
         label: 'Tool name or group reference'
+    max_tools_per_turn:
+      type: integer
+      label: 'Tools sent to the model per turn (0 automatic, -1 every tool)'
+    always_include_tools:
+      type: sequence
+      label: 'Tool names sent on every turn, outside the per-turn limit'
+      sequence:
+        type: string
+        label: 'Tool name'
     fallback_provider:
       type: string
       label: 'Fallback provider used when the main provider fails'

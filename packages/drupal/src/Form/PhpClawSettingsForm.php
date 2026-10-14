@@ -16,6 +16,7 @@ use PhpClaw\Drupal\Support\Defaults;
 use PhpClaw\Drupal\Support\RemoteSkillUrlFilter;
 use PhpClaw\Providers\ProviderCatalogue;
 use PhpClaw\Tools\ToolRegistry;
+use PhpClaw\Tools\ToolRouter;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 
 /**
@@ -258,6 +259,24 @@ HTML;
             '#attributes' => $fieldStyle,
         ];
 
+        $form['max_tools_per_turn'] = [
+            '#type' => 'number',
+            '#title' => $this->t('Max Tools Per Turn'),
+            '#description' => $this->t('Tools sent to the model per turn. 0 keeps the automatic limit, -1 sends every tool.'),
+            '#default_value' => (int) ($config->get('max_tools_per_turn') ?? 0),
+            '#min' => ToolRouter::UNLIMITED,
+            '#attributes' => $fieldStyle,
+        ];
+
+        $form['always_include_tools'] = [
+            '#type' => 'textfield',
+            '#title' => $this->t('Always Include Tools'),
+            '#description' => $this->t('Comma-separated tool names sent on every turn, outside Max Tools Per Turn. A name that is not a tool on this site is skipped.'),
+            '#default_value' => implode(', ', CloudDisableParser::parse($config->get('always_include_tools') ?? [])),
+            '#placeholder' => 'e.g. drupal_cache, drupal_entity',
+            '#attributes' => $fieldStyle,
+        ];
+
         if (class_exists(CloudManager::class)) {
             $visibleWhenStoring = [
                 'visible' => [':input[name="store_messages"]' => ['checked' => true]],
@@ -426,7 +445,9 @@ HTML;
             ->set('rate_limit_rpm', self::clamp($form_state->getValue('rate_limit_rpm'), 0, self::MAX_RATE_LIMIT_RPM))
             ->set('response_cache', (bool) $form_state->getValue('response_cache'))
             ->set('response_cache_ttl', trim((string) ($form_state->getValue('response_cache_ttl') ?? '')) === '' ? self::DEFAULT_CACHE_TTL : self::clamp($form_state->getValue('response_cache_ttl'), self::MIN_CACHE_TTL, self::MAX_CACHE_TTL))
-            ->set('max_token_budget', self::clamp($form_state->getValue('max_token_budget'), 0, self::MAX_TOKEN_BUDGET));
+            ->set('max_token_budget', self::clamp($form_state->getValue('max_token_budget'), 0, self::MAX_TOKEN_BUDGET))
+            ->set('max_tools_per_turn', self::clamp($form_state->getValue('max_tools_per_turn'), ToolRouter::UNLIMITED, PHP_INT_MAX))
+            ->set('always_include_tools', CloudDisableParser::parse($form_state->getValue('always_include_tools') ?? ''));
 
         $newFallbackKey = (string) ($form_state->getValue('fallback_api_key') ?? '');
         if ($newFallbackKey !== '') {

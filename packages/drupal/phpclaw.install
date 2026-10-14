@@ -353,3 +353,29 @@ function phpclaw_update_8005(): string
 
     return $added === [] ? 'All agent primitive settings are already present, nothing to do.' : 'Added phpclaw.settings: '.implode(', ', $added).'.';
 }
+
+/**
+ * Adds the max tools per turn and always include tools settings, keeping any value already set.
+ *
+ * @return string
+ */
+function phpclaw_update_8006(): string
+{
+    $config = \Drupal::configFactory()->getEditable('phpclaw.settings');
+    $defaults = [
+        'max_tools_per_turn' => 0,
+        'always_include_tools' => [],
+    ];
+    $added = [];
+
+    foreach ($defaults as $key => $value) {
+        if ($config->get($key) === null) {
+            $config->set($key, $value);
+            $added[] = $key;
+        }
+    }
+
+    $config->save(has_trusted_data: true);
+
+    return $added === [] ? 'Both tool routing settings are already present, nothing to do.' : 'Added phpclaw.settings: '.implode(', ', $added).'.';
+}

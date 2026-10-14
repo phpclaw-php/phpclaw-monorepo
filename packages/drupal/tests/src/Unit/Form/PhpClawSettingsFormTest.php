@@ -737,6 +737,41 @@ final class PhpClawSettingsFormTest extends TestCase
         self::assertSame(0, $built['max_token_budget']['#default_value']);
     }
 
+    public function test_the_form_shows_both_tool_routing_fields_with_saved_values(): void
+    {
+        $built = $this->createForm(['max_tools_per_turn' => 3, 'always_include_tools' => ['drupal_cache', 'drupal_cron']])->buildForm([], $this->createFormState());
+
+        self::assertSame('number', $built['max_tools_per_turn']['#type']);
+        self::assertSame(3, $built['max_tools_per_turn']['#default_value']);
+        self::assertSame(-1, $built['max_tools_per_turn']['#min']);
+        self::assertSame('Tools sent to the model per turn. 0 keeps the automatic limit, -1 sends every tool.', (string) $built['max_tools_per_turn']['#description']);
+        self::assertSame('textfield', $built['always_include_tools']['#type']);
+        self::assertSame('drupal_cache, drupal_cron', $built['always_include_tools']['#default_value']);
+        self::assertSame('Comma-separated tool names sent on every turn, outside Max Tools Per Turn. A name that is not a tool on this site is skipped.', (string) $built['always_include_tools']['#description']);
+    }
+
+    public function test_the_tool_routing_fields_default_to_the_automatic_limit_and_no_tools(): void
+    {
+        $built = $this->createForm(['provider' => 'ollama'])->buildForm([], $this->createFormState());
+
+        self::assertSame(0, $built['max_tools_per_turn']['#default_value']);
+        self::assertSame('', $built['always_include_tools']['#default_value']);
+    }
+
+    public function test_saving_clamps_max_tools_per_turn_to_minus_one_or_higher(): void
+    {
+        self::assertSame(-1, $this->submit(['max_tools_per_turn' => '-5'])['max_tools_per_turn']);
+        self::assertSame(-1, $this->submit(['max_tools_per_turn' => '-1'])['max_tools_per_turn']);
+        self::assertSame(0, $this->submit(['max_tools_per_turn' => ''])['max_tools_per_turn']);
+        self::assertSame(12, $this->submit(['max_tools_per_turn' => '12'])['max_tools_per_turn']);
+    }
+
+    public function test_saving_trims_tool_names_and_drops_blanks(): void
+    {
+        self::assertSame(['drupal_cache', 'drupal_cron'], $this->submit(['always_include_tools' => ' drupal_cache , ,drupal_cron '])['always_include_tools']);
+        self::assertSame([], $this->submit(['always_include_tools' => ''])['always_include_tools']);
+    }
+
     public function test_build_form_uses_the_shared_descriptions(): void
     {
         $built = $this->createForm(['provider' => 'ollama'])->buildForm([], $this->createFormState());

@@ -237,7 +237,8 @@ final class PhpClawServiceFactory
             ->systemPrompt($systemPrompt)
             ->storeMessages($storeMessages)
             ->maxIterations($maxIterations > 0 ? $maxIterations : ClawConfig::DEFAULT_MAX_ITERATIONS)
-            ->maxToolsPerTurn(ToolProfileResolver::maxTools(ToolProfileResolver::resolve($provider, $model)))
+            ->maxToolsPerTurn(self::resolveMaxToolsPerTurn($config, $provider, $model))
+            ->alwaysIncludeTools(CloudDisableParser::parse($config->get('always_include_tools') ?? []))
             ->shellAllowlist($shellAllowlist)
             ->cloudKey($storeMessages ? $cloudKey : '')
             ->cloudSigningSecret($cloudSigningSecret)
@@ -260,6 +261,23 @@ final class PhpClawServiceFactory
         self::applyAgentPrimitives($builder, $config, $provider);
 
         return $builder->build();
+    }
+
+    /**
+     * Per-turn tool cap: the saved max_tools_per_turn, or the provider and model profile limit when it is 0.
+     *
+     * @param  ImmutableConfig  $config  The phpclaw.settings config.
+     * @param  string  $provider  Provider in use.
+     * @param  string  $model  Model in use.
+     * @return int Cap passed to the builder.
+     */
+    private static function resolveMaxToolsPerTurn(ImmutableConfig $config, string $provider, string $model): int
+    {
+        $configured = (int) ($config->get('max_tools_per_turn') ?? 0);
+
+        return $configured === 0
+            ? ToolProfileResolver::maxTools(ToolProfileResolver::resolve($provider, $model))
+            : $configured;
     }
 
     /**

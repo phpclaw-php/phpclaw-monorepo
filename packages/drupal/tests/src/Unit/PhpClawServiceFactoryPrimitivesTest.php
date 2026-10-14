@@ -102,6 +102,45 @@ final class PhpClawServiceFactoryPrimitivesTest extends TestCase
         self::assertSame(5000, $this->engineConfig(['provider' => 'ollama', 'max_token_budget' => 5000])->maxTokenBudget);
     }
 
+    public function test_max_tools_per_turn_from_config_overrides_the_profile(): void
+    {
+        self::assertSame(3, $this->engineConfig(['provider' => 'ollama', 'model' => 'qwen2.5:7b', 'max_tools_per_turn' => 3])->maxToolsPerTurn);
+    }
+
+    public function test_minus_one_from_config_removes_the_cap(): void
+    {
+        self::assertSame(-1, $this->engineConfig(['provider' => 'ollama', 'model' => 'qwen2.5:7b', 'max_tools_per_turn' => -1])->maxToolsPerTurn);
+    }
+
+    public function test_zero_keeps_the_profile_limit(): void
+    {
+        self::assertSame(5, $this->engineConfig(['provider' => 'ollama', 'model' => 'qwen2.5:7b', 'max_tools_per_turn' => 0])->maxToolsPerTurn);
+    }
+
+    public function test_a_missing_max_tools_key_keeps_the_profile_limit(): void
+    {
+        self::assertSame(5, $this->engineConfig(['provider' => 'ollama', 'model' => 'qwen2.5:7b'])->maxToolsPerTurn);
+    }
+
+    public function test_always_include_tools_from_config_reach_the_engine(): void
+    {
+        self::assertSame(['drupal_cache', 'drupal_cron'], $this->engineConfig(['provider' => 'ollama', 'always_include_tools' => ['drupal_cache', 'drupal_cron']])->alwaysIncludeTools);
+    }
+
+    public function test_a_missing_always_include_key_means_an_empty_list(): void
+    {
+        self::assertSame([], $this->engineConfig(['provider' => 'ollama'])->alwaysIncludeTools);
+    }
+
+    public function test_always_include_and_tool_deny_on_the_same_name_keeps_it_denied(): void
+    {
+        $config = $this->engineConfig(['provider' => 'ollama', 'tool_deny' => ['drupal_cache'], 'always_include_tools' => ['drupal_cache']]);
+        $names = array_map(static fn ($tool): string => $tool->name(), $config->tools);
+
+        self::assertContains('drupal_cron', $names, 'precondition: drupal_cron is a built-in tool that is not denied, so the tool list is not empty');
+        self::assertNotContains('drupal_cache', $names);
+    }
+
     private function engineConfig(array $settings): ClawConfig
     {
         $config = $this->createMock(ImmutableConfig::class);

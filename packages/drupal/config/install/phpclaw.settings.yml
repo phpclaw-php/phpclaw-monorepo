@@ -5,6 +5,8 @@ hooks: []
 skills: []
 cloud_signing_secret: ''
 tool_deny: []
+max_tools_per_turn: 0
+always_include_tools: []
 api_auth_providers:
   - basic_auth
   - cookie
