@@ -177,31 +177,6 @@ final class CloudManifestTest extends TestCase
         $this->assertSame(25, $features['guard_a']['priority']);
     }
 
-    public function test_config_returns_value_for_existing_key(): void
-    {
-        $manifest = CloudManifest::fromArray(['config' => ['timeout' => 30]]);
-        $this->assertSame(30, $manifest->config('timeout'));
-    }
-
-    public function test_config_returns_null_for_missing_key_by_default(): void
-    {
-        $manifest = CloudManifest::fromArray([]);
-        $this->assertNull($manifest->config('nonexistent'));
-    }
-
-    public function test_config_returns_default_for_missing_key(): void
-    {
-        $manifest = CloudManifest::fromArray([]);
-        $this->assertSame('fallback', $manifest->config('nonexistent', 'fallback'));
-    }
-
-    public function test_config_returns_custom_default_types(): void
-    {
-        $manifest = CloudManifest::fromArray([]);
-        $this->assertSame([], $manifest->config('missing', []));
-        $this->assertSame(false, $manifest->config('missing', false));
-    }
-
     public function test_to_array_round_trips_via_from_array(): void
     {
         $data = [

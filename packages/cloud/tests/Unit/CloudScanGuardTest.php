@@ -183,7 +183,7 @@ final class CloudScanGuardTest extends TestCase
 
     private function invokeSignatureIsValid(CloudScanGuard $guard, array $result): bool
     {
-        $method = new \ReflectionMethod(CloudScanGuard::class, 'signatureIsValid');
+        $method = new \ReflectionMethod(CloudScanGuard::class, 'isSignatureValid');
 
         return (bool) $method->invoke($guard, $result);
     }

@@ -9,9 +9,82 @@ use PHPUnit\Framework\TestCase;
 
 final class CloudHttpTest extends TestCase
 {
+    private static mixed $server = null;
+
+    private static string $serverUrl = '';
+
+    private static string $router = '';
+
+    public static function setUpBeforeClass(): void
+    {
+        $probe = stream_socket_server('tcp://127.0.0.1:0');
+        $address = stream_socket_get_name($probe, false);
+        fclose($probe);
+
+        self::$router = sys_get_temp_dir().'/phpclaw-cloud-http-router-'.getmypid().'.php';
+        file_put_contents(self::$router, '<?php header("Content-Type: application/json"); echo $_GET["body"] ?? "";');
+
+        self::$server = proc_open(
+            [PHP_BINARY, '-S', $address, self::$router],
+            [1 => ['file', '/dev/null', 'w'], 2 => ['file', '/dev/null', 'w']],
+            $pipes,
+        );
+        self::$serverUrl = 'http://'.$address.'/?body=';
+
+        $deadline = microtime(true) + 3;
+        while (microtime(true) < $deadline) {
+            $socket = @fsockopen('127.0.0.1', (int) substr($address, strrpos($address, ':') + 1), $errno, $errstr, 0.1);
+            if ($socket !== false) {
+                fclose($socket);
+
+                return;
+            }
+            usleep(50000);
+        }
+    }
+
+    public static function tearDownAfterClass(): void
+    {
+        if (is_resource(self::$server)) {
+            proc_terminate(self::$server);
+            proc_close(self::$server);
+        }
+        @unlink(self::$router);
+    }
+
     protected function tearDown(): void
     {
         CloudHttp::reset();
+    }
+
+    public function test_get_returns_decoded_object_body_on_200(): void
+    {
+        self::assertSame(['a' => 1], CloudHttp::get(self::$serverUrl.urlencode('{"a":1}'), 'key'));
+    }
+
+    public function test_post_returns_decoded_object_body_on_200(): void
+    {
+        self::assertSame(['plan' => 'pro'], CloudHttp::post(self::$serverUrl.urlencode('{"plan":"pro"}'), 'key', ['x' => 1]));
+    }
+
+    public function test_get_returns_null_when_body_is_json_true(): void
+    {
+        self::assertNull(CloudHttp::get(self::$serverUrl.urlencode('true'), 'key'));
+    }
+
+    public function test_get_returns_null_when_body_is_json_string(): void
+    {
+        self::assertNull(CloudHttp::get(self::$serverUrl.urlencode('"str"'), 'key'));
+    }
+
+    public function test_post_returns_null_when_body_is_json_number(): void
+    {
+        self::assertNull(CloudHttp::post(self::$serverUrl.urlencode('42'), 'key', []));
+    }
+
+    public function test_get_returns_null_when_body_is_invalid_json(): void
+    {
+        self::assertNull(CloudHttp::get(self::$serverUrl.urlencode('{not json'), 'key'));
     }
 
     public function test_transport_refuses_remote_plaintext_http(): void

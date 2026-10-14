@@ -12,6 +12,8 @@ use PhpClaw\Guards\Contracts\GuardInterface;
  */
 final class CloudScanGuard implements GuardInterface
 {
+    private const DEFAULT_FEATURE = 'scan';
+
     private const SIGNATURE_ALGO = 'sha256';
 
     private const SCAN_PATH = '/'.CloudHttp::API_VERSION.'/scan';
@@ -32,7 +34,7 @@ final class CloudScanGuard implements GuardInterface
      */
     public function __construct(
         private readonly string $key,
-        private readonly string $feature = 'scan',
+        private readonly string $feature = self::DEFAULT_FEATURE,
         private readonly string $signingSecret = '',
         private readonly bool $failClosed = false,
     ) {}
@@ -61,7 +63,7 @@ final class CloudScanGuard implements GuardInterface
             return;
         }
 
-        if ($this->signingSecret !== '' && ! $this->signatureIsValid($result)) {
+        if ($this->signingSecret !== '' && ! $this->isSignatureValid($result)) {
             throw new GuardException('Cloud security scan response could not be verified.');
         }
 
@@ -70,19 +72,19 @@ final class CloudScanGuard implements GuardInterface
         }
 
         throw new GuardException(
-            (string) ($result['reason'] ?? '') !== ''
-                ? (string) $result['reason']
-                : 'Cloud security scan blocked this message.'
+            (string) ($result['reason'] ?? '') === ''
+                ? 'Cloud security scan blocked this message.'
+                : (string) $result['reason']
         );
     }
 
     /**
-     * Verify the HMAC the cloud receiver signs over the verdict (the allowed/reason/request_id concatenation), keyed by the shared signing secret.
+     * Verify the HMAC the cloud signs over allowed, reason and request_id with the signing secret.
      *
      * @param  array<string, mixed>  $result  Decoded scan response.
      * @return bool True only when a signature is present and matches.
      */
-    private function signatureIsValid(array $result): bool
+    private function isSignatureValid(array $result): bool
     {
         $signature = $result['signature'] ?? null;
 

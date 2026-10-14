@@ -41,6 +41,10 @@ final class CloudHttp
 
     private const JSON_ENCODE_FLAGS = JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE;
 
+    private const HTTPS_SCHEME_PREFIX = 'https://';
+
+    private const LOOPBACK_HOSTS = ['localhost', '127.0.0.1', '::1'];
+
     private static ?\CurlMultiHandle $multiHandle = null;
 
     private static array $pendingFires = [];
@@ -48,8 +52,7 @@ final class CloudHttp
     private static bool $shutdownRegistered = false;
 
     /**
-     * Return the phpClaw Cloud API base URL. Fixed in code so no environment value can redirect
-     * the trace stream away from the billing endpoint.
+     * Return the phpClaw Cloud API base URL, fixed in code so no environment value can redirect it.
      *
      * @return string Absolute base URL for cloud API calls.
      */
@@ -295,7 +298,7 @@ final class CloudHttp
      */
     private static function isTransportSecure(string $url): bool
     {
-        if (str_starts_with($url, 'https://')) {
+        if (str_starts_with($url, self::HTTPS_SCHEME_PREFIX)) {
             return true;
         }
 
@@ -305,7 +308,7 @@ final class CloudHttp
             $host = substr($host, 1, -1);
         }
 
-        return in_array($host, ['localhost', '127.0.0.1', '::1'], true);
+        return in_array($host, self::LOOPBACK_HOSTS, true);
     }
 
     /**
@@ -330,7 +333,7 @@ final class CloudHttp
             return null;
         }
 
-        return $data;
+        return is_array($data) ? $data : null;
     }
 
     /**

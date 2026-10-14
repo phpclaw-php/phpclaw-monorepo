@@ -74,7 +74,7 @@ final class CloudManager
     }
 
     /**
-     * Register lifecycle hooks per the manifest: wildcard if custom events are enabled, otherwise one CloudWebhookHook per named event.
+     * Register a wildcard hook when custom events are on, else one CloudWebhookHook per active event.
      *
      * @param  CloudManifest  $manifest  Resolved manifest dictating which hooks to register.
      * @param  string  $key  Cloud key passed through to each CloudWebhookHook.
@@ -122,7 +122,7 @@ final class CloudManager
         string $key,
         array $disable,
         string $signingSecret,
-        bool $failClosed = false,
+        bool $failClosed,
     ): void {
         foreach ($manifest->activeGuardFeatures($disable) as $feature => $config) {
             GuardRegistry::register(
@@ -133,7 +133,7 @@ final class CloudManager
     }
 
     /**
-     * Resolve the active manifest: serve the on-disk cache while it is fresh, otherwise fetch from the API, otherwise fall back to the cache at any age, otherwise an empty manifest.
+     * Resolve the manifest from the fresh cache, then the API, then the stale cache, then empty.
      *
      * @param  string  $key  Cloud key used for both the fetch and the per-key cache path.
      * @return CloudManifest Fresh-enough cached manifest, else a newly fetched one, else the stale cache, else empty.
@@ -173,11 +173,11 @@ final class CloudManager
             timeout: self::MANIFEST_TIMEOUT_S,
         );
 
-        return $data !== null ? CloudManifest::fromArray($data) : null;
+        return $data === null ? null : CloudManifest::fromArray($data);
     }
 
     /**
-     * Read a cached manifest if present, younger than $maxAge seconds, and carrying a valid HMAC; a tampered or foreign file (wrong or missing MAC) is treated as a cache miss so it is refetched instead of trusted.
+     * Read a cached manifest no older than $maxAge whose HMAC verifies; anything else is a miss.
      *
      * @param  string  $file  Absolute path to the cache file.
      * @param  string  $key  Cloud key used to verify the envelope HMAC.
@@ -218,7 +218,7 @@ final class CloudManager
     }
 
     /**
-     * Verify an HMAC envelope and return the inner payload, or null when the envelope is malformed or the MAC fails.
+     * Return the payload of an HMAC envelope, or null when it is malformed or the MAC fails.
      *
      * @param  string  $content  Raw file contents, a JSON envelope of the shape {mac, data}.
      * @param  string  $key  Cloud key the MAC is verified against.
@@ -253,7 +253,7 @@ final class CloudManager
     }
 
     /**
-     * Persist a manifest as an owner-only HMAC envelope via an O_EXCL temp file that is chmod'd owner-only before content then atomically renamed in, so a co-tenant can neither read it mid-write nor hijack the path with a symlink; failures are silently ignored.
+     * Write the manifest as an owner-only HMAC envelope via an exclusive temp file and atomic rename.
      *
      * @param  string  $file  Absolute path of the cache file to write.
      * @param  CloudManifest  $manifest  Manifest to serialise.
@@ -262,18 +262,9 @@ final class CloudManager
      */
     private static function writeCache(string $file, CloudManifest $manifest, string $key): void
     {
-        $payload = json_encode($manifest->toArray());
+        $envelope = self::encodeEnvelope($manifest, $key);
 
-        if ($payload === false) {
-            return;
-        }
-
-        $envelope = json_encode([
-            'mac' => hash_hmac(self::CACHE_MAC_ALGO, $payload, $key),
-            'data' => $payload,
-        ]);
-
-        if ($envelope === false) {
+        if ($envelope === null) {
             return;
         }
 
@@ -297,6 +288,29 @@ final class CloudManager
         if (! $written || ! @rename($tmp, $file)) {
             @unlink($tmp);
         }
+    }
+
+    /**
+     * Encode the manifest as a JSON envelope of the shape {mac, data}, signed with the cloud key.
+     *
+     * @param  CloudManifest  $manifest  Manifest to serialise.
+     * @param  string  $key  Cloud key used to sign the envelope.
+     * @return string|null The envelope JSON, or null when encoding fails.
+     */
+    private static function encodeEnvelope(CloudManifest $manifest, string $key): ?string
+    {
+        $payload = json_encode($manifest->toArray());
+
+        if ($payload === false) {
+            return null;
+        }
+
+        $envelope = json_encode([
+            'mac' => hash_hmac(self::CACHE_MAC_ALGO, $payload, $key),
+            'data' => $payload,
+        ]);
+
+        return $envelope === false ? null : $envelope;
     }
 
     /**
