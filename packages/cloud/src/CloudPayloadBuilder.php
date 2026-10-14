@@ -8,11 +8,15 @@ use PhpClaw\Hooks\LifecycleEvent;
 
 /**
  * Builds the cloud-bound JSON payload for every phpClaw lifecycle event.
- *
- * @internal
  */
 final class CloudPayloadBuilder
 {
+    public const HIDE_INPUTS = 'hide_inputs';
+
+    public const HIDE_OUTPUTS = 'hide_outputs';
+
+    public const HIDE_METADATA = 'hide_metadata';
+
     private const EVENT_NAME_UNKNOWN = 'unknown';
 
     private const MAX_PAYLOAD_STRING_BYTES = 8192;
@@ -33,18 +37,43 @@ final class CloudPayloadBuilder
         'token', 'authorization',
     ];
 
-    public const HIDE_INPUTS = 'hide_inputs';
-
-    public const HIDE_OUTPUTS = 'hide_outputs';
-
-    public const HIDE_METADATA = 'hide_metadata';
-
     private const HIDDEN_MARKER = '[hidden]';
 
     private const HIDDEN_FIELDS = [
         self::HIDE_INPUTS => ['message', 'prompt', 'message_excerpt', 'tool_input', 'command'],
         self::HIDE_OUTPUTS => ['text', 'response', 'tool_result'],
         self::HIDE_METADATA => ['metadata'],
+    ];
+
+    private const FIELD_STRING = 'string';
+
+    private const FIELD_INT = 'int';
+
+    private const FIELD_BOOL = 'bool';
+
+    private const FIELD_NULLABLE_BOOL = 'nullable_bool';
+
+    private const FIELD_NON_EMPTY = 'non_empty';
+
+    private const FIELD_RAW = 'raw';
+
+    private const RUN_FIELDS = [
+        'run_id' => self::FIELD_STRING,
+        'parent_run_id' => self::FIELD_STRING,
+    ];
+
+    private const MODEL_FIELDS = [
+        'provider' => self::FIELD_STRING,
+        'model' => self::FIELD_STRING,
+    ];
+
+    private const MESSAGE_FIELDS = [
+        'message' => self::FIELD_STRING,
+        'prompt' => [self::FIELD_STRING, 'message'],
+    ];
+
+    private const HAS_CONVERSATION_FIELD = [
+        'has_conversation' => [self::FIELD_NON_EMPTY, 'conversation_id'],
     ];
 
     private readonly array $hidden;
@@ -84,57 +113,316 @@ final class CloudPayloadBuilder
             'ts' => (new \DateTimeImmutable('now', new \DateTimeZone('UTC')))->format(\DateTimeInterface::ATOM),
         ];
 
-        $payload = match ($event) {
-            LifecycleEvent::AgentBefore->value => $base + $this->fromAgentBefore($context),
-            LifecycleEvent::AgentIteration->value => $base + $this->fromAgentIteration($context),
-            LifecycleEvent::AgentAfter->value,
-            LifecycleEvent::AgentMaxIterations->value => $base + $this->fromAgentAfter($context),
-            LifecycleEvent::AgentError->value => $base + $this->fromAgentError($context),
-            LifecycleEvent::ProviderRequest->value => $base + $this->fromProviderRequest($context),
-            LifecycleEvent::ProviderResponse->value => $base + $this->fromProviderResponse($context),
-            LifecycleEvent::ProviderRetry->value => $base + $this->fromProviderRetry($context),
-            LifecycleEvent::ProviderCacheHit->value => $base + $this->fromProviderCacheHit($context),
-            LifecycleEvent::ProviderFallback->value => $base + $this->fromProviderFallback($context),
-            LifecycleEvent::ProviderResponseCached->value => $base + $this->fromProviderResponseCached($context),
-            LifecycleEvent::BudgetExceeded->value => $base + $this->fromBudgetExceeded($context),
-            LifecycleEvent::StructuredRepair->value => $base + $this->fromStructuredRepair($context),
-            LifecycleEvent::ProviderError->value => $base + $this->fromProviderError($context),
-            LifecycleEvent::ProviderToken->value => $base + $this->fromProviderToken($context),
-            LifecycleEvent::ToolBefore->value => $base + $this->fromToolBefore($context),
-            LifecycleEvent::ToolAfter->value => $base + $this->fromToolAfter($context),
-            LifecycleEvent::ToolError->value => $base + $this->fromToolError($context),
-            LifecycleEvent::ToolNotFound->value => $base + $this->fromToolNotFound($context),
-            LifecycleEvent::ContextOverflow->value => $base + $this->fromContextOverflow($context),
-            LifecycleEvent::GuardBlocked->value => $base + $this->fromGuardBlocked($context),
-            LifecycleEvent::GuardRateLimitExceeded->value => $base + $this->fromGuardRateLimit($context),
-            LifecycleEvent::GuardToolOutputRedacted->value => $base + $this->fromGuardToolOutputRedacted($context),
-            LifecycleEvent::GuardOutputPhpTagRemoved->value => $base + $this->fromGuardPhpTagRemoved($context),
-            LifecycleEvent::GuardOutputFunctionRedacted->value => $base + $this->fromGuardFunctionRedacted($context),
-            LifecycleEvent::ConversationStart->value => $base + $this->fromConversationStart($context),
-            LifecycleEvent::ConversationEnd->value => $base + $this->fromConversationEnd($context),
-            LifecycleEvent::MemoryRead->value,
-            LifecycleEvent::MemoryWrite->value,
-            LifecycleEvent::MemoryForget->value => $base + $this->fromMemory($context),
-            LifecycleEvent::StreamStart->value => $base + $this->fromStreamStart($context),
-            LifecycleEvent::StreamEnd->value => $base + $this->fromStreamEnd($context),
-            LifecycleEvent::StreamAbort->value => $base + $this->fromStreamAbort($context),
-            LifecycleEvent::ShellDenied->value => $base + $this->fromShellDenied($context),
-            LifecycleEvent::ShellExec->value => $base + $this->fromShellExec($context),
-            LifecycleEvent::JobStarted->value => $base + $this->fromJobStarted($context),
-            LifecycleEvent::JobCompleted->value => $base + $this->fromJobCompleted($context),
-            LifecycleEvent::JobFailed->value => $base + $this->fromJobFailed($context),
-            LifecycleEvent::SkillRegistered->value => $base + $this->fromSkillRegistered($context),
-            LifecycleEvent::SkillLoaded->value => $base + $this->fromSkillLoaded($context),
-            LifecycleEvent::SkillMatched->value => $base + $this->fromSkillMatched($context),
-            LifecycleEvent::SkillNotMatched->value => $base + $this->fromSkillNotMatched($context),
-            LifecycleEvent::GraphStart->value => $base + $this->fromGraphStart($context),
-            LifecycleEvent::GraphEnd->value => $base + $this->fromGraphEnd($context),
-            LifecycleEvent::GraphFanOut->value => $base + $this->fromGraphFanOut($context),
-            LifecycleEvent::GraphJoin->value => $base + $this->fromGraphJoin($context),
-            default => $base + $this->fromGenericEvent($context),
-        };
+        $fields = self::fieldsFor($event);
+        $payload = $fields === null
+            ? $base + self::readFields($context, self::RUN_FIELDS) + ['payload' => self::sanitizePayload($context)]
+            : $base + self::readFields($context, $fields);
 
         return self::capTotalSize($base, self::sanitizePayload($this->hide($payload)));
+    }
+
+    /**
+     * Return the payload field map for a known lifecycle event, or null for a custom event.
+     *
+     * @param  string  $event  Resolved event name.
+     * @return array<string, string|array{0: string, 1: string}>|null Output field to field type, or [type, context key] when the key differs.
+     */
+    private static function fieldsFor(string $event): ?array
+    {
+        return match ($event) {
+            LifecycleEvent::AgentBefore->value => [
+                ...self::RUN_FIELDS,
+                'conversation_id' => self::FIELD_STRING,
+                ...self::HAS_CONVERSATION_FIELD,
+                'streaming' => self::FIELD_BOOL,
+                ...self::MESSAGE_FIELDS,
+            ],
+            LifecycleEvent::AgentIteration->value => [...self::RUN_FIELDS, 'iteration' => self::FIELD_INT],
+            LifecycleEvent::AgentAfter->value,
+            LifecycleEvent::AgentMaxIterations->value => [
+                ...self::RUN_FIELDS,
+                'conversation_id' => self::FIELD_STRING,
+                ...self::MODEL_FIELDS,
+                'iterations' => self::FIELD_INT,
+                'duration_ms' => self::FIELD_INT,
+                'tools_called' => self::FIELD_RAW,
+                'cache_read_tokens' => self::FIELD_INT,
+                'cache_write_tokens' => self::FIELD_INT,
+                'streaming' => self::FIELD_BOOL,
+                ...self::HAS_CONVERSATION_FIELD,
+                'text' => self::FIELD_STRING,
+                'response' => [self::FIELD_STRING, 'text'],
+                'message' => self::FIELD_STRING,
+            ],
+            LifecycleEvent::AgentError->value => [
+                'run_id' => self::FIELD_STRING,
+                'error' => self::FIELD_STRING,
+                'class' => self::FIELD_STRING,
+                'streaming' => self::FIELD_BOOL,
+                ...self::HAS_CONVERSATION_FIELD,
+                ...self::MESSAGE_FIELDS,
+            ],
+            LifecycleEvent::ProviderRequest->value => [
+                ...self::RUN_FIELDS,
+                ...self::MODEL_FIELDS,
+                'history_len' => self::FIELD_INT,
+                'tool_count' => self::FIELD_INT,
+                'streaming' => self::FIELD_BOOL,
+            ],
+            LifecycleEvent::ProviderResponse->value => [
+                ...self::RUN_FIELDS,
+                ...self::MODEL_FIELDS,
+                'type' => self::FIELD_STRING,
+                'input_tokens' => self::FIELD_INT,
+                'output_tokens' => self::FIELD_INT,
+                'cache_read_tokens' => self::FIELD_INT,
+                'cache_write_tokens' => self::FIELD_INT,
+                'duration_ms' => self::FIELD_INT,
+                'streaming' => self::FIELD_BOOL,
+            ],
+            LifecycleEvent::ProviderRetry->value => [
+                ...self::RUN_FIELDS,
+                ...self::MODEL_FIELDS,
+                'attempt' => self::FIELD_INT,
+                'error' => self::FIELD_STRING,
+                'iteration' => self::FIELD_INT,
+            ],
+            LifecycleEvent::ProviderCacheHit->value => [
+                ...self::RUN_FIELDS,
+                ...self::MODEL_FIELDS,
+                'cache_read_tokens' => self::FIELD_INT,
+                'cache_write_tokens' => self::FIELD_INT,
+            ],
+            LifecycleEvent::ProviderFallback->value => [
+                ...self::RUN_FIELDS,
+                'from' => self::FIELD_STRING,
+                'to' => self::FIELD_STRING,
+                'status' => self::FIELD_INT,
+            ],
+            LifecycleEvent::ProviderResponseCached->value => [
+                ...self::RUN_FIELDS,
+                ...self::MODEL_FIELDS,
+                'key_hash' => self::FIELD_STRING,
+            ],
+            LifecycleEvent::BudgetExceeded->value => [
+                ...self::RUN_FIELDS,
+                'tokens_spent' => self::FIELD_INT,
+                'budget' => self::FIELD_INT,
+            ],
+            LifecycleEvent::StructuredRepair->value => [
+                ...self::RUN_FIELDS,
+                'attempt' => self::FIELD_INT,
+                'error_count' => self::FIELD_INT,
+            ],
+            LifecycleEvent::ProviderError->value => [
+                ...self::RUN_FIELDS,
+                ...self::MODEL_FIELDS,
+                'error' => self::FIELD_STRING,
+                'iteration' => self::FIELD_INT,
+            ],
+            LifecycleEvent::ProviderToken->value => self::MODEL_FIELDS,
+            LifecycleEvent::ToolBefore->value => [
+                ...self::RUN_FIELDS,
+                'tool_name' => self::FIELD_STRING,
+                'tool_input' => self::FIELD_RAW,
+                'iteration' => self::FIELD_INT,
+            ],
+            LifecycleEvent::ToolAfter->value => [
+                ...self::RUN_FIELDS,
+                'tool_name' => self::FIELD_STRING,
+                'tool_input' => self::FIELD_RAW,
+                'tool_result' => self::FIELD_STRING,
+                'iteration' => self::FIELD_INT,
+                'duration_ms' => self::FIELD_INT,
+            ],
+            LifecycleEvent::ToolError->value => [
+                ...self::RUN_FIELDS,
+                'tool_name' => self::FIELD_STRING,
+                'tool_input' => self::FIELD_RAW,
+                'error' => self::FIELD_STRING,
+            ],
+            LifecycleEvent::ToolNotFound->value => [
+                ...self::RUN_FIELDS,
+                'tool_name' => self::FIELD_STRING,
+                'tool_input' => self::FIELD_RAW,
+                'available_tools' => self::FIELD_RAW,
+            ],
+            LifecycleEvent::ContextOverflow->value => [
+                ...self::RUN_FIELDS,
+                ...self::MODEL_FIELDS,
+                'history_length' => self::FIELD_INT,
+                'max_history_length' => self::FIELD_INT,
+            ],
+            LifecycleEvent::GuardBlocked->value => [...self::RUN_FIELDS, 'reason' => self::FIELD_STRING],
+            LifecycleEvent::GuardRateLimitExceeded->value => [
+                ...self::RUN_FIELDS,
+                'caller_id' => self::FIELD_STRING,
+                'count' => self::FIELD_INT,
+                'max_requests' => self::FIELD_INT,
+                'window_seconds' => self::FIELD_INT,
+            ],
+            LifecycleEvent::GuardToolOutputRedacted->value => [
+                ...self::RUN_FIELDS,
+                'tool_name' => self::FIELD_STRING,
+                'pattern' => self::FIELD_STRING,
+            ],
+            LifecycleEvent::GuardOutputPhpTagRemoved->value => [...self::RUN_FIELDS, 'tag' => self::FIELD_STRING],
+            LifecycleEvent::GuardOutputFunctionRedacted->value => [...self::RUN_FIELDS, 'function' => self::FIELD_STRING],
+            LifecycleEvent::ConversationStart->value => [
+                ...self::RUN_FIELDS,
+                'conversation_id' => self::FIELD_STRING,
+                'metadata' => self::FIELD_RAW,
+            ],
+            LifecycleEvent::ConversationEnd->value => [
+                'run_id' => self::FIELD_STRING,
+                'conversation_id' => self::FIELD_STRING,
+                'turn_count' => self::FIELD_INT,
+                'duration_ms' => self::FIELD_INT,
+                ...self::MESSAGE_FIELDS,
+                'text' => [self::FIELD_STRING, 'response'],
+                'response' => self::FIELD_STRING,
+            ],
+            LifecycleEvent::MemoryRead->value,
+            LifecycleEvent::MemoryWrite->value,
+            LifecycleEvent::MemoryForget->value => [
+                ...self::RUN_FIELDS,
+                'namespace' => self::FIELD_STRING,
+                'key' => self::FIELD_STRING,
+                'driver' => self::FIELD_STRING,
+                'ttl' => self::FIELD_INT,
+                'hit' => self::FIELD_NULLABLE_BOOL,
+            ],
+            LifecycleEvent::StreamStart->value => [
+                'run_id' => self::FIELD_STRING,
+                ...self::MODEL_FIELDS,
+                ...self::MESSAGE_FIELDS,
+            ],
+            LifecycleEvent::StreamEnd->value => [
+                'run_id' => self::FIELD_STRING,
+                ...self::MODEL_FIELDS,
+                'duration_ms' => self::FIELD_INT,
+                'chars' => self::FIELD_INT,
+                ...self::MESSAGE_FIELDS,
+            ],
+            LifecycleEvent::StreamAbort->value => [
+                'run_id' => self::FIELD_STRING,
+                ...self::MODEL_FIELDS,
+                'error' => self::FIELD_STRING,
+            ],
+            LifecycleEvent::ShellDenied->value => [
+                ...self::RUN_FIELDS,
+                'command' => self::FIELD_STRING,
+                'cmd_name' => self::FIELD_STRING,
+                'reason' => self::FIELD_STRING,
+                'file' => self::FIELD_STRING,
+            ],
+            LifecycleEvent::ShellExec->value => [
+                ...self::RUN_FIELDS,
+                'command' => self::FIELD_STRING,
+                'cmd_name' => self::FIELD_STRING,
+            ],
+            LifecycleEvent::JobStarted->value => ['job_id' => self::FIELD_STRING, ...self::MESSAGE_FIELDS],
+            LifecycleEvent::JobCompleted->value => [
+                'job_id' => self::FIELD_STRING,
+                'run_id' => self::FIELD_STRING,
+                ...self::MODEL_FIELDS,
+                'iterations' => self::FIELD_INT,
+                'duration_ms' => self::FIELD_INT,
+                'tokens' => self::FIELD_INT,
+            ],
+            LifecycleEvent::JobFailed->value => [
+                'job_id' => self::FIELD_STRING,
+                'error' => self::FIELD_STRING,
+                'class' => self::FIELD_STRING,
+            ],
+            LifecycleEvent::SkillRegistered->value => [
+                'key' => self::FIELD_STRING,
+                'class' => self::FIELD_STRING,
+                'label' => self::FIELD_STRING,
+            ],
+            LifecycleEvent::SkillLoaded->value => [
+                'skill_name' => self::FIELD_STRING,
+                'skill_class' => self::FIELD_STRING,
+            ],
+            LifecycleEvent::SkillMatched->value => [
+                ...self::RUN_FIELDS,
+                'matched_skills' => self::FIELD_RAW,
+                'message_excerpt' => self::FIELD_STRING,
+                'matched_count' => self::FIELD_INT,
+            ],
+            LifecycleEvent::SkillNotMatched->value => [
+                ...self::RUN_FIELDS,
+                'message_excerpt' => self::FIELD_STRING,
+                'available_skills' => self::FIELD_RAW,
+            ],
+            LifecycleEvent::GraphStart->value => [...self::RUN_FIELDS, 'entry_node' => self::FIELD_STRING],
+            LifecycleEvent::GraphEnd->value => [
+                ...self::RUN_FIELDS,
+                'steps' => self::FIELD_INT,
+                'last_node' => self::FIELD_STRING,
+            ],
+            LifecycleEvent::GraphFanOut->value => [
+                ...self::RUN_FIELDS,
+                'node' => self::FIELD_STRING,
+                'branches' => self::FIELD_INT,
+            ],
+            LifecycleEvent::GraphJoin->value => [
+                ...self::RUN_FIELDS,
+                'node' => self::FIELD_STRING,
+                'branches' => self::FIELD_INT,
+                'failed' => self::FIELD_INT,
+            ],
+            default => null,
+        };
+    }
+
+    /**
+     * Read every field of a field map from the event context, in map order.
+     *
+     * @param  array<string, mixed>  $context  Raw event context from the hook dispatcher.
+     * @param  array<string, string|array{0: string, 1: string}>  $fields  Output field to field type, or [type, context key].
+     * @return array<string, mixed> Output field to typed value.
+     */
+    private static function readFields(array $context, array $fields): array
+    {
+        $payload = [];
+
+        foreach ($fields as $name => $field) {
+            [$type, $key] = is_array($field) ? $field : [$field, $name];
+            $payload[$name] = self::readField($context, $key, $type);
+        }
+
+        return $payload;
+    }
+
+    /**
+     * Read one context value cast to its field type; an absent key gives null, or false for the bool types.
+     *
+     * @param  array<string, mixed>  $context  Raw event context from the hook dispatcher.
+     * @param  string  $key  Context key to read.
+     * @param  string  $type  One of the FIELD_* types; FIELD_RAW returns the value uncast.
+     * @return mixed The typed value.
+     */
+    private static function readField(array $context, string $key, string $type): mixed
+    {
+        if ($type === self::FIELD_BOOL) {
+            return (bool) ($context[$key] ?? false);
+        }
+
+        if ($type === self::FIELD_NON_EMPTY) {
+            return isset($context[$key]) && $context[$key] !== '';
+        }
+
+        if (! isset($context[$key])) {
+            return null;
+        }
+
+        return match ($type) {
+            self::FIELD_STRING => (string) $context[$key],
+            self::FIELD_INT => (int) $context[$key],
+            self::FIELD_NULLABLE_BOOL => (bool) $context[$key],
+            default => $context[$key],
+        };
     }
 
     /**
@@ -183,871 +471,44 @@ final class CloudPayloadBuilder
     }
 
     /**
-     * Build the cloud payload for the `agent.before` event.
-     *
-     * @param  array<string, mixed>  $context  Raw event context from the hook dispatcher.
-     * @return array<string, mixed> Cloud-ready payload fields for this event.
-     */
-    private function fromAgentBefore(array $context): array
-    {
-        $payload = [
-            'run_id' => self::str($context, 'run_id'),
-            'parent_run_id' => self::str($context, 'parent_run_id'),
-            'conversation_id' => self::str($context, 'conversation_id'),
-            'has_conversation' => self::hasConversation($context),
-            'streaming' => self::bool($context, 'streaming'),
-        ];
-
-        return $payload + self::messageAliases($context);
-    }
-
-    /**
-     * Build the cloud payload for the `agent.iteration` event.
-     *
-     * @param  array<string, mixed>  $context  Raw event context from the hook dispatcher.
-     * @return array<string, mixed> Cloud-ready payload fields for this event.
-     */
-    private function fromAgentIteration(array $context): array
-    {
-        return [
-            'run_id' => self::str($context, 'run_id'),
-            'parent_run_id' => self::str($context, 'parent_run_id'),
-            'iteration' => self::int($context, 'iteration'),
-        ];
-    }
-
-    /**
-     * Build the cloud payload for the `agent.after` and `agent.max_iterations` events.
-     *
-     * @param  array<string, mixed>  $context  Raw event context from the hook dispatcher.
-     * @return array<string, mixed> Cloud-ready payload fields for this event.
-     */
-    private function fromAgentAfter(array $context): array
-    {
-        $payload = [
-            'run_id' => self::str($context, 'run_id'),
-            'parent_run_id' => self::str($context, 'parent_run_id'),
-            'conversation_id' => self::str($context, 'conversation_id'),
-            'provider' => self::str($context, 'provider'),
-            'model' => self::str($context, 'model'),
-            'iterations' => self::int($context, 'iterations'),
-            'duration_ms' => self::int($context, 'duration_ms'),
-            'tools_called' => $context['tools_called'] ?? null,
-            'cache_read_tokens' => self::int($context, 'cache_read_tokens'),
-            'cache_write_tokens' => self::int($context, 'cache_write_tokens'),
-            'streaming' => self::bool($context, 'streaming'),
-            'has_conversation' => self::hasConversation($context),
-        ];
-
-        return $payload
-            + self::textAliases($context, 'text')
-            + ['message' => self::str($context, 'message')];
-    }
-
-    /**
-     * Build the cloud payload for the `agent.error` event.
-     *
-     * @param  array<string, mixed>  $context  Raw event context from the hook dispatcher.
-     * @return array<string, mixed> Cloud-ready payload fields for this event.
-     */
-    private function fromAgentError(array $context): array
-    {
-        $payload = [
-            'run_id' => self::str($context, 'run_id'),
-            'error' => self::str($context, 'error'),
-            'class' => self::str($context, 'class'),
-            'streaming' => self::bool($context, 'streaming'),
-            'has_conversation' => self::hasConversation($context),
-        ];
-
-        return $payload + self::messageAliases($context);
-    }
-
-    /**
-     * Build the cloud payload for the `provider.request` event.
-     *
-     * @param  array<string, mixed>  $context  Raw event context from the hook dispatcher.
-     * @return array<string, mixed> Cloud-ready payload fields for this event.
-     */
-    private function fromProviderRequest(array $context): array
-    {
-        return [
-            'run_id' => self::str($context, 'run_id'),
-            'parent_run_id' => self::str($context, 'parent_run_id'),
-            'provider' => self::str($context, 'provider'),
-            'model' => self::str($context, 'model'),
-            'history_len' => self::int($context, 'history_len'),
-            'tool_count' => self::int($context, 'tool_count'),
-            'streaming' => self::bool($context, 'streaming'),
-        ];
-    }
-
-    /**
-     * Build the cloud payload for the `provider.response` event.
-     *
-     * @param  array<string, mixed>  $context  Raw event context from the hook dispatcher.
-     * @return array<string, mixed> Cloud-ready payload fields for this event.
-     */
-    private function fromProviderResponse(array $context): array
-    {
-        return [
-            'run_id' => self::str($context, 'run_id'),
-            'parent_run_id' => self::str($context, 'parent_run_id'),
-            'provider' => self::str($context, 'provider'),
-            'model' => self::str($context, 'model'),
-            'type' => self::str($context, 'type'),
-            'input_tokens' => self::int($context, 'input_tokens'),
-            'output_tokens' => self::int($context, 'output_tokens'),
-            'cache_read_tokens' => self::int($context, 'cache_read_tokens'),
-            'cache_write_tokens' => self::int($context, 'cache_write_tokens'),
-            'duration_ms' => self::int($context, 'duration_ms'),
-            'streaming' => self::bool($context, 'streaming'),
-        ];
-    }
-
-    /**
-     * Build the cloud payload for the `provider.retry` event.
-     *
-     * @param  array<string, mixed>  $context  Raw event context from the hook dispatcher.
-     * @return array<string, mixed> Cloud-ready payload fields for this event.
-     */
-    private function fromProviderRetry(array $context): array
-    {
-        return [
-            'run_id' => self::str($context, 'run_id'),
-            'parent_run_id' => self::str($context, 'parent_run_id'),
-            'provider' => self::str($context, 'provider'),
-            'model' => self::str($context, 'model'),
-            'attempt' => self::int($context, 'attempt'),
-            'error' => self::str($context, 'error'),
-            'iteration' => self::int($context, 'iteration'),
-        ];
-    }
-
-    /**
-     * Build the cloud payload for the `provider.cache_hit` event.
-     *
-     * @param  array<string, mixed>  $context  Raw event context from the hook dispatcher.
-     * @return array<string, mixed> Cloud-ready payload fields for this event.
-     */
-    private function fromProviderCacheHit(array $context): array
-    {
-        return [
-            'run_id' => self::str($context, 'run_id'),
-            'parent_run_id' => self::str($context, 'parent_run_id'),
-            'provider' => self::str($context, 'provider'),
-            'model' => self::str($context, 'model'),
-            'cache_read_tokens' => self::int($context, 'cache_read_tokens'),
-            'cache_write_tokens' => self::int($context, 'cache_write_tokens'),
-        ];
-    }
-
-    /**
-     * Build the cloud payload for the `provider.fallback` event.
-     *
-     * @param  array<string, mixed>  $context  Raw event context from the hook dispatcher.
-     * @return array<string, mixed> Cloud-ready payload fields for this event.
-     */
-    private function fromProviderFallback(array $context): array
-    {
-        return [
-            'run_id' => self::str($context, 'run_id'),
-            'parent_run_id' => self::str($context, 'parent_run_id'),
-            'from' => self::str($context, 'from'),
-            'to' => self::str($context, 'to'),
-            'status' => self::int($context, 'status'),
-        ];
-    }
-
-    /**
-     * Build the cloud payload for the `provider.response_cached` event.
-     *
-     * @param  array<string, mixed>  $context  Raw event context from the hook dispatcher.
-     * @return array<string, mixed> Cloud-ready payload fields for this event.
-     */
-    private function fromProviderResponseCached(array $context): array
-    {
-        return [
-            'run_id' => self::str($context, 'run_id'),
-            'parent_run_id' => self::str($context, 'parent_run_id'),
-            'provider' => self::str($context, 'provider'),
-            'model' => self::str($context, 'model'),
-            'key_hash' => self::str($context, 'key_hash'),
-        ];
-    }
-
-    /**
-     * Build the cloud payload for the `budget.exceeded` event.
-     *
-     * @param  array<string, mixed>  $context  Raw event context from the hook dispatcher.
-     * @return array<string, mixed> Cloud-ready payload fields for this event.
-     */
-    private function fromBudgetExceeded(array $context): array
-    {
-        return [
-            'run_id' => self::str($context, 'run_id'),
-            'parent_run_id' => self::str($context, 'parent_run_id'),
-            'tokens_spent' => self::int($context, 'tokens_spent'),
-            'budget' => self::int($context, 'budget'),
-        ];
-    }
-
-    /**
-     * Build the cloud payload for the `structured.repair` event.
-     *
-     * @param  array<string, mixed>  $context  Raw event context from the hook dispatcher.
-     * @return array<string, mixed> Cloud-ready payload fields for this event.
-     */
-    private function fromStructuredRepair(array $context): array
-    {
-        return [
-            'run_id' => self::str($context, 'run_id'),
-            'parent_run_id' => self::str($context, 'parent_run_id'),
-            'attempt' => self::int($context, 'attempt'),
-            'error_count' => self::int($context, 'error_count'),
-        ];
-    }
-
-    /**
-     * Build the cloud payload for the `provider.error` event.
-     *
-     * @param  array<string, mixed>  $context  Raw event context from the hook dispatcher.
-     * @return array<string, mixed> Cloud-ready payload fields for this event.
-     */
-    private function fromProviderError(array $context): array
-    {
-        return [
-            'run_id' => self::str($context, 'run_id'),
-            'parent_run_id' => self::str($context, 'parent_run_id'),
-            'provider' => self::str($context, 'provider'),
-            'model' => self::str($context, 'model'),
-            'error' => self::str($context, 'error'),
-            'iteration' => self::int($context, 'iteration'),
-        ];
-    }
-
-    /**
-     * Token-level event: emit provider and model only.
-     *
-     * @param  array<string, mixed>  $context  Raw event context from the hook dispatcher.
-     * @return array<string, mixed> Cloud-ready token-event payload.
-     */
-    private function fromProviderToken(array $context): array
-    {
-        return [
-            'provider' => self::str($context, 'provider'),
-            'model' => self::str($context, 'model'),
-        ];
-    }
-
-    /**
-     * Build the cloud payload for the `tool.before` event.
-     *
-     * @param  array<string, mixed>  $context  Raw event context from the hook dispatcher.
-     * @return array<string, mixed> Cloud-ready payload fields for this event.
-     */
-    private function fromToolBefore(array $context): array
-    {
-        return [
-            'run_id' => self::str($context, 'run_id'),
-            'parent_run_id' => self::str($context, 'parent_run_id'),
-            'tool_name' => self::str($context, 'tool_name'),
-            'tool_input' => $context['tool_input'] ?? null,
-            'iteration' => self::int($context, 'iteration'),
-        ];
-    }
-
-    /**
-     * Build the cloud payload for the `tool.after` event.
-     *
-     * @param  array<string, mixed>  $context  Raw event context from the hook dispatcher.
-     * @return array<string, mixed> Cloud-ready payload fields for this event.
-     */
-    private function fromToolAfter(array $context): array
-    {
-        return [
-            'run_id' => self::str($context, 'run_id'),
-            'parent_run_id' => self::str($context, 'parent_run_id'),
-            'tool_name' => self::str($context, 'tool_name'),
-            'tool_input' => $context['tool_input'] ?? null,
-            'tool_result' => self::str($context, 'tool_result'),
-            'iteration' => self::int($context, 'iteration'),
-            'duration_ms' => self::int($context, 'duration_ms'),
-        ];
-    }
-
-    /**
-     * Build the cloud payload for the `tool.error` event.
-     *
-     * @param  array<string, mixed>  $context  Raw event context from the hook dispatcher.
-     * @return array<string, mixed> Cloud-ready payload fields for this event.
-     */
-    private function fromToolError(array $context): array
-    {
-        return [
-            'run_id' => self::str($context, 'run_id'),
-            'parent_run_id' => self::str($context, 'parent_run_id'),
-            'tool_name' => self::str($context, 'tool_name'),
-            'tool_input' => $context['tool_input'] ?? null,
-            'error' => self::str($context, 'error'),
-        ];
-    }
-
-    /**
-     * Build the cloud payload for the `tool.not_found` event.
-     *
-     * @param  array<string, mixed>  $context  Raw event context from the hook dispatcher.
-     * @return array<string, mixed> Cloud-ready payload fields for this event.
-     */
-    private function fromToolNotFound(array $context): array
-    {
-        return [
-            'run_id' => self::str($context, 'run_id'),
-            'parent_run_id' => self::str($context, 'parent_run_id'),
-            'tool_name' => self::str($context, 'tool_name'),
-            'tool_input' => $context['tool_input'] ?? null,
-            'available_tools' => $context['available_tools'] ?? null,
-        ];
-    }
-
-    /**
-     * Build the cloud payload for the `context.overflow` event.
-     *
-     * @param  array<string, mixed>  $context  Raw event context from the hook dispatcher.
-     * @return array<string, mixed> Cloud-ready payload fields for this event.
-     */
-    private function fromContextOverflow(array $context): array
-    {
-        return [
-            'run_id' => self::str($context, 'run_id'),
-            'parent_run_id' => self::str($context, 'parent_run_id'),
-            'provider' => self::str($context, 'provider'),
-            'model' => self::str($context, 'model'),
-            'history_length' => self::int($context, 'history_length'),
-            'max_history_length' => self::int($context, 'max_history_length'),
-        ];
-    }
-
-    /**
-     * Build the cloud payload for the `guard.blocked` event.
-     *
-     * @param  array<string, mixed>  $context  Raw event context from the hook dispatcher.
-     * @return array<string, mixed> Cloud-ready payload fields for this event.
-     */
-    private function fromGuardBlocked(array $context): array
-    {
-        return [
-            'run_id' => self::str($context, 'run_id'),
-            'parent_run_id' => self::str($context, 'parent_run_id'),
-            'reason' => self::str($context, 'reason'),
-        ];
-    }
-
-    /**
-     * Build the cloud payload for the `guard.rate_limit_exceeded` event.
-     *
-     * @param  array<string, mixed>  $context  Raw event context from the hook dispatcher.
-     * @return array<string, mixed> Cloud-ready payload fields for this event.
-     */
-    private function fromGuardRateLimit(array $context): array
-    {
-        return [
-            'run_id' => self::str($context, 'run_id'),
-            'parent_run_id' => self::str($context, 'parent_run_id'),
-            'caller_id' => self::str($context, 'caller_id'),
-            'count' => self::int($context, 'count'),
-            'max_requests' => self::int($context, 'max_requests'),
-            'window_seconds' => self::int($context, 'window_seconds'),
-        ];
-    }
-
-    /**
-     * Build the cloud payload for the `guard.tool_output_redacted` event.
-     *
-     * @param  array<string, mixed>  $context  Raw event context from the hook dispatcher.
-     * @return array<string, mixed> Cloud-ready payload fields for this event.
-     */
-    private function fromGuardToolOutputRedacted(array $context): array
-    {
-        return [
-            'run_id' => self::str($context, 'run_id'),
-            'parent_run_id' => self::str($context, 'parent_run_id'),
-            'tool_name' => self::str($context, 'tool_name'),
-            'pattern' => self::str($context, 'pattern'),
-        ];
-    }
-
-    /**
-     * Build the cloud payload for the `guard.output_php_tag_removed` event.
-     *
-     * @param  array<string, mixed>  $context  Raw event context from the hook dispatcher.
-     * @return array<string, mixed> Cloud-ready payload fields for this event.
-     */
-    private function fromGuardPhpTagRemoved(array $context): array
-    {
-        return [
-            'run_id' => self::str($context, 'run_id'),
-            'parent_run_id' => self::str($context, 'parent_run_id'),
-            'tag' => self::str($context, 'tag'),
-        ];
-    }
-
-    /**
-     * Build the cloud payload for the `guard.output_function_redacted` event.
-     *
-     * @param  array<string, mixed>  $context  Raw event context from the hook dispatcher.
-     * @return array<string, mixed> Cloud-ready payload fields for this event.
-     */
-    private function fromGuardFunctionRedacted(array $context): array
-    {
-        return [
-            'run_id' => self::str($context, 'run_id'),
-            'parent_run_id' => self::str($context, 'parent_run_id'),
-            'function' => self::str($context, 'function'),
-        ];
-    }
-
-    /**
-     * Build the cloud payload for the `conversation.start` event.
-     *
-     * @param  array<string, mixed>  $context  Raw event context from the hook dispatcher.
-     * @return array<string, mixed> Cloud-ready payload fields for this event.
-     */
-    private function fromConversationStart(array $context): array
-    {
-        return [
-            'run_id' => self::str($context, 'run_id'),
-            'parent_run_id' => self::str($context, 'parent_run_id'),
-            'conversation_id' => self::str($context, 'conversation_id'),
-            'metadata' => $context['metadata'] ?? null,
-        ];
-    }
-
-    /**
-     * Build the cloud payload for the `conversation.end` event.
-     *
-     * @param  array<string, mixed>  $context  Raw event context from the hook dispatcher.
-     * @return array<string, mixed> Cloud-ready payload fields for this event.
-     */
-    private function fromConversationEnd(array $context): array
-    {
-        $payload = [
-            'run_id' => self::str($context, 'run_id'),
-            'conversation_id' => self::str($context, 'conversation_id'),
-            'turn_count' => self::int($context, 'turn_count'),
-            'duration_ms' => self::int($context, 'duration_ms'),
-        ];
-
-        return $payload
-            + self::messageAliases($context)
-            + self::textAliases($context, 'response');
-    }
-
-    /**
-     * Build the cloud payload for the `memory.read`, `memory.write`, and `memory.forget` events.
-     *
-     * @param  array<string, mixed>  $context  Raw event context from the hook dispatcher.
-     * @return array<string, mixed> Cloud-ready payload fields for this event.
-     */
-    private function fromMemory(array $context): array
-    {
-        return [
-            'run_id' => self::str($context, 'run_id'),
-            'parent_run_id' => self::str($context, 'parent_run_id'),
-            'namespace' => self::str($context, 'namespace'),
-            'key' => self::str($context, 'key'),
-            'driver' => self::str($context, 'driver'),
-            'ttl' => self::int($context, 'ttl'),
-            'hit' => isset($context['hit']) ? self::bool($context, 'hit') : null,
-        ];
-    }
-
-    /**
-     * Build the cloud payload for the `stream.start` event.
-     *
-     * @param  array<string, mixed>  $context  Raw event context from the hook dispatcher.
-     * @return array<string, mixed> Cloud-ready payload fields for this event.
-     */
-    private function fromStreamStart(array $context): array
-    {
-        $payload = [
-            'run_id' => self::str($context, 'run_id'),
-            'provider' => self::str($context, 'provider'),
-            'model' => self::str($context, 'model'),
-        ];
-
-        return $payload + self::messageAliases($context);
-    }
-
-    /**
-     * Build the cloud payload for the `stream.end` event.
-     *
-     * @param  array<string, mixed>  $context  Raw event context from the hook dispatcher.
-     * @return array<string, mixed> Cloud-ready payload fields for this event.
-     */
-    private function fromStreamEnd(array $context): array
-    {
-        $payload = [
-            'run_id' => self::str($context, 'run_id'),
-            'provider' => self::str($context, 'provider'),
-            'model' => self::str($context, 'model'),
-            'duration_ms' => self::int($context, 'duration_ms'),
-            'chars' => self::int($context, 'chars'),
-        ];
-
-        return $payload + self::messageAliases($context);
-    }
-
-    /**
-     * Build the cloud payload for the `stream.abort` event.
-     *
-     * @param  array<string, mixed>  $context  Raw event context from the hook dispatcher.
-     * @return array<string, mixed> Cloud-ready payload fields for this event.
-     */
-    private function fromStreamAbort(array $context): array
-    {
-        return [
-            'run_id' => self::str($context, 'run_id'),
-            'provider' => self::str($context, 'provider'),
-            'model' => self::str($context, 'model'),
-            'error' => self::str($context, 'error'),
-        ];
-    }
-
-    /**
-     * Build the cloud payload for the `shell.denied` event.
-     *
-     * @param  array<string, mixed>  $context  Raw event context from the hook dispatcher.
-     * @return array<string, mixed> Cloud-ready payload fields for this event.
-     */
-    private function fromShellDenied(array $context): array
-    {
-        return [
-            'run_id' => self::str($context, 'run_id'),
-            'parent_run_id' => self::str($context, 'parent_run_id'),
-            'command' => self::str($context, 'command'),
-            'cmd_name' => self::str($context, 'cmd_name'),
-            'reason' => self::str($context, 'reason'),
-            'file' => self::str($context, 'file'),
-        ];
-    }
-
-    /**
-     * Build the cloud payload for the `shell.exec` event.
-     *
-     * @param  array<string, mixed>  $context  Raw event context from the hook dispatcher.
-     * @return array<string, mixed> Cloud-ready payload fields for this event.
-     */
-    private function fromShellExec(array $context): array
-    {
-        return [
-            'run_id' => self::str($context, 'run_id'),
-            'parent_run_id' => self::str($context, 'parent_run_id'),
-            'command' => self::str($context, 'command'),
-            'cmd_name' => self::str($context, 'cmd_name'),
-        ];
-    }
-
-    /**
-     * Build the cloud payload for the `job.started` event.
-     *
-     * @param  array<string, mixed>  $context  Raw event context from the hook dispatcher.
-     * @return array<string, mixed> Cloud-ready payload fields for this event.
-     */
-    private function fromJobStarted(array $context): array
-    {
-        $payload = ['job_id' => self::str($context, 'job_id')];
-
-        return $payload + self::messageAliases($context);
-    }
-
-    /**
-     * Build the cloud payload for the `job.completed` event.
-     *
-     * @param  array<string, mixed>  $context  Raw event context from the hook dispatcher.
-     * @return array<string, mixed> Cloud-ready payload fields for this event.
-     */
-    private function fromJobCompleted(array $context): array
-    {
-        return [
-            'job_id' => self::str($context, 'job_id'),
-            'run_id' => self::str($context, 'run_id'),
-            'provider' => self::str($context, 'provider'),
-            'model' => self::str($context, 'model'),
-            'iterations' => self::int($context, 'iterations'),
-            'duration_ms' => self::int($context, 'duration_ms'),
-            'tokens' => self::int($context, 'tokens'),
-        ];
-    }
-
-    /**
-     * Build the cloud payload for the `job.failed` event.
-     *
-     * @param  array<string, mixed>  $context  Raw event context from the hook dispatcher.
-     * @return array<string, mixed> Cloud-ready payload fields for this event.
-     */
-    private function fromJobFailed(array $context): array
-    {
-        return [
-            'job_id' => self::str($context, 'job_id'),
-            'error' => self::str($context, 'error'),
-            'class' => self::str($context, 'class'),
-        ];
-    }
-
-    /**
-     * Build the cloud payload for the `skill.registered` event.
-     *
-     * @param  array<string, mixed>  $context  Raw event context from the hook dispatcher.
-     * @return array<string, mixed> Cloud-ready payload fields for this event.
-     */
-    private function fromSkillRegistered(array $context): array
-    {
-        return [
-            'key' => self::str($context, 'key'),
-            'class' => self::str($context, 'class'),
-            'label' => self::str($context, 'label'),
-        ];
-    }
-
-    /**
-     * Build the cloud payload for the `skill.loaded` event.
-     *
-     * @param  array<string, mixed>  $context  Raw event context from the hook dispatcher.
-     * @return array<string, mixed> Cloud-ready payload fields for this event.
-     */
-    private function fromSkillLoaded(array $context): array
-    {
-        return [
-            'skill_name' => self::str($context, 'skill_name'),
-            'skill_class' => self::str($context, 'skill_class'),
-        ];
-    }
-
-    /**
-     * Build the cloud payload for the `skill.matched` event.
-     *
-     * @param  array<string, mixed>  $context  Raw event context from the hook dispatcher.
-     * @return array<string, mixed> Cloud-ready payload fields for this event.
-     */
-    private function fromSkillMatched(array $context): array
-    {
-        return [
-            'run_id' => self::str($context, 'run_id'),
-            'parent_run_id' => self::str($context, 'parent_run_id'),
-            'matched_skills' => $context['matched_skills'] ?? null,
-            'message_excerpt' => self::str($context, 'message_excerpt'),
-            'matched_count' => self::int($context, 'matched_count'),
-        ];
-    }
-
-    /**
-     * Build the cloud payload for the `skill.not_matched` event.
-     *
-     * @param  array<string, mixed>  $context  Raw event context from the hook dispatcher.
-     * @return array<string, mixed> Cloud-ready payload fields for this event.
-     */
-    private function fromSkillNotMatched(array $context): array
-    {
-        return [
-            'run_id' => self::str($context, 'run_id'),
-            'parent_run_id' => self::str($context, 'parent_run_id'),
-            'message_excerpt' => self::str($context, 'message_excerpt'),
-            'available_skills' => $context['available_skills'] ?? null,
-        ];
-    }
-
-    /**
-     * Build the cloud payload for the `graph.start` event.
-     *
-     * @param  array<string, mixed>  $context  Raw event context from the hook dispatcher.
-     * @return array<string, mixed> Cloud-ready payload fields for this event.
-     */
-    private function fromGraphStart(array $context): array
-    {
-        return [
-            'run_id' => self::str($context, 'run_id'),
-            'parent_run_id' => self::str($context, 'parent_run_id'),
-            'entry_node' => self::str($context, 'entry_node'),
-        ];
-    }
-
-    /**
-     * Build the cloud payload for the `graph.end` event.
-     *
-     * @param  array<string, mixed>  $context  Raw event context from the hook dispatcher.
-     * @return array<string, mixed> Cloud-ready payload fields for this event.
-     */
-    private function fromGraphEnd(array $context): array
-    {
-        return [
-            'run_id' => self::str($context, 'run_id'),
-            'parent_run_id' => self::str($context, 'parent_run_id'),
-            'steps' => self::int($context, 'steps'),
-            'last_node' => self::str($context, 'last_node'),
-        ];
-    }
-
-    /**
-     * Build the cloud payload for the `graph.fan_out` event.
-     *
-     * @param  array<string, mixed>  $context  Raw event context from the hook dispatcher.
-     * @return array<string, mixed> Cloud-ready payload fields for this event.
-     */
-    private function fromGraphFanOut(array $context): array
-    {
-        return [
-            'run_id' => self::str($context, 'run_id'),
-            'parent_run_id' => self::str($context, 'parent_run_id'),
-            'node' => self::str($context, 'node'),
-            'branches' => self::int($context, 'branches'),
-        ];
-    }
-
-    /**
-     * Build the cloud payload for the `graph.join` event.
-     *
-     * @param  array<string, mixed>  $context  Raw event context from the hook dispatcher.
-     * @return array<string, mixed> Cloud-ready payload fields for this event.
-     */
-    private function fromGraphJoin(array $context): array
-    {
-        return [
-            'run_id' => self::str($context, 'run_id'),
-            'parent_run_id' => self::str($context, 'parent_run_id'),
-            'node' => self::str($context, 'node'),
-            'branches' => self::int($context, 'branches'),
-            'failed' => self::int($context, 'failed'),
-        ];
-    }
-
-    /**
-     * Build the sanitised generic envelope for unknown or custom events.
-     *
-     * @param  array<string, mixed>  $context  Raw event context from the hook dispatcher.
-     * @return array<string, mixed> Cloud-ready generic envelope with a sanitised nested `payload`.
-     */
-    private function fromGenericEvent(array $context): array
-    {
-        return [
-            'run_id' => self::str($context, 'run_id'),
-            'parent_run_id' => self::str($context, 'parent_run_id'),
-            'payload' => self::sanitizePayload($context),
-        ];
-    }
-
-    /**
      * Recursively redact secret keys, truncate large strings, and bound array sizes.
      *
-     * @param  array<string, mixed>  $payload  Payload.
-     * @return array<string, mixed>
+     * @param  array<string, mixed>  $payload  Payload to sanitise.
+     * @return array<string, mixed> The sanitised payload, same keys.
      */
     private static function sanitizePayload(array $payload): array
     {
-        $out = [];
+        $sanitized = [];
 
         foreach ($payload as $key => $value) {
-            if (in_array(strtolower((string) $key), self::SECRET_KEYS, strict: true)) {
-                $out[$key] = self::REDACTED_MARKER;
-
-                continue;
-            }
-
-            if (is_string($value) && strlen($value) > self::MAX_PAYLOAD_STRING_BYTES) {
-                $out[$key] = substr($value, 0, self::MAX_PAYLOAD_STRING_BYTES).self::TRUNCATED_MARKER;
-
-                continue;
-            }
-
-            if (is_array($value)) {
-                if (count($value) > self::MAX_PAYLOAD_ARRAY_SIZE) {
-                    $out[$key] = sprintf(self::ARRAY_TOO_LARGE_MARKER, count($value));
-
-                    continue;
-                }
-                $out[$key] = self::sanitizePayload($value);
-
-                continue;
-            }
-
-            $out[$key] = $value;
+            $sanitized[$key] = in_array(strtolower((string) $key), self::SECRET_KEYS, strict: true)
+                ? self::REDACTED_MARKER
+                : self::sanitizeValue($value);
         }
 
-        return $out;
+        return $sanitized;
     }
 
     /**
-     * Whether the event context carries a non-empty conversation id.
+     * Truncate a long string, replace an over-large array with a marker, and recurse into other arrays.
      *
-     * @param  array<string, mixed>  $context  Raw event context from the hook dispatcher.
-     * @return bool True when a non-empty `conversation_id` is present.
+     * @param  mixed  $value  One payload value.
+     * @return mixed The sanitised value.
      */
-    private static function hasConversation(array $context): bool
+    private static function sanitizeValue(mixed $value): mixed
     {
-        return isset($context['conversation_id']) && $context['conversation_id'] !== '';
-    }
+        if (is_string($value) && strlen($value) > self::MAX_PAYLOAD_STRING_BYTES) {
+            return substr($value, 0, self::MAX_PAYLOAD_STRING_BYTES).self::TRUNCATED_MARKER;
+        }
 
-    /**
-     * The `message`/`prompt` alias pair every prompt-bearing event emits.
-     *
-     * @param  array<string, mixed>  $context  Raw event context from the hook dispatcher.
-     * @return array<string, string|null> Both alias keys carrying the context `message`.
-     */
-    private static function messageAliases(array $context): array
-    {
-        $msg = self::str($context, 'message');
+        if (! is_array($value)) {
+            return $value;
+        }
 
-        return ['message' => $msg, 'prompt' => $msg];
-    }
+        if (count($value) > self::MAX_PAYLOAD_ARRAY_SIZE) {
+            return sprintf(self::ARRAY_TOO_LARGE_MARKER, count($value));
+        }
 
-    /**
-     * The `text`/`response` alias pair every completion-bearing event emits.
-     *
-     * @param  array<string, mixed>  $context  Raw event context from the hook dispatcher.
-     * @param  string  $key  Context key holding the completion text.
-     * @return array<string, string|null> Both alias keys carrying that value.
-     */
-    private static function textAliases(array $context, string $key): array
-    {
-        $txt = self::str($context, $key);
-
-        return ['text' => $txt, 'response' => $txt];
-    }
-
-    /**
-     * Read a context value coerced to string, or null when the key is absent.
-     *
-     * @param  array<string, mixed>  $ctx  Event context to read from.
-     * @param  string  $key  Key to look up.
-     * @return string|null String value, or null when the key is unset.
-     */
-    private static function str(array $ctx, string $key): ?string
-    {
-        return isset($ctx[$key]) ? (string) $ctx[$key] : null;
-    }
-
-    /**
-     * Read a context value coerced to int, or null when the key is absent.
-     *
-     * @param  array<string, mixed>  $ctx  Event context to read from.
-     * @param  string  $key  Key to look up.
-     * @return int|null Integer value, or null when the key is unset.
-     */
-    private static function int(array $ctx, string $key): ?int
-    {
-        return isset($ctx[$key]) ? (int) $ctx[$key] : null;
-    }
-
-    /**
-     * Read a context value coerced to bool, falling back to a default when absent.
-     *
-     * @param  array<string, mixed>  $ctx  Event context to read from.
-     * @param  string  $key  Key to look up.
-     * @param  bool  $default  Value returned when the key is unset.
-     * @return bool Boolean value, or the default when the key is unset.
-     */
-    private static function bool(array $ctx, string $key, bool $default = false): bool
-    {
-        return (bool) ($ctx[$key] ?? $default);
+        return self::sanitizePayload($value);
     }
 }

@@ -58,16 +58,6 @@ final class CloudWebhookHook implements HookInterface
     }
 
     /**
-     * Event name this hook instance is registered for (or `__any__`).
-     *
-     * @return string Event name, or `__any__` for the wildcard listener.
-     */
-    public function event(): string
-    {
-        return $this->event;
-    }
-
-    /**
      * Lazily instantiate the payload builder.
      *
      * @return CloudPayloadBuilder The lazily-instantiated payload builder.

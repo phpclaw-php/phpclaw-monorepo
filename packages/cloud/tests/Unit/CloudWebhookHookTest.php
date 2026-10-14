@@ -254,29 +254,53 @@ final class CloudWebhookHookTest extends TestCase
         $this->assertSame('gpt-4o', $payload['payload']['model']);
     }
 
-    public function test_str_helper_returns_string_or_null(): void
+    public function test_read_field_string_returns_string_or_null(): void
     {
-        $method = new \ReflectionMethod(CloudPayloadBuilder::class, 'str');
+        $method = new \ReflectionMethod(CloudPayloadBuilder::class, 'readField');
 
-        $this->assertSame('hello', $method->invoke(null, ['k' => 'hello'], 'k'));
-        $this->assertNull($method->invoke(null, [], 'k'));
+        $this->assertSame('42', $method->invoke(null, ['k' => 42], 'k', 'string'));
+        $this->assertNull($method->invoke(null, [], 'k', 'string'));
     }
 
-    public function test_int_helper_returns_int_or_null(): void
+    public function test_read_field_int_returns_int_or_null(): void
     {
-        $method = new \ReflectionMethod(CloudPayloadBuilder::class, 'int');
+        $method = new \ReflectionMethod(CloudPayloadBuilder::class, 'readField');
 
-        $this->assertSame(42, $method->invoke(null, ['n' => 42], 'n'));
-        $this->assertNull($method->invoke(null, [], 'n'));
+        $this->assertSame(42, $method->invoke(null, ['n' => '42'], 'n', 'int'));
+        $this->assertNull($method->invoke(null, [], 'n', 'int'));
     }
 
-    public function test_bool_helper_returns_bool_with_default_false(): void
+    public function test_read_field_bool_defaults_to_false_when_absent(): void
     {
-        $method = new \ReflectionMethod(CloudPayloadBuilder::class, 'bool');
+        $method = new \ReflectionMethod(CloudPayloadBuilder::class, 'readField');
 
-        $this->assertTrue($method->invoke(null, ['flag' => true], 'flag'));
-        $this->assertFalse($method->invoke(null, [], 'flag'));
-        $this->assertTrue($method->invoke(null, [], 'flag', true));
+        $this->assertTrue($method->invoke(null, ['flag' => 1], 'flag', 'bool'));
+        $this->assertFalse($method->invoke(null, [], 'flag', 'bool'));
+    }
+
+    public function test_read_field_nullable_bool_is_null_only_when_absent(): void
+    {
+        $method = new \ReflectionMethod(CloudPayloadBuilder::class, 'readField');
+
+        $this->assertFalse($method->invoke(null, ['hit' => 0], 'hit', 'nullable_bool'));
+        $this->assertNull($method->invoke(null, [], 'hit', 'nullable_bool'));
+    }
+
+    public function test_read_field_non_empty_is_false_for_absent_or_empty_string(): void
+    {
+        $method = new \ReflectionMethod(CloudPayloadBuilder::class, 'readField');
+
+        $this->assertTrue($method->invoke(null, ['c' => 'conv-1'], 'c', 'non_empty'));
+        $this->assertFalse($method->invoke(null, ['c' => ''], 'c', 'non_empty'));
+        $this->assertFalse($method->invoke(null, [], 'c', 'non_empty'));
+    }
+
+    public function test_read_field_raw_keeps_value_unchanged(): void
+    {
+        $method = new \ReflectionMethod(CloudPayloadBuilder::class, 'readField');
+
+        $this->assertSame(['a' => 1], $method->invoke(null, ['r' => ['a' => 1]], 'r', 'raw'));
+        $this->assertNull($method->invoke(null, [], 'r', 'raw'));
     }
 
     public function test_hook_is_invokable_via_registry(): void
@@ -546,18 +570,6 @@ final class CloudWebhookHookTest extends TestCase
         $this->expectNotToPerformAssertions();
         $hook = new CloudWebhookHook('test-key', '__any__');
         $hook->handle(['event' => 'provider.token', 'provider' => 'x']);
-    }
-
-    public function test_event_getter_returns_configured_event_name(): void
-    {
-        $hook = new CloudWebhookHook('test-key', 'agent.after');
-        $this->assertSame('agent.after', $hook->event());
-    }
-
-    public function test_event_getter_returns_wildcard_marker_when_configured(): void
-    {
-        $hook = new CloudWebhookHook('test-key', '__any__');
-        $this->assertSame('__any__', $hook->event());
     }
 
     public function test_generic_sanitiser_handles_nested_secret_keys(): void

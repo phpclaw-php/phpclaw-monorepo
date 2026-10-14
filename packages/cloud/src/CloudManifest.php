@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace PhpClaw\Cloud;
 
 /**
- * Cloud subscription configuration: describes which hook events and guard features the active subscription has enabled, plus arbitrary cloud config.
+ * Cloud subscription manifest: the enabled hook events, guard features and cloud config.
  */
 final class CloudManifest
 {
@@ -105,18 +105,6 @@ final class CloudManifest
     }
 
     /**
-     * Look up a config value by key, returning $default when missing.
-     *
-     * @param  string  $key  Config key to look up.
-     * @param  mixed  $default  Value returned when the key is not present.
-     * @return mixed The config value, or $default when missing.
-     */
-    public function config(string $key, mixed $default = null): mixed
-    {
-        return $this->config[$key] ?? $default;
-    }
-
-    /**
      * Whether the wildcard CloudWebhookHook listener should be installed.
      *
      * @return bool True when the manifest's config.custom_events flag is truthy.
@@ -124,16 +112,6 @@ final class CloudManifest
     public function customEventsEnabled(): bool
     {
         return (bool) ($this->config[self::CONFIG_CUSTOM_EVENTS] ?? false);
-    }
-
-    /**
-     * Whether this is the empty / fallback manifest.
-     *
-     * @return bool True when plan equals PLAN_INACTIVE.
-     */
-    public function isInactive(): bool
-    {
-        return $this->plan === self::PLAN_INACTIVE;
     }
 
     /**
