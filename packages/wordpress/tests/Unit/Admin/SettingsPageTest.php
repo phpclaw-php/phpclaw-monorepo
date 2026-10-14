@@ -94,7 +94,7 @@ final class SettingsPageTest extends TestCase
             }
         }
 
-        $expectedCount = ($cloudInstalled ? 18 : 15) + $dynamicFields;
+        $expectedCount = ($cloudInstalled ? 20 : 17) + $dynamicFields;
 
         self::assertSame(1, $calls['setting']);
         self::assertSame(1, $calls['section']);
@@ -106,6 +106,7 @@ final class SettingsPageTest extends TestCase
             'phpclaw_remote_skill_urls', 'phpclaw_fallback_provider', 'phpclaw_fallback_model',
             'phpclaw_fallback_api_key', 'phpclaw_rate_limit_rpm', 'phpclaw_response_cache',
             'phpclaw_response_cache_ttl', 'phpclaw_max_token_budget',
+            'phpclaw_max_tools_per_turn', 'phpclaw_always_include_tools',
         ];
         foreach ($alwaysPresent as $expected) {
             self::assertContains($expected, $fieldIds);
@@ -1236,5 +1237,82 @@ final class SettingsPageTest extends TestCase
                 }
             }
         }
+    }
+
+    public function test_render_field_max_tools_per_turn_shows_the_saved_number_with_a_minus_one_floor(): void
+    {
+        Functions\expect('get_option')->once()->andReturn(['max_tools_per_turn' => 3]);
+
+        ob_start();
+        SettingsPage::renderField(['field' => 'max_tools_per_turn']);
+        $html = (string) ob_get_clean();
+
+        self::assertStringContainsString('type="number" id="phpclaw_max_tools_per_turn"', $html);
+        self::assertStringContainsString('value="3"', $html);
+        self::assertStringContainsString('min="-1"', $html);
+        self::assertStringContainsString('Tools sent to the model per turn. 0 keeps the automatic limit, -1 sends every tool.', $html);
+    }
+
+    public function test_render_field_max_tools_per_turn_defaults_to_zero(): void
+    {
+        Functions\expect('get_option')->once()->andReturn([]);
+
+        ob_start();
+        SettingsPage::renderField(['field' => 'max_tools_per_turn']);
+
+        self::assertStringContainsString('value="0"', (string) ob_get_clean());
+    }
+
+    public function test_render_field_always_include_tools_joins_the_saved_names(): void
+    {
+        Functions\expect('get_option')->once()->andReturn(['always_include_tools' => ['wp_query', 'wc_get_orders']]);
+
+        ob_start();
+        SettingsPage::renderField(['field' => 'always_include_tools']);
+        $html = (string) ob_get_clean();
+
+        self::assertStringContainsString('id="phpclaw_always_include_tools"', $html);
+        self::assertStringContainsString('value="wp_query, wc_get_orders"', $html);
+        self::assertStringContainsString('Comma-separated tool names sent on every turn, outside Max Tools Per Turn. A name that is not a tool on this site is skipped.', $html);
+    }
+
+    public function test_render_field_always_include_tools_is_empty_when_unset(): void
+    {
+        Functions\expect('get_option')->once()->andReturn([]);
+
+        ob_start();
+        SettingsPage::renderField(['field' => 'always_include_tools']);
+
+        self::assertStringContainsString('value=""', (string) ob_get_clean());
+    }
+
+    public function test_sanitize_max_tools_per_turn_holds_minus_one_or_higher(): void
+    {
+        Functions\expect('get_option')->atLeast()->once()->andReturn([]);
+
+        self::assertSame(-1, SettingsPage::sanitize(['max_tools_per_turn' => '-5'])['max_tools_per_turn']);
+        self::assertSame(-1, SettingsPage::sanitize(['max_tools_per_turn' => '-1'])['max_tools_per_turn']);
+        self::assertSame(0, SettingsPage::sanitize(['max_tools_per_turn' => ''])['max_tools_per_turn']);
+        self::assertSame(12, SettingsPage::sanitize(['max_tools_per_turn' => '12'])['max_tools_per_turn']);
+    }
+
+    public function test_sanitize_always_include_tools_trims_names_and_drops_blanks(): void
+    {
+        Functions\expect('get_option')->atLeast()->once()->andReturn([]);
+
+        self::assertSame(['wp_query', 'wc_get_orders'], SettingsPage::sanitize(['always_include_tools' => ' wp_query , ,wc_get_orders '])['always_include_tools']);
+        self::assertSame([], SettingsPage::sanitize(['always_include_tools' => ''])['always_include_tools']);
+    }
+
+    public function test_sanitize_keeps_the_other_stored_settings_when_the_tool_fields_change(): void
+    {
+        Functions\expect('get_option')->atLeast()->once()->andReturn(['provider' => 'ollama', 'max_token_budget' => 5000]);
+
+        $clean = SettingsPage::sanitize(['max_tools_per_turn' => '3', 'always_include_tools' => 'wp_query']);
+
+        self::assertSame('ollama', $clean['provider']);
+        self::assertSame(5000, $clean['max_token_budget']);
+        self::assertSame(3, $clean['max_tools_per_turn']);
+        self::assertSame(['wp_query'], $clean['always_include_tools']);
     }
 }

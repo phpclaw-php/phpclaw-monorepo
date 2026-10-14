@@ -173,4 +173,55 @@ final class EngineFactoryAgentPrimitivesTest extends TestCase
 
         $engine->send('a real prompt that costs more than one token');
     }
+
+    public function test_max_tools_per_turn_from_config_overrides_the_profile(): void
+    {
+        $engine = EngineFactory::build(config: [], saved: ['provider' => 'ollama', 'model' => 'qwen2.5:7b', 'max_tools_per_turn' => 3]);
+
+        self::assertSame(3, $engine->config()->maxToolsPerTurn);
+    }
+
+    public function test_minus_one_from_config_removes_the_cap(): void
+    {
+        $engine = EngineFactory::build(config: [], saved: ['provider' => 'ollama', 'model' => 'qwen2.5:7b', 'max_tools_per_turn' => -1]);
+
+        self::assertSame(-1, $engine->config()->maxToolsPerTurn);
+    }
+
+    public function test_zero_keeps_the_profile_limit(): void
+    {
+        $engine = EngineFactory::build(config: [], saved: ['provider' => 'ollama', 'model' => 'qwen2.5:7b', 'max_tools_per_turn' => 0]);
+
+        self::assertSame(5, $engine->config()->maxToolsPerTurn);
+    }
+
+    public function test_a_missing_max_tools_key_keeps_the_profile_limit(): void
+    {
+        $engine = EngineFactory::build(config: [], saved: ['provider' => 'ollama', 'model' => 'qwen2.5:7b']);
+
+        self::assertSame(5, $engine->config()->maxToolsPerTurn);
+    }
+
+    public function test_always_include_tools_from_config_reach_the_engine(): void
+    {
+        $engine = EngineFactory::build(config: [], saved: ['provider' => 'ollama', 'always_include_tools' => ['wp_query', 'wp_users']]);
+
+        self::assertSame(['wp_query', 'wp_users'], $engine->config()->alwaysIncludeTools);
+    }
+
+    public function test_a_missing_always_include_key_means_an_empty_list(): void
+    {
+        $engine = EngineFactory::build(config: [], saved: ['provider' => 'ollama']);
+
+        self::assertSame([], $engine->config()->alwaysIncludeTools);
+    }
+
+    public function test_always_include_and_tool_deny_on_the_same_name_keeps_it_denied(): void
+    {
+        $engine = EngineFactory::build(config: ['tool_deny' => ['wp_query']], saved: ['provider' => 'ollama', 'always_include_tools' => ['wp_query']]);
+        $names = array_map(static fn ($tool): string => $tool->name(), $engine->config()->tools);
+
+        self::assertContains('wp_users', $names, 'precondition: wp_users is a built-in tool that is not denied, so the tool list is not empty');
+        self::assertNotContains('wp_query', $names);
+    }
 }

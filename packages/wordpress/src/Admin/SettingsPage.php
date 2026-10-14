@@ -9,6 +9,7 @@ use PhpClaw\Cloud\CloudManager;
 use PhpClaw\Providers\ProviderCatalogue;
 use PhpClaw\Tools\Contracts\ConfigurableToolInterface;
 use PhpClaw\Tools\ToolRegistry;
+use PhpClaw\Tools\ToolRouter;
 use PhpClaw\WordPress\Plugin;
 
 /**
@@ -79,6 +80,8 @@ final class SettingsPage
             'response_cache' => __('Response Cache', 'phpclaw'),
             'response_cache_ttl' => __('Response Cache TTL (seconds)', 'phpclaw'),
             'max_token_budget' => __('Max Token Budget', 'phpclaw'),
+            'max_tools_per_turn' => __('Max Tools Per Turn', 'phpclaw'),
+            'always_include_tools' => __('Always Include Tools', 'phpclaw'),
         ];
 
         if (class_exists(CloudManager::class)) {
@@ -111,8 +114,7 @@ final class SettingsPage
     }
 
     /**
-     * Render the main settings page with tabbed navigation, returning early for anyone
-     * without phpclaw_use_admin_chat.
+     * Render the settings page, or nothing for a user without phpclaw_use_admin_chat.
      *
      * @return void
      */
@@ -286,6 +288,21 @@ final class SettingsPage
                 esc_attr($value !== '' ? (string) $value : '0'),
                 esc_html__('Stops a run before a provider call would take its token spend over this number. 0 turns it off. Maximum 10000000.', 'phpclaw'),
             ),
+            'max_tools_per_turn' => printf(
+                '<input type="number" id="phpclaw_max_tools_per_turn" name="%s" value="%s" min="-1" class="small-text" />'
+                .'<p class="description">%s</p>',
+                esc_attr($name),
+                esc_attr($value !== '' ? (string) $value : '0'),
+                esc_html__('Tools sent to the model per turn. 0 keeps the automatic limit, -1 sends every tool.', 'phpclaw'),
+            ),
+            'always_include_tools' => printf(
+                '<input type="text" id="phpclaw_always_include_tools" name="%s" value="%s" class="regular-text" placeholder="%s" />'
+                .'<p class="description">%s</p>',
+                esc_attr($name),
+                esc_attr(is_array($value) ? implode(', ', $value) : (string) $value),
+                esc_attr__('e.g. wp_query, wc_get_orders', 'phpclaw'),
+                esc_html__('Comma-separated tool names sent on every turn, outside Max Tools Per Turn. A name that is not a tool on this site is skipped.', 'phpclaw'),
+            ),
             default => self::renderDynamicField($field, $name, (string) $value),
         };
     }
@@ -366,14 +383,7 @@ final class SettingsPage
         }
 
         if (isset($input['cloud_disable'])) {
-            $raw = $input['cloud_disable'];
-            $items = is_array($raw)
-                ? array_map(static fn (mixed $v): string => is_scalar($v) ? (string) $v : '', $raw)
-                : explode(',', sanitize_text_field((string) $raw));
-            $clean['cloud_disable'] = array_values(array_filter(
-                array_map(static fn (string $s): string => sanitize_text_field(trim($s)), $items),
-                static fn (string $s): bool => $s !== '',
-            ));
+            $clean['cloud_disable'] = self::sanitizeNameList($input['cloud_disable']);
         }
 
         if (isset($input['store_messages'])) {
@@ -424,12 +434,37 @@ final class SettingsPage
             $clean['max_token_budget'] = max(0, min(10_000_000, (int) $input['max_token_budget']));
         }
 
+        if (isset($input['max_tools_per_turn'])) {
+            $clean['max_tools_per_turn'] = max(ToolRouter::UNLIMITED, (int) $input['max_tools_per_turn']);
+        }
+
+        if (isset($input['always_include_tools'])) {
+            $clean['always_include_tools'] = self::sanitizeNameList($input['always_include_tools']);
+        }
+
         return $clean;
     }
 
     /**
-     * Sanitize the fallback provider slug: '' turns fallback off, 'custom' is rejected, and a
-     * mismatched tool-schema format raises a settings error and clears the field.
+     * Turn a comma-separated string or a list into trimmed, sanitised names with blanks dropped.
+     *
+     * @param  mixed  $raw  Submitted value: a comma-separated string or an array.
+     * @return list<string>
+     */
+    private static function sanitizeNameList(mixed $raw): array
+    {
+        $items = is_array($raw)
+            ? array_map(static fn (mixed $v): string => is_scalar($v) ? (string) $v : '', $raw)
+            : explode(',', sanitize_text_field((string) $raw));
+
+        return array_values(array_filter(
+            array_map(static fn (string $s): string => sanitize_text_field(trim($s)), $items),
+            static fn (string $s): bool => $s !== '',
+        ));
+    }
+
+    /**
+     * Sanitize the fallback slug: '' is off; Custom or another tool format adds an error and clears it.
      *
      * @param  string  $candidate  Raw submitted fallback provider slug.
      * @param  string  $primaryProvider  The primary provider slug being saved or already stored; '' means auto-detected.
@@ -620,8 +655,7 @@ final class SettingsPage
     }
 
     /**
-     * Build the fallback provider dropdown options: an "off" placeholder plus every catalogue provider except
-     * Custom, filtered to the primary provider's tool format.
+     * Fallback dropdown options: "off", then every provider except Custom with the primary's tool format.
      *
      * @param  string  $primaryProvider  The saved primary provider slug, or '' when it is auto-detected.
      * @return array<string, string>
@@ -646,8 +680,7 @@ final class SettingsPage
     }
 
     /**
-     * Data the settings page script needs to rebuild the fallback dropdown when the primary provider changes: every
-     * provider except Custom, every provider's tool format, and the format of the auto-detected primary.
+     * Data the page script needs to rebuild the fallback dropdown when the primary provider changes.
      *
      * @return array{offLabel: string, providers: array<string, string>, formats: array<string, string>, autoFormat: string}
      */

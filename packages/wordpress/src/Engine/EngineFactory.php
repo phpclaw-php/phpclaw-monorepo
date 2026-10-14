@@ -162,7 +162,8 @@ final class EngineFactory
             ->systemPrompt($systemPrompt)
             ->storeMessages($storeMessages)
             ->maxIterations($maxIterations)
-            ->maxToolsPerTurn(ToolProfileResolver::maxTools(ToolProfileResolver::resolve($provider, $model)))
+            ->maxToolsPerTurn(self::resolveMaxToolsPerTurn($saved, $provider, $model))
+            ->alwaysIncludeTools(array_values((array) ($saved['always_include_tools'] ?? [])))
             ->shellAllowlist((array) ($config['shell_allowlist'] ?? []))
             ->memory($memory)
             ->tools(self::buildTools($workspaceRoot, $config, $saved, $extraToolClasses, allowPhpWrite: $isCli))
@@ -183,8 +184,7 @@ final class EngineFactory
     }
 
     /**
-     * Apply the fallback provider, outbound rate limit, response cache, and token budget
-     * primitives from saved settings; each stays off unless the site owner turned it on.
+     * Apply the saved fallback, rate limit, response cache and token budget; each stays off unless set.
      *
      * @param  ClawBuilder  $builder
      * @param  array<string, mixed>  $saved  Saved admin settings.
@@ -218,8 +218,24 @@ final class EngineFactory
     }
 
     /**
-     * Return every tool the settings enable, after the deny list but without the provider
-     * tool profile the engine itself applies.
+     * Per-turn tool cap: the saved max_tools_per_turn, or the provider and model profile limit when it is 0.
+     *
+     * @param  array<string, mixed>  $saved  Saved admin settings.
+     * @param  string  $provider  Provider in use.
+     * @param  string  $model  Model in use.
+     * @return int Cap passed to the builder.
+     */
+    private static function resolveMaxToolsPerTurn(array $saved, string $provider, string $model): int
+    {
+        $configured = (int) ($saved['max_tools_per_turn'] ?? 0);
+
+        return $configured === 0
+            ? ToolProfileResolver::maxTools(ToolProfileResolver::resolve($provider, $model))
+            : $configured;
+    }
+
+    /**
+     * Every tool the settings enable, after the deny list, without the engine's provider tool profile.
      *
      * @param  array<string, mixed>  $config
      * @param  array<string, mixed>  $saved
