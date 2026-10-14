@@ -186,7 +186,8 @@ final class EngineFactory
             ->systemPrompt($systemPrompt)
             ->storeMessages($persistMsgs)
             ->maxIterations($maxIterations)
-            ->maxToolsPerTurn(ToolProfileResolver::maxTools(ToolProfileResolver::resolve($provider, $model)))
+            ->maxToolsPerTurn($this->resolveMaxToolsPerTurn($provider, $model))
+            ->alwaysIncludeTools(array_values(array_map('strval', (array) ($this->saved['always_include_tools'] ?? []))))
             ->tools($tools)
             ->shellAllowlist((array) ($this->config['shell_allowlist'] ?? []))
             ->memory($memory)
@@ -264,6 +265,22 @@ final class EngineFactory
         if ($budget > 0) {
             $builder->maxTokenBudget($budget);
         }
+    }
+
+    /**
+     * Per-turn tool cap: the saved max_tools_per_turn, or the provider and model profile limit when it is 0.
+     *
+     * @param  string  $provider  Provider in use.
+     * @param  string  $model  Model in use.
+     * @return int Cap passed to the builder.
+     */
+    private function resolveMaxToolsPerTurn(string $provider, string $model): int
+    {
+        $configured = (int) ($this->saved['max_tools_per_turn'] ?? 0);
+
+        return $configured === 0
+            ? ToolProfileResolver::maxTools(ToolProfileResolver::resolve($provider, $model))
+            : $configured;
     }
 
     /**
@@ -587,8 +604,7 @@ final class EngineFactory
     }
 
     /**
-     * Resolve `phpclaw/extra/tools` contributions: objects pass through, `ShellTool` / `FileWriteTool` /
-     * `FileEditTool` class names get this adapter's config, and any other no-argument class is built plain.
+     * Resolve `phpclaw/extra/tools` contributions into tool instances, configuring the shell and file tools.
      *
      * @param  array<mixed>  $extra  Raw contributions from the extension event.
      * @param  ?string  $workspaceRoot  Configured workspace root, or null for the tool's own default.

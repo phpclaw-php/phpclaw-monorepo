@@ -180,6 +180,24 @@
               </div>
             </div>
 
+            <div class="mb-3 row">
+              <label for="phpclaw-max-tools-per-turn" class="col-sm-3 col-form-label">Max Tools Per Turn</label>
+              <div class="col-sm-3">
+                <input type="number" name="max_tools_per_turn" id="phpclaw-max-tools-per-turn" class="form-control"
+                       value="{$phpclaw_settings.max_tools_per_turn|intval}" min="-1" />
+                <small class="text-muted">Tools sent to the model per turn. 0 keeps the automatic limit, -1 sends every tool.</small>
+              </div>
+            </div>
+
+            <div class="mb-3 row">
+              <label for="phpclaw-always-include-tools" class="col-sm-3 col-form-label">Always Include Tools</label>
+              <div class="col-sm-9">
+                <input type="text" name="always_include_tools" id="phpclaw-always-include-tools" class="form-control"
+                       value="{foreach $phpclaw_settings.always_include_tools as $tool}{$tool|escape:'htmlall'}{if !$tool@last}, {/if}{/foreach}" placeholder="e.g. ps_product, ps_order" />
+                <small class="text-muted">Comma-separated tool names sent on every turn, outside Max Tools Per Turn. A name that is not a tool on this shop is skipped.</small>
+              </div>
+            </div>
+
 
             {* 9. Cloud Key + Disable Cloud Features *}
             {if $phpclaw_cloud_available}

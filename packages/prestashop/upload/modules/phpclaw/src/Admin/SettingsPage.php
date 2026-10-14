@@ -8,6 +8,7 @@ use Configuration;
 use PhpClaw\ClawConfig;
 use PhpClaw\Providers\ProviderCatalogue;
 use PhpClaw\Tools\ToolRegistry;
+use PhpClaw\Tools\ToolRouter;
 
 /**
  * Settings page helper: field definitions, validation, and default merging for the admin settings form.
@@ -89,12 +90,7 @@ final class SettingsPage
         $data['cloud_key'] = self::preserveSecret('PHPCLAW_CLOUD_KEY', $post['cloud_key'] ?? '');
         $data['cloud_signing_secret'] = self::preserveSecret('PHPCLAW_CLOUD_SIGNING_SECRET', $post['cloud_signing_secret'] ?? '');
 
-        $rawDisable = $post['cloud_disable'] ?? '';
-        $disableItems = is_array($rawDisable) ? $rawDisable : explode(',', (string) $rawDisable);
-        $data['cloud_disable'] = array_values(array_filter(
-            array_map(static fn ($s): string => trim((string) $s), $disableItems),
-            static fn (string $s): bool => $s !== ''
-        ));
+        $data['cloud_disable'] = self::nameList($post['cloud_disable'] ?? '');
 
         $data['remote_skill_urls'] = self::filterRemoteSkillUrls($post['remote_skill_urls'] ?? '');
 
@@ -111,6 +107,8 @@ final class SettingsPage
         $ttl = trim((string) ($post['response_cache_ttl'] ?? ''));
         $data['response_cache_ttl'] = $ttl === '' ? self::DEFAULT_CACHE_TTL : self::clamp($ttl, self::MIN_CACHE_TTL, self::MAX_CACHE_TTL);
         $data['max_token_budget'] = self::clamp($post['max_token_budget'] ?? 0, 0, self::MAX_TOKEN_BUDGET);
+        $data['max_tools_per_turn'] = self::clamp($post['max_tools_per_turn'] ?? 0, ToolRouter::UNLIMITED, PHP_INT_MAX);
+        $data['always_include_tools'] = self::nameList($post['always_include_tools'] ?? '');
 
         return ['errors' => $errors, 'data' => $data];
     }
@@ -143,6 +141,8 @@ final class SettingsPage
             'response_cache' => (bool) ($saved['response_cache'] ?? false),
             'response_cache_ttl' => (int) (($saved['response_cache_ttl'] ?? 0) ?: self::DEFAULT_CACHE_TTL),
             'max_token_budget' => (int) ($saved['max_token_budget'] ?? 0),
+            'max_tools_per_turn' => (int) ($saved['max_tools_per_turn'] ?? 0),
+            'always_include_tools' => array_map('strval', (array) ($saved['always_include_tools'] ?? [])),
         ];
     }
 
@@ -168,8 +168,7 @@ final class SettingsPage
     }
 
     /**
-     * Data the settings page script needs to rebuild the fallback dropdown when the primary provider changes: every
-     * provider except Custom, every provider's tool format, and the format of the auto-detected primary.
+     * Data the page script needs to rebuild the fallback dropdown when the primary provider changes.
      *
      * @return array{offLabel: string, providers: array<string, string>, formats: array<string, string>, autoFormat: string}
      */
@@ -221,6 +220,22 @@ final class SettingsPage
         ));
 
         return array_slice($valid, 0, 50);
+    }
+
+    /**
+     * Turn a comma-separated string or a list into trimmed names with blanks dropped.
+     *
+     * @param  mixed  $raw  Submitted value: a comma-separated string or an array.
+     * @return string[]
+     */
+    private static function nameList(mixed $raw): array
+    {
+        $items = is_array($raw) ? $raw : explode(',', (string) $raw);
+
+        return array_values(array_filter(
+            array_map(static fn ($s): string => trim((string) $s), $items),
+            static fn (string $s): bool => $s !== ''
+        ));
     }
 
     /**

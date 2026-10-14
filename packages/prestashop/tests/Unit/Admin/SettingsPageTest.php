@@ -123,10 +123,10 @@ final class SettingsPageTest extends TestCase
         sort($keys);
 
         self::assertSame([
-            'api_key', 'base_url', 'cloud_disable',
+            'always_include_tools', 'api_key', 'base_url', 'cloud_disable',
             'cloud_key', 'cloud_signing_secret', 'fallback_api_key',
             'fallback_model', 'fallback_provider', 'max_iterations',
-            'max_token_budget', 'model', 'provider', 'rate_limit_rpm',
+            'max_token_budget', 'max_tools_per_turn', 'model', 'provider', 'rate_limit_rpm',
             'remote_skill_urls', 'response_cache', 'response_cache_ttl',
             'store_messages', 'system_prompt',
         ], $keys);
@@ -409,5 +409,30 @@ final class SettingsPageTest extends TestCase
                 }
             }
         }
+    }
+
+    public function test_validate_holds_max_tools_per_turn_at_minus_one_or_higher(): void
+    {
+        self::assertSame(-1, SettingsPage::validate(['provider' => 'ollama', 'max_tools_per_turn' => '-5'])['data']['max_tools_per_turn']);
+        self::assertSame(-1, SettingsPage::validate(['provider' => 'ollama', 'max_tools_per_turn' => '-1'])['data']['max_tools_per_turn']);
+        self::assertSame(0, SettingsPage::validate(['provider' => 'ollama', 'max_tools_per_turn' => ''])['data']['max_tools_per_turn']);
+        self::assertSame(12, SettingsPage::validate(['provider' => 'ollama', 'max_tools_per_turn' => '12'])['data']['max_tools_per_turn']);
+    }
+
+    public function test_validate_trims_always_include_tools_and_drops_blanks(): void
+    {
+        self::assertSame(['ps_product', 'ps_order'], SettingsPage::validate(['provider' => 'ollama', 'always_include_tools' => ' ps_product , ,ps_order '])['data']['always_include_tools']);
+        self::assertSame([], SettingsPage::validate(['provider' => 'ollama', 'always_include_tools' => ''])['data']['always_include_tools']);
+    }
+
+    public function test_merge_passes_the_tool_routing_settings_through_with_defaults(): void
+    {
+        $saved = SettingsPage::merge(['max_tools_per_turn' => '3', 'always_include_tools' => ['ps_product', 'ps_order']], []);
+        $defaults = SettingsPage::merge([], []);
+
+        self::assertSame(3, $saved['max_tools_per_turn']);
+        self::assertSame(['ps_product', 'ps_order'], $saved['always_include_tools']);
+        self::assertSame(0, $defaults['max_tools_per_turn']);
+        self::assertSame([], $defaults['always_include_tools']);
     }
 }

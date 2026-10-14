@@ -19,8 +19,10 @@ final class Plugin
         'provider', 'model', 'api_key', 'base_url', 'max_iterations',
         'store_messages', 'system_prompt', 'cloud_key', 'cloud_signing_secret', 'cloud_disable',
         'remote_skill_urls', 'fallback_provider', 'fallback_model', 'fallback_api_key', 'rate_limit_rpm',
-        'response_cache', 'response_cache_ttl', 'max_token_budget',
+        'response_cache', 'response_cache_ttl', 'max_token_budget', 'max_tools_per_turn', 'always_include_tools',
     ];
+
+    private const LIST_FIELDS = ['cloud_disable', 'remote_skill_urls', 'always_include_tools'];
 
     private static ?self $instance = null;
 
@@ -66,8 +68,7 @@ final class Plugin
     }
 
     /**
-     * Singleton accessor. The first call builds the instance and every later call returns it unchanged,
-     * so arguments passed after the first call are ignored rather than rebinding the acting identity.
+     * Singleton accessor: the first call builds the instance; later calls return it and ignore their arguments.
      *
      * @param  ?PsDbInterface  $db
      * @param  string  $tablePrefix
@@ -241,7 +242,7 @@ final class Plugin
             if ($raw === false || $raw === null) {
                 continue;
             }
-            if ($field === 'cloud_disable' || $field === 'remote_skill_urls') {
+            if (in_array($field, self::LIST_FIELDS, true)) {
                 $decoded = json_decode((string) $raw, true);
                 if (is_array($decoded)) {
                     $settings[$field] = array_values(array_map('strval', $decoded));

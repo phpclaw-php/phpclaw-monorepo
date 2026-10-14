@@ -258,4 +258,19 @@ final class PluginTest extends TestCase
 
         self::assertSame(array_map('strval', $primitives), array_intersect_key($saved, $primitives));
     }
+
+    public function test_save_settings_persists_both_tool_routing_settings_and_a_new_instance_reads_them_back(): void
+    {
+        Plugin::getInstance(null, 'ps_')->saveSettings(['max_tools_per_turn' => 3, 'always_include_tools' => ['ps_product', 'ps_order']]);
+
+        self::assertSame('3', \Configuration::get('PHPCLAW_MAX_TOOLS_PER_TURN'));
+        self::assertSame('["ps_product","ps_order"]', \Configuration::get('PHPCLAW_ALWAYS_INCLUDE_TOOLS'));
+
+        $ref = new \ReflectionProperty(Plugin::class, 'instance');
+        $ref->setValue(null, null);
+        $saved = (new \ReflectionProperty(Plugin::class, 'saved'))->getValue(Plugin::getInstance(null, 'ps_'));
+
+        self::assertSame('3', $saved['max_tools_per_turn']);
+        self::assertSame(['ps_product', 'ps_order'], $saved['always_include_tools']);
+    }
 }
