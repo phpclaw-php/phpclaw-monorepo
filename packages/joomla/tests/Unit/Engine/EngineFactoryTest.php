@@ -479,4 +479,45 @@ final class EngineFactoryTest extends TestCase
 
         return $method->invoke(null, $config);
     }
+
+    public function test_max_tools_per_turn_from_config_overrides_the_profile(): void
+    {
+        $this->assertSame(3, $this->configAfterToolRouting(new PhpClawConfig(provider: 'ollama', model: 'qwen2.5:7b', maxToolsPerTurn: 3))->maxToolsPerTurn);
+    }
+
+    public function test_minus_one_from_config_removes_the_cap(): void
+    {
+        $this->assertSame(-1, $this->configAfterToolRouting(new PhpClawConfig(provider: 'ollama', model: 'qwen2.5:7b', maxToolsPerTurn: -1))->maxToolsPerTurn);
+    }
+
+    public function test_zero_keeps_the_profile_limit(): void
+    {
+        $this->assertSame(5, $this->configAfterToolRouting(new PhpClawConfig(provider: 'ollama', model: 'qwen2.5:7b', maxToolsPerTurn: 0))->maxToolsPerTurn);
+    }
+
+    public function test_always_include_tools_from_config_reach_the_engine(): void
+    {
+        $config = $this->configAfterToolRouting(new PhpClawConfig(provider: 'ollama', model: 'qwen2.5:7b', alwaysIncludeTools: ['joomla_articles', 'joomla_users']));
+
+        $this->assertSame(['joomla_articles', 'joomla_users'], $config->alwaysIncludeTools);
+    }
+
+    public function test_always_include_and_tool_deny_on_the_same_name_keeps_it_denied(): void
+    {
+        $tools = ToolProfileResolver::filter([$this->fakeTool('joomla_articles'), $this->fakeTool('joomla_users')], deny: ['joomla_articles'], groups: ToolBuilder::TOOL_GROUPS);
+        $config = $this->configAfterToolRouting(new PhpClawConfig(provider: 'ollama', model: 'qwen2.5:7b', toolDeny: ['joomla_articles'], alwaysIncludeTools: ['joomla_articles']), $tools);
+        $names = array_map(static fn ($tool): string => $tool->name(), $config->tools);
+
+        $this->assertContains('joomla_users', $names, 'precondition: joomla_users is not denied, so the tool list is not empty');
+        $this->assertNotContains('joomla_articles', $names);
+    }
+
+    private function configAfterToolRouting(PhpClawConfig $config, array $tools = []): ClawConfig
+    {
+        $builder = Claw::builder()->provider($config->provider)->model($config->model)->apiKey('test-key')->tools($tools);
+        $method = new \ReflectionMethod(EngineFactory::class, 'applyToolRouting');
+        $method->invoke(null, $builder, $config);
+
+        return $builder->build()->config();
+    }
 }

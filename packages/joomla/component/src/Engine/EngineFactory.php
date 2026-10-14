@@ -69,7 +69,6 @@ final class EngineFactory
             ->systemPrompt($config->systemPrompt)
             ->storeMessages($config->storeMessages)
             ->maxIterations($config->maxIterations)
-            ->maxToolsPerTurn(ToolProfileResolver::maxTools(ToolProfileResolver::resolve($config->provider, $config->model)))
             ->shellAllowlist($config->shellAllowlist)
             ->memory($memory)
             ->tools($tools)
@@ -85,9 +84,26 @@ final class EngineFactory
             $builder->withRemoteSkills($url);
         }
 
+        self::applyToolRouting($builder, $config);
         self::applyAgentPrimitives($builder, $config);
 
         return $builder->build();
+    }
+
+    /**
+     * Apply the per-turn tool cap (the saved value, or the profile limit when it is 0) and the always-included tools.
+     *
+     * @param  ClawBuilder  $builder  Builder for the engine being assembled.
+     * @param  PhpClawConfig  $config  Plugin settings, already clamped by PhpClawConfig::fromRegistry().
+     * @return void
+     */
+    private static function applyToolRouting(ClawBuilder $builder, PhpClawConfig $config): void
+    {
+        $builder
+            ->maxToolsPerTurn($config->maxToolsPerTurn === 0
+                ? ToolProfileResolver::maxTools(ToolProfileResolver::resolve($config->provider, $config->model))
+                : $config->maxToolsPerTurn)
+            ->alwaysIncludeTools($config->alwaysIncludeTools);
     }
 
     /**
@@ -178,8 +194,7 @@ final class EngineFactory
     }
 
     /**
-     * Build a pre-configured OpenAIProvider when Base URL points the provider somewhere else.
-     * Applies to the OpenAI-compatible providers only; native providers are left alone.
+     * Build an OpenAIProvider for Custom or Ollama when an allowed Base URL is set; otherwise null.
      *
      * @param  PhpClawConfig  $config
      * @return ?ProviderInterface

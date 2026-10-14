@@ -166,6 +166,21 @@
                        default="0"
                        min="0"
                        max="10000000"/>
+
+                <field name="max_tools_per_turn"
+                       type="number"
+                       label="PLG_SYSTEM_PHPCLAW_FIELD_MAX_TOOLS_PER_TURN_LABEL"
+                       description="PLG_SYSTEM_PHPCLAW_FIELD_MAX_TOOLS_PER_TURN_DESC"
+                       default="0"
+                       min="-1"/>
+
+                <field name="always_include_tools"
+                       type="text"
+                       label="PLG_SYSTEM_PHPCLAW_FIELD_ALWAYS_INCLUDE_TOOLS_LABEL"
+                       description="PLG_SYSTEM_PHPCLAW_FIELD_ALWAYS_INCLUDE_TOOLS_DESC"
+                       default=""
+                       hint="e.g. joomla_articles, joomla_users"
+                       filter="string"/>
             </fieldset>
 
             <fieldset name="cloud" label="PLG_SYSTEM_PHPCLAW_FIELDSET_CLOUD">

@@ -7,6 +7,7 @@ namespace PhpClaw\Joomla\Component\Administrator\Engine;
 use Joomla\Registry\Registry;
 use PhpClaw\ClawConfig;
 use PhpClaw\Config\ToolConfig;
+use PhpClaw\Tools\ToolRouter;
 
 /**
  * Typed configuration value object for the phpClaw Joomla adapter.
@@ -49,6 +50,8 @@ final class PhpClawConfig
      * @param  bool  $responseCache  Whether identical requests are answered from the cache
      * @param  int  $responseCacheTtl  Response cache lifetime in seconds, 60-86400
      * @param  int  $maxTokenBudget  Token spend ceiling per run, 0-10000000; 0 turns the budget off
+     * @param  int  $maxToolsPerTurn  Tools sent per turn, -1 or higher; 0 keeps the profile limit, -1 sends every tool
+     * @param  string[]  $alwaysIncludeTools  Tool names sent on every turn, outside the per-turn limit
      */
     public function __construct(
         public readonly string $provider = '',
@@ -74,6 +77,8 @@ final class PhpClawConfig
         public readonly bool $responseCache = false,
         public readonly int $responseCacheTtl = self::DEFAULT_RESPONSE_CACHE_TTL,
         public readonly int $maxTokenBudget = 0,
+        public readonly int $maxToolsPerTurn = 0,
+        public readonly array $alwaysIncludeTools = [],
     ) {}
 
     /**
@@ -84,20 +89,10 @@ final class PhpClawConfig
      */
     public static function fromRegistry(Registry $params): self
     {
-        $rawAllowlist = (string) $params->get('shell_allowlist', '');
-        $shellAllowlist = array_values(array_filter(
-            array_map('trim', explode(',', $rawAllowlist)),
-            static fn (string $s): bool => $s !== '',
-        ));
+        $shellAllowlist = self::csvList($params->get('shell_allowlist', ''));
         if ($shellAllowlist === []) {
             $shellAllowlist = ToolConfig::DEFAULT_SHELL_ALLOWLIST;
         }
-
-        $rawToolDeny = (string) $params->get('tool_deny', '');
-        $toolDeny = array_values(array_filter(
-            array_map('trim', explode(',', $rawToolDeny)),
-            static fn (string $s): bool => $s !== '',
-        ));
 
         $rawDisable = $params->get('cloud_disable', '');
         $cloudDisable = is_array($rawDisable)
@@ -130,7 +125,7 @@ final class PhpClawConfig
             guards: (string) $params->get('guards', '[]'),
             hooks: (string) $params->get('hooks', '[]'),
             skills: (string) $params->get('skills', '[]'),
-            toolDeny: $toolDeny,
+            toolDeny: self::csvList($params->get('tool_deny', '')),
             fallbackProvider: (string) $params->get('fallback_provider', ''),
             fallbackModel: (string) $params->get('fallback_model', ''),
             fallbackApiKey: (string) $params->get('fallback_api_key', ''),
@@ -138,6 +133,8 @@ final class PhpClawConfig
             responseCache: (string) $params->get('response_cache', '0') === '1',
             responseCacheTtl: max(self::MIN_RESPONSE_CACHE_TTL, min(self::MAX_RESPONSE_CACHE_TTL, $ttl)),
             maxTokenBudget: max(0, min(self::MAX_TOKEN_BUDGET, (int) $params->get('max_token_budget', 0))),
+            maxToolsPerTurn: max(ToolRouter::UNLIMITED, (int) $params->get('max_tools_per_turn', 0)),
+            alwaysIncludeTools: self::csvList($params->get('always_include_tools', '')),
         );
     }
 
@@ -210,5 +207,19 @@ final class PhpClawConfig
         }
 
         return '';
+    }
+
+    /**
+     * Split a comma-separated plugin param into trimmed values with blanks dropped.
+     *
+     * @param  mixed  $raw  Raw param value.
+     * @return string[]
+     */
+    private static function csvList(mixed $raw): array
+    {
+        return array_values(array_filter(
+            array_map('trim', explode(',', (string) $raw)),
+            static fn (string $s): bool => $s !== '',
+        ));
     }
 }

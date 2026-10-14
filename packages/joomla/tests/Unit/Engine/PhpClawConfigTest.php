@@ -253,4 +253,31 @@ final class PhpClawConfigTest extends TestCase
     {
         $this->assertSame(3600, PhpClawConfig::fromRegistry(new Registry(['response_cache_ttl' => '']))->responseCacheTtl);
     }
+
+    public function test_the_tool_routing_settings_default_to_the_automatic_limit_and_no_tools(): void
+    {
+        $config = PhpClawConfig::fromRegistry(new Registry([]));
+
+        $this->assertSame(0, $config->maxToolsPerTurn);
+        $this->assertSame([], $config->alwaysIncludeTools);
+    }
+
+    public function test_the_tool_routing_settings_are_read_from_the_plugin_params(): void
+    {
+        $config = PhpClawConfig::fromRegistry(new Registry([
+            'max_tools_per_turn' => '3',
+            'always_include_tools' => ' joomla_articles , ,joomla_users ',
+        ]));
+
+        $this->assertSame(3, $config->maxToolsPerTurn);
+        $this->assertSame(['joomla_articles', 'joomla_users'], $config->alwaysIncludeTools);
+    }
+
+    public function test_max_tools_per_turn_is_held_at_minus_one_or_higher(): void
+    {
+        $this->assertSame(-1, PhpClawConfig::fromRegistry(new Registry(['max_tools_per_turn' => '-5']))->maxToolsPerTurn);
+        $this->assertSame(-1, PhpClawConfig::fromRegistry(new Registry(['max_tools_per_turn' => '-1']))->maxToolsPerTurn);
+        $this->assertSame(0, PhpClawConfig::fromRegistry(new Registry(['max_tools_per_turn' => '']))->maxToolsPerTurn);
+        $this->assertSame(12, PhpClawConfig::fromRegistry(new Registry(['max_tools_per_turn' => '12']))->maxToolsPerTurn);
+    }
 }
