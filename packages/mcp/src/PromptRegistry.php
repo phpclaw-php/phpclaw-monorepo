@@ -77,11 +77,11 @@ final class PromptRegistry
     {
         $schemas = [];
 
-        foreach (self::$prompts as $name => $p) {
+        foreach (self::$prompts as $name => $prompt) {
             $schemas[] = [
                 'name' => $name,
-                'description' => $p['description'],
-                'arguments' => $p['arguments'],
+                'description' => $prompt['description'],
+                'arguments' => $prompt['arguments'],
             ];
         }
 

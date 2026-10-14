@@ -48,9 +48,9 @@ final class DefaultPrompts
             renderer: static function (array $args): array {
                 $table = $args['table'] ?? null;
 
-                $text = $table !== null
-                    ? "List all columns in the database table '{$table}': include column name, type, nullable, default value, and any indexes or constraints."
-                    : 'List all database tables and describe their columns: include column name, type, nullable, default value, and any indexes or constraints.';
+                $text = $table === null
+                    ? 'List all database tables and describe their columns: include column name, type, nullable, default value, and any indexes or constraints.'
+                    : "List all columns in the database table '{$table}': include column name, type, nullable, default value, and any indexes or constraints.";
 
                 return [
                     [

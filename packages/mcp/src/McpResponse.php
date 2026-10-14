@@ -9,6 +9,8 @@ namespace PhpClaw\Mcp;
  */
 final class McpResponse
 {
+    private const JSONRPC_VERSION = '2.0';
+
     /**
      * Build an immutable JSON-RPC response value object.
      *
@@ -28,7 +30,7 @@ final class McpResponse
      *
      * @param  mixed  $id  JSON-RPC request id (string, int, or null).
      * @param  mixed  $result  The result payload.
-     * @return self
+     * @return self Success envelope carrying the result.
      */
     public static function success(mixed $id, mixed $result): self
     {
@@ -41,7 +43,7 @@ final class McpResponse
      * @param  mixed  $id  JSON-RPC request id (null for transport-level errors).
      * @param  int  $code  JSON-RPC error code (e.g. -32600, -32601, -32603).
      * @param  string  $message  Human-readable error description.
-     * @return self
+     * @return self Error envelope carrying the code and message.
      */
     public static function error(mixed $id, int $code, string $message): self
     {
@@ -55,11 +57,11 @@ final class McpResponse
     /**
      * Return the JSON-RPC 2.0 array structure.
      *
-     * @return array<string, mixed>
+     * @return array<string, mixed> The jsonrpc/id envelope plus either error or result.
      */
     public function toArray(): array
     {
-        $payload = ['jsonrpc' => '2.0', 'id' => $this->id];
+        $payload = ['jsonrpc' => self::JSONRPC_VERSION, 'id' => $this->id];
 
         if ($this->error !== null) {
             $payload['error'] = $this->error;

@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace PhpClaw\Mcp;
 
 /**
- * Security utilities for the MCP server; the rate-limit table is static as the single-process fallback to the APCu shared store, reset via resetRateLimits() for tests.
+ * MCP server security: token check, tool allow/deny lists and a per-key rate limit (APCu, else in-process).
  */
 final class McpSecurity
 {
@@ -13,7 +13,7 @@ final class McpSecurity
 
     private const WINDOW_SECONDS = 60;
 
-    private const RL_PREFIX = 'phpclaw_mcp_rl_';
+    private const RATE_LIMIT_KEY_PREFIX = 'phpclaw_mcp_rl_';
 
     private static array $rateLimits = [];
 
@@ -45,9 +45,9 @@ final class McpSecurity
     public static function rateLimit(string $ip, int $limit = self::DEFAULT_RATE_LIMIT): bool
     {
         if (self::apcuAvailable()) {
-            $ok = false;
-            $count = \apcu_inc(self::RL_PREFIX.$ip, 1, $ok, self::WINDOW_SECONDS);
-            if ($ok && is_int($count)) {
+            $success = false;
+            $count = \apcu_inc(self::RATE_LIMIT_KEY_PREFIX.$ip, 1, $success, self::WINDOW_SECONDS);
+            if ($success && is_int($count)) {
                 return $count <= $limit;
             }
         }
@@ -66,9 +66,9 @@ final class McpSecurity
     public static function getRequestCount(string $ip): int
     {
         if (self::apcuAvailable()) {
-            $v = \apcu_fetch(self::RL_PREFIX.$ip);
+            $count = \apcu_fetch(self::RATE_LIMIT_KEY_PREFIX.$ip);
 
-            return is_int($v) ? $v : 0;
+            return is_int($count) ? $count : 0;
         }
 
         if (! isset(self::$rateLimits[$ip])) {
@@ -115,7 +115,7 @@ final class McpSecurity
         self::$warnedNoApcu = false;
 
         if (self::apcuAvailable() && class_exists(\APCUIterator::class)) {
-            foreach (new \APCUIterator('/^'.preg_quote(self::RL_PREFIX, '/').'/') as $item) {
+            foreach (new \APCUIterator('/^'.preg_quote(self::RATE_LIMIT_KEY_PREFIX, '/').'/') as $item) {
                 \apcu_delete($item['key']);
             }
         }

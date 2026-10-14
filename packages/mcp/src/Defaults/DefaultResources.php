@@ -13,6 +13,10 @@ use PhpClaw\Tools\ToolRegistry;
  */
 final class DefaultResources
 {
+    private const CONFIGURED_MARKER = '***configured***';
+
+    private const NOT_SET_MARKER = 'not set';
+
     /**
      * Register default resources with the ResourceRegistry.
      *
@@ -25,36 +29,7 @@ final class DefaultResources
             uri: 'phpclaw://config',
             name: 'phpClaw Configuration',
             description: 'Sanitized application configuration (API keys redacted)',
-            reader: static function (): string {
-                $config = [];
-
-                $envKeys = [
-                    EnvVars::PHPCLAW_PROVIDER,
-                    EnvVars::PHPCLAW_MODEL,
-                    'PHPCLAW_MAX_TOKENS',
-                    'PHPCLAW_MAX_ITERATIONS',
-                ];
-
-                foreach ($envKeys as $key) {
-                    $value = getenv($key);
-                    if ($value !== false) {
-                        $config[$key] = $value;
-                    }
-                }
-
-                $providerKeys = [
-                    EnvVars::ANTHROPIC_API_KEY,
-                    EnvVars::OPENAI_API_KEY,
-                    EnvVars::GROQ_API_KEY,
-                    EnvVars::GEMINI_API_KEY,
-                ];
-
-                foreach ($providerKeys as $key) {
-                    $config[$key] = getenv($key) !== false ? '***configured***' : 'not set';
-                }
-
-                return json_encode($config, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) ?: '{}';
-            },
+            reader: static fn (): string => self::readConfig(),
             mimeType: 'application/json',
         );
 
@@ -79,5 +54,42 @@ final class DefaultResources
             },
             mimeType: 'application/json',
         );
+    }
+
+    /**
+     * Build the sanitised configuration JSON: selected env values, and only whether each provider key is set.
+     *
+     * @return string Pretty-printed JSON, or '{}' when encoding fails.
+     */
+    private static function readConfig(): string
+    {
+        $config = [];
+
+        $envKeys = [
+            EnvVars::PHPCLAW_PROVIDER,
+            EnvVars::PHPCLAW_MODEL,
+            'PHPCLAW_MAX_TOKENS',
+            'PHPCLAW_MAX_ITERATIONS',
+        ];
+
+        foreach ($envKeys as $key) {
+            $value = getenv($key);
+            if ($value !== false) {
+                $config[$key] = $value;
+            }
+        }
+
+        $providerKeys = [
+            EnvVars::ANTHROPIC_API_KEY,
+            EnvVars::OPENAI_API_KEY,
+            EnvVars::GROQ_API_KEY,
+            EnvVars::GEMINI_API_KEY,
+        ];
+
+        foreach ($providerKeys as $key) {
+            $config[$key] = getenv($key) === false ? self::NOT_SET_MARKER : self::CONFIGURED_MARKER;
+        }
+
+        return json_encode($config, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) ?: '{}';
     }
 }

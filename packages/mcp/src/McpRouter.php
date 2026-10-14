@@ -25,6 +25,8 @@ final class McpRouter
         'version' => '1.0.0',
     ];
 
+    private const EVENT_SOURCE = 'mcp';
+
     /**
      * Construct the router with the active tool registry and descriptor adapter.
      *
@@ -73,7 +75,7 @@ final class McpRouter
             HookRegistry::fire(LifecycleEvent::GuardBlocked->value, [
                 'message' => $e->getMessage(),
                 'reason' => $e->getMessage(),
-                'source' => 'mcp',
+                'source' => self::EVENT_SOURCE,
             ]);
 
             return McpResponse::success($request->id, [
@@ -240,13 +242,31 @@ final class McpRouter
 
         GuardRegistry::scanToolArguments(implode(' ', self::collectStringLeaves($arguments)));
 
-        $toolInput = is_array($arguments) ? $arguments : [];
+        $result = $this->executeTool($name, is_array($arguments) ? $arguments : []);
+
+        return [
+            'content' => [['type' => 'text', 'text' => $result]],
+            'isError' => false,
+        ];
+    }
+
+    /**
+     * Run a registered tool between the tool.before and tool.after hooks, firing tool.error on failure.
+     *
+     * @param  string  $name  Registered tool name.
+     * @param  array<string, mixed>  $toolInput  Tool arguments.
+     * @return string The tool's text output.
+     *
+     * @throws ToolException If the tool execution fails.
+     */
+    private function executeTool(string $name, array $toolInput): string
+    {
         $tool = $this->registry->get($name);
 
         HookRegistry::fire(LifecycleEvent::ToolBefore->value, [
             'tool_name' => $name,
             'tool_input' => $toolInput,
-            'source' => 'mcp',
+            'source' => self::EVENT_SOURCE,
         ]);
 
         try {
@@ -256,7 +276,7 @@ final class McpRouter
                 'tool_name' => $name,
                 'tool_input' => $toolInput,
                 'error' => $e->getMessage(),
-                'source' => 'mcp',
+                'source' => self::EVENT_SOURCE,
             ]);
 
             throw $e;
@@ -266,13 +286,10 @@ final class McpRouter
             'tool_name' => $name,
             'tool_input' => $toolInput,
             'tool_result' => $result,
-            'source' => 'mcp',
+            'source' => self::EVENT_SOURCE,
         ]);
 
-        return [
-            'content' => [['type' => 'text', 'text' => $result]],
-            'isError' => false,
-        ];
+        return $result;
     }
 
     /**

@@ -14,6 +14,12 @@ use PhpClaw\Tools\ToolRegistry;
  */
 final class CliRunner
 {
+    private const TRANSPORT_STDIO = 'stdio';
+
+    private const TRANSPORT_HTTP = 'http';
+
+    private const ENV_TOKEN = 'PHPCLAW_MCP_TOKEN';
+
     /**
      * Start a stdio MCP server and block until stdin closes.
      *
@@ -35,15 +41,15 @@ final class CliRunner
      */
     public static function serve(
         ToolRegistry $registry,
-        string $transport = 'stdio',
+        string $transport = self::TRANSPORT_STDIO,
         ?callable $emit = null,
     ): bool {
         $emit ??= static fn (string $message, bool $isError): int => fwrite($isError ? STDERR : STDOUT, $message."\n");
 
         $server = new PhpClawMcpServer($registry);
 
-        if ($transport === 'http') {
-            $token = (string) (getenv('PHPCLAW_MCP_TOKEN') ?: '');
+        if ($transport === self::TRANSPORT_HTTP) {
+            $token = (string) (getenv(self::ENV_TOKEN) ?: '');
 
             if ($token === '') {
                 $emit('Refusing to start HTTP transport: set PHPCLAW_MCP_TOKEN to a non-empty value.', true);

@@ -6,6 +6,10 @@ namespace PhpClaw\Mcp\Tests\Unit;
 
 use PhpClaw\Mcp\Exceptions\McpException;
 use PhpClaw\Mcp\McpRequest;
+use PhpClaw\Mcp\PhpClawMcpServer;
+use PhpClaw\Mcp\Transport\StdioTransport;
+use PhpClaw\Tools\ToolRegistry;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
 final class McpRequestTest extends TestCase
@@ -26,6 +30,41 @@ final class McpRequestTest extends TestCase
         $this->expectExceptionCode(-32700);
 
         McpRequest::fromJson('{not valid json}');
+    }
+
+    public static function nonObjectJsonProvider(): array
+    {
+        return [
+            'number' => ['1'],
+            'string' => ['"x"'],
+            'boolean' => ['true'],
+            'null' => ['null'],
+        ];
+    }
+
+    #[DataProvider('nonObjectJsonProvider')]
+    public function test_from_json_throws_invalid_request_on_valid_json_that_is_not_an_object(string $json): void
+    {
+        $this->expectException(McpException::class);
+        $this->expectExceptionCode(McpException::INVALID_REQUEST);
+
+        McpRequest::fromJson($json);
+    }
+
+    public function test_stdio_server_answers_invalid_request_for_a_non_object_message(): void
+    {
+        $input = fopen('php://memory', 'r+');
+        fwrite($input, "1\n");
+        rewind($input);
+        $output = fopen('php://memory', 'r+');
+
+        (new PhpClawMcpServer(new ToolRegistry))->serve(new StdioTransport($input, $output));
+
+        rewind($output);
+        $reply = json_decode((string) stream_get_contents($output), true);
+
+        self::assertSame(McpException::INVALID_REQUEST, $reply['error']['code']);
+        self::assertNull($reply['id']);
     }
 
     public function test_from_json_throws_on_missing_method(): void
