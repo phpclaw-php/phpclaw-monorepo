@@ -4,6 +4,11 @@ An AI agent inside your Laravel application. Ask it in plain English about your 
 values, cache store, queue health, application log and database, from Artisan, from your own code,
 or over REST. Works on Laravel 10, 11, 12 and 13.
 
+## 0.1.4 (2026-10-14)
+
+### Added
+- Max tools per turn and always-include tools settings (#162)
+
 ## 0.1.3 (2026-10-09)
 
 ### Added
