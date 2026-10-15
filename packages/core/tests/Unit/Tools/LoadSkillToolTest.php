@@ -45,6 +45,56 @@ final class LoadSkillToolTest extends TestCase
         $this->assertSame(['xlsx'], $result['error']['available']);
     }
 
+    public function test_an_underscore_name_loads_the_hyphenated_skill(): void
+    {
+        SkillRegistry::register(new ArraySkill('sql-tuning', 'SQL query performance tuning', ['sql'], 'SQL BODY'));
+
+        $result = json_decode((new LoadSkillTool)->execute(['name' => 'sql_tuning']), true);
+
+        $this->assertTrue($result['success']);
+        $this->assertSame(['name' => 'sql-tuning', 'instructions' => 'SQL BODY'], $result['data']);
+    }
+
+    public function test_a_hyphen_name_loads_the_underscored_skill(): void
+    {
+        SkillRegistry::register(new ArraySkill('wp_plugin_creator', 'WordPress plugin generation rules', ['plugin'], 'PLUGIN BODY'));
+
+        $result = json_decode((new LoadSkillTool)->execute(['name' => 'wp-plugin-creator']), true);
+
+        $this->assertTrue($result['success']);
+        $this->assertSame('wp_plugin_creator', $result['data']['name']);
+    }
+
+    public function test_the_name_lookup_ignores_case(): void
+    {
+        SkillRegistry::register(new ArraySkill('sql-tuning', 'SQL query performance tuning', ['sql'], 'SQL BODY'));
+
+        $result = json_decode((new LoadSkillTool)->execute(['name' => 'SQL_Tuning']), true);
+
+        $this->assertTrue($result['success']);
+        $this->assertSame('sql-tuning', $result['data']['name']);
+    }
+
+    public function test_an_exact_name_wins_over_a_separator_variant(): void
+    {
+        SkillRegistry::register(new ArraySkill('api-design', 'Hyphen variant', ['api'], 'HYPHEN BODY'));
+        SkillRegistry::register(new ArraySkill('api_design', 'Underscore variant', ['api'], 'UNDERSCORE BODY'));
+
+        $result = json_decode((new LoadSkillTool)->execute(['name' => 'api_design']), true);
+
+        $this->assertSame(['name' => 'api_design', 'instructions' => 'UNDERSCORE BODY'], $result['data']);
+    }
+
+    public function test_a_name_that_differs_beyond_separators_is_still_unknown(): void
+    {
+        SkillRegistry::register(new ArraySkill('sql-tuning', 'SQL query performance tuning', ['sql'], 'SQL BODY'));
+
+        $result = json_decode((new LoadSkillTool)->execute(['name' => 'sqltuning']), true);
+
+        $this->assertSame('UNKNOWN_SKILL', $result['error']['code']);
+        $this->assertSame(['sql-tuning'], $result['error']['available']);
+    }
+
     public function test_a_missing_name_returns_the_unknown_skill_error(): void
     {
         SkillRegistry::register(new ArraySkill('xlsx', 'Spreadsheets', ['excel'], 'BODY'));

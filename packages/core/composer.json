@@ -37,9 +37,6 @@
         "phpstan/phpstan": "^1.0",
         "psr/simple-cache": "^3.0"
     },
-    "suggest": {
-        "psr/simple-cache": "Needed for ClawBuilder::responseCache(), which takes any PSR-16 cache."
-    },
     "autoload": {
         "psr-4": {
             "PhpClaw\\": "src/"

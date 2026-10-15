@@ -96,20 +96,41 @@ final class LoadSkillTool implements AuthorizableToolInterface, ToolInterface, T
     }
 
     /**
-     * Find the registered skill with exactly the requested name.
+     * Find the requested skill: an exact name first, else the same name ignoring case and `_` versus `-`.
      *
      * @param  array<string, mixed>  $input  Validated input.
      * @return array<string, mixed> The matched skill under `skill`, or null when no skill has that name.
      */
     protected function perform(array $input): array
     {
-        foreach (SkillRegistry::all() as $skill) {
+        $skills = SkillRegistry::all();
+
+        foreach ($skills as $skill) {
             if ($skill->name() === $input['name']) {
                 return ['skill' => $skill];
             }
         }
 
+        $wanted = self::normaliseName($input['name']);
+
+        foreach ($skills as $skill) {
+            if (self::normaliseName($skill->name()) === $wanted) {
+                return ['skill' => $skill];
+            }
+        }
+
         return ['skill' => null];
+    }
+
+    /**
+     * Lower-case a skill name and treat `_` and `-` as the same separator, as the skill matcher does.
+     *
+     * @param  string  $name  Skill name as registered or as the model sent it.
+     * @return string The comparable form.
+     */
+    private static function normaliseName(string $name): string
+    {
+        return str_replace('_', '-', strtolower($name));
     }
 
     /**
