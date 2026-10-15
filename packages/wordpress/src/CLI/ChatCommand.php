@@ -16,6 +16,7 @@ use PhpClaw\WordPress\CLI\Concerns\RendersToolTrace;
 use PhpClaw\WordPress\CLI\Concerns\ReportsAgentTurns;
 use PhpClaw\WordPress\CLI\Concerns\ResolvesEngine;
 use PhpClaw\WordPress\CLI\Concerns\TracksLastConversation;
+use PhpClaw\WordPress\Support\ToolHistorySplicer;
 
 /**
  * WP-CLI command `wp phpclaw chat`: an interactive agent session with streamed turns, a tool trace and slash commands.
@@ -238,7 +239,7 @@ ART;
     }
 
     /**
-     * Send one message with the spinner shown until the first word of the reply.
+     * Send one message with the spinner shown until the first word of the reply, saving its tool calls into the history.
      *
      * @param  string  $message  What the user typed.
      * @return ConversationTurn
@@ -247,6 +248,8 @@ ART;
     {
         $this->turnRunning = true;
         $this->startSpinner();
+        $toolCalls = [];
+        $collector = ToolHistorySplicer::collect($toolCalls);
 
         try {
             return $this->engine->streamInConversation(
@@ -256,8 +259,10 @@ ART;
                     $this->stopSpinner();
                     $this->write($token);
                 },
+                ToolHistorySplicer::beforePersist($toolCalls),
             );
         } finally {
+            HookRegistry::off(LifecycleEvent::ToolAfter->value, $collector);
             $this->turnRunning = false;
             $this->stopSpinner();
         }
@@ -483,7 +488,7 @@ ART;
     private function switchEngine(?string $provider = null, ?string $model = null): void
     {
         if (($provider ?? $model) === '') {
-            $this->writeLine($model !== null ? 'Usage: /model <name>' : 'Usage: /provider <slug>');
+            $this->writeLine($model === null ? 'Usage: /provider <slug>' : 'Usage: /model <name>');
 
             return;
         }
@@ -493,7 +498,7 @@ ART;
         } catch (\Throwable) {
             $this->writeLine(sprintf(
                 'Cannot switch to %s: the provider name is unknown or its API key is not saved in phpClaw settings.',
-                $provider !== null ? "provider {$provider}" : "model {$model}",
+                $provider === null ? "model {$model}" : "provider {$provider}",
             ));
 
             return;
@@ -503,7 +508,7 @@ ART;
         $this->sessionProvider = $provider ?? $this->sessionProvider;
         $this->sessionModel = $model ?? $this->sessionModel;
 
-        $this->writeLine($model !== null ? "Model for this session: {$model}" : "Provider for this session: {$provider}");
+        $this->writeLine($model === null ? "Provider for this session: {$provider}" : "Model for this session: {$model}");
         $this->writeLine($this->engineLine());
     }
 

@@ -219,10 +219,37 @@ final class PluginTest extends TestCase
         });
         Functions\when('wp_localize_script')->alias(static function (...$args): void {});
         Functions\when('wp_create_nonce')->alias(static fn (string $a): string => 'N_'.$a);
+        Functions\when('current_user_can')->justReturn(true);
 
         Plugin::enqueueAdminAssets('phpclaw_page_phpclaw-chat');
 
         self::assertContains('phpclaw-chat', $scripts);
+    }
+
+    public function test_chat_script_data_carries_the_settings_url_for_a_settings_manager(): void
+    {
+        self::assertSame('http://example.com/wp-admin/admin.php?page=phpclaw', $this->chatScriptData(true)['settingsUrl']);
+    }
+
+    public function test_chat_script_data_hides_the_settings_url_from_a_chat_only_user(): void
+    {
+        self::assertSame('', $this->chatScriptData(false)['settingsUrl']);
+    }
+
+    private function chatScriptData(bool $canManageSettings): array
+    {
+        $localized = [];
+        Functions\when('wp_enqueue_style')->alias(static function (...$args): void {});
+        Functions\when('wp_enqueue_script')->alias(static function (...$args): void {});
+        Functions\when('wp_localize_script')->alias(static function (string $handle, string $name, array $data) use (&$localized): void {
+            $localized[$name] = $data;
+        });
+        Functions\when('wp_create_nonce')->alias(static fn (string $a): string => 'N_'.$a);
+        Functions\expect('current_user_can')->once()->with('phpclaw_use_admin_chat')->andReturn($canManageSettings);
+
+        Plugin::enqueueAdminAssets('phpclaw_page_phpclaw-chat');
+
+        return $localized['phpClawChatData'];
     }
 
     public function test_enqueue_admin_assets_registers_inline_guide_data_on_guide_page(): void
@@ -574,50 +601,6 @@ final class PluginTest extends TestCase
         return ['output' => $output, 'exit' => pcntl_wifexited($status) ? pcntl_wexitstatus($status) : -1];
     }
 
-    public function test_find_last_assistant_index_returns_index_of_last_assistant(): void
-    {
-        $plugin = $this->makePluginWithoutConstructor();
-        $ref = new \ReflectionMethod(Plugin::class, 'findLastAssistantIndex');
-        $ref->setAccessible(true);
-
-        $messages = [
-            ['role' => 'user',      'content' => 'hi'],
-            ['role' => 'assistant', 'content' => 'hello'],
-            ['role' => 'user',      'content' => 'list articles'],
-            ['role' => 'assistant', 'content' => 'sure'],
-        ];
-
-        self::assertSame(3, $ref->invoke($plugin, $messages));
-    }
-
-    public function test_find_last_assistant_index_returns_count_when_no_assistant(): void
-    {
-        $plugin = $this->makePluginWithoutConstructor();
-        $ref = new \ReflectionMethod(Plugin::class, 'findLastAssistantIndex');
-        $ref->setAccessible(true);
-
-        self::assertSame(0, $ref->invoke($plugin, []));
-        self::assertSame(2, $ref->invoke($plugin, [
-            ['role' => 'user', 'content' => 'a'],
-            ['role' => 'user', 'content' => 'b'],
-        ]));
-    }
-
-    public function test_find_last_assistant_index_ignores_non_array_entries(): void
-    {
-        $plugin = $this->makePluginWithoutConstructor();
-        $ref = new \ReflectionMethod(Plugin::class, 'findLastAssistantIndex');
-        $ref->setAccessible(true);
-
-        $messages = [
-            ['role' => 'assistant', 'content' => 'first'],
-            'not-an-array',
-            ['role' => 'user',      'content' => 'next'],
-        ];
-
-        self::assertSame(0, $ref->invoke($plugin, $messages));
-    }
-
     public function test_handle_ajax_stream_rejects_user_without_permission(): void
     {
         Functions\when('current_user_can')->justReturn(false);
@@ -864,5 +847,22 @@ final class PluginTest extends TestCase
         $this->makePluginWithoutConstructor($engine);
 
         self::assertSame($response, \phpclaw('ping'));
+    }
+
+    public function test_store_messages_enabled_reads_the_saved_flag(): void
+    {
+        self::assertTrue(Plugin::storeMessagesEnabled(['store_messages' => '1']));
+        self::assertFalse(Plugin::storeMessagesEnabled(['store_messages' => '0']));
+    }
+
+    public function test_store_messages_enabled_falls_back_to_the_default_when_the_flag_is_missing(): void
+    {
+        self::assertTrue(Plugin::storeMessagesEnabled([], true));
+        self::assertFalse(Plugin::storeMessagesEnabled([], false));
+    }
+
+    public function test_store_messages_enabled_treats_an_unparseable_flag_as_off(): void
+    {
+        self::assertFalse(Plugin::storeMessagesEnabled(['store_messages' => 'maybe']));
     }
 }

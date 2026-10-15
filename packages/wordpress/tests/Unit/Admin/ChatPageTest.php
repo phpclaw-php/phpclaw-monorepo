@@ -83,7 +83,7 @@ final class ChatPageTest extends TestCase
 
     public function test_render_shows_engine_error_when_engine_fails(): void
     {
-        Functions\expect('current_user_can')->once()->andReturnTrue();
+        Functions\when('current_user_can')->justReturn(true);
         Functions\expect('get_option')->once()->andReturn([]);
 
         $this->injectPlugin(new \RuntimeException('init failed'));
@@ -96,9 +96,63 @@ final class ChatPageTest extends TestCase
         self::assertStringContainsString('disabled', $html);
     }
 
+    public function test_a_chat_only_user_is_not_offered_the_settings_button(): void
+    {
+        Functions\when('current_user_can')->alias(static fn (string $cap): bool => $cap === 'phpclaw_use_chat');
+        Functions\expect('get_option')->once()->andReturn(['provider' => 'ollama', 'store_messages' => '0']);
+        $this->injectPlugin(Mockery::mock(PhpClawInterface::class)->allows('memory')->andReturn(Mockery::mock(MemoryInterface::class))->getMock());
+
+        $html = $this->renderPage();
+
+        self::assertStringNotContainsString('admin.php?page=phpclaw"', $html);
+        self::assertStringNotContainsString('Settings</a>', $html);
+    }
+
+    public function test_an_admin_is_offered_the_settings_button(): void
+    {
+        Functions\when('current_user_can')->justReturn(true);
+        Functions\expect('get_option')->once()->andReturn(['provider' => 'ollama', 'store_messages' => '0']);
+        $this->injectPlugin(Mockery::mock(PhpClawInterface::class)->allows('memory')->andReturn(Mockery::mock(MemoryInterface::class))->getMock());
+
+        $html = $this->renderPage();
+
+        self::assertStringContainsString('admin.php?page=phpclaw" class="button">', $html);
+    }
+
+    public function test_the_engine_error_offers_configure_only_to_an_admin(): void
+    {
+        Functions\when('current_user_can')->alias(static fn (string $cap): bool => $cap === 'phpclaw_use_chat');
+        Functions\expect('get_option')->once()->andReturn([]);
+        $this->injectPlugin(new \RuntimeException('init failed'));
+
+        $html = $this->renderPage();
+
+        self::assertStringContainsString('Engine error', $html);
+        self::assertStringNotContainsString('Configure</a>', $html);
+    }
+
+    public function test_the_engine_error_offers_configure_to_an_admin(): void
+    {
+        Functions\when('current_user_can')->justReturn(true);
+        Functions\expect('get_option')->once()->andReturn([]);
+        $this->injectPlugin(new \RuntimeException('init failed'));
+
+        $html = $this->renderPage();
+
+        self::assertStringContainsString('Configure</a>', $html);
+    }
+
+    private function renderPage(): string
+    {
+        ob_start();
+        ChatPage::render();
+
+        return (string) ob_get_clean();
+    }
+
     public function test_render_shows_empty_sidebar_when_no_conversations(): void
     {
-        Functions\expect('current_user_can')->once()->andReturnTrue();
+        Functions\when('current_user_can')->justReturn(true);
         Functions\expect('get_option')->once()->andReturn([
             'provider' => 'anthropic',
             'model' => 'claude',
@@ -124,7 +178,7 @@ final class ChatPageTest extends TestCase
 
     public function test_render_shows_conversation_list_when_present(): void
     {
-        Functions\expect('current_user_can')->once()->andReturnTrue();
+        Functions\when('current_user_can')->justReturn(true);
         Functions\expect('get_option')->once()->andReturn([
             'provider' => 'openai',
             'model' => 'gpt-4o',
@@ -162,7 +216,7 @@ final class ChatPageTest extends TestCase
 
     public function test_render_skips_conversations_when_store_messages_off(): void
     {
-        Functions\expect('current_user_can')->once()->andReturnTrue();
+        Functions\when('current_user_can')->justReturn(true);
         Functions\expect('get_option')->once()->andReturn([
             'provider' => 'openai',
             'store_messages' => '0',
@@ -185,7 +239,7 @@ final class ChatPageTest extends TestCase
 
     public function test_render_swallows_initial_message_load_error(): void
     {
-        Functions\expect('current_user_can')->once()->andReturnTrue();
+        Functions\when('current_user_can')->justReturn(true);
         Functions\expect('get_option')->once()->andReturn([
             'provider' => 'anthropic',
             'store_messages' => '1',
@@ -210,7 +264,7 @@ final class ChatPageTest extends TestCase
 
     public function test_auto_load_uses_own_most_recent(): void
     {
-        Functions\expect('current_user_can')->once()->andReturnTrue();
+        Functions\when('current_user_can')->justReturn(true);
         Functions\expect('get_option')->once()->andReturn([
             'provider' => 'anthropic',
             'store_messages' => '1',
@@ -247,7 +301,7 @@ final class ChatPageTest extends TestCase
     public function test_fmt_provider_known_keys(): void
     {
         $ref = new \ReflectionClass(ChatPage::class);
-        $m = $ref->getMethod('fmtProvider');
+        $m = $ref->getMethod('formatProviderLabel');
         $m->setAccessible(true);
 
         self::assertSame('Anthropic', $m->invoke(null, 'anthropic'));

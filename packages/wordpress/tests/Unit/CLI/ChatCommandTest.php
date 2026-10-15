@@ -15,6 +15,8 @@ use PhpClaw\Contracts\ClawInterface;
 use PhpClaw\Exceptions\GuardException;
 use PhpClaw\Exceptions\ToolException;
 use PhpClaw\Hooks\HookRegistry;
+use PhpClaw\Hooks\LifecycleEvent;
+use PhpClaw\Memory\ArrayMemory;
 use PhpClaw\Memory\MemoryRegistry;
 use PhpClaw\Providers\ProviderRegistry;
 use PhpClaw\WordPress\CLI\ChatCommand;
@@ -303,5 +305,26 @@ final class ChatCommandTest extends TestCase
         $summary = (new \ReflectionMethod($command, 'turnSummary'))->invoke($command, $turn);
 
         self::assertStringContainsString('| Tools: wp_posts, wp_users | Conversation: '.$turn->conversation->id, $summary);
+    }
+
+    public function test_a_turn_saves_its_tool_calls_into_the_stored_history(): void
+    {
+        $memory = new ArrayMemory;
+        $this->provider = new ScriptedProvider(static function (): void {
+            HookRegistry::fire(LifecycleEvent::ToolAfter->value, [
+                'tool_name' => 'wp_query',
+                'tool_input' => ['post_type' => 'post'],
+                'tool_result' => '{"posts":[]}',
+            ]);
+        });
+        $this->useEngine($this->provider, memory: $memory);
+
+        $out = $this->chat(['how many posts?', '/exit'], buildEngine: false);
+        $history = $memory->get($this->conversationId($out), 'conversations')['history'] ?? [];
+        $toolRows = array_values(array_filter($history, static fn (array $row): bool => ($row['role'] ?? '') === 'tool'));
+
+        self::assertCount(1, $toolRows);
+        self::assertSame('wp_query', $toolRows[0]['tool_name']);
+        self::assertSame('{"posts":[]}', $toolRows[0]['content']);
     }
 }

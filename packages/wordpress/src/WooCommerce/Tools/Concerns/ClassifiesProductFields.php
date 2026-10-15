@@ -143,10 +143,10 @@ trait ClassifiesProductFields
                 continue;
             }
 
-            $qty = $variation->get_stock_quantity();
+            $quantity = $variation->get_stock_quantity();
 
-            if ($qty !== null) {
-                $total += (int) $qty;
+            if ($quantity !== null) {
+                $total += (int) $quantity;
                 $seen = true;
             }
         }

@@ -145,7 +145,7 @@ final class PhpClawCommand
         );
 
         if (! $stream) {
-            \WP_CLI::log($turn->response->text !== '' ? $turn->response->text : PhpClawRestController::EMPTY_RESPONSE_TEXT);
+            \WP_CLI::log($turn->response->text === '' ? PhpClawRestController::EMPTY_RESPONSE_TEXT : $turn->response->text);
         } elseif (! $streamed && $turn->response->text === '') {
             \WP_CLI::log(PhpClawRestController::EMPTY_RESPONSE_TEXT);
         }

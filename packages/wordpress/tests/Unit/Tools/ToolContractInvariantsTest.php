@@ -4,7 +4,12 @@ declare(strict_types=1);
 
 namespace PhpClaw\WordPress\Tests\Unit\Tools;
 
+use Brain\Monkey;
+use Brain\Monkey\Functions;
 use PhpClaw\Testing\AbstractToolContractInvariants;
+use PhpClaw\WordPress\Tools\DatabaseTool;
+use PHPUnit\Framework\Attributes\PreserveGlobalState;
+use PHPUnit\Framework\Attributes\RunInSeparateProcess;
 
 final class ToolContractInvariantsTest extends AbstractToolContractInvariants
 {
@@ -119,5 +124,54 @@ final class ToolContractInvariantsTest extends AbstractToolContractInvariants
             'current_user_can() must appear only in the WordPress shim. Found in: '
             .implode(', ', $callers),
         );
+    }
+
+    #[RunInSeparateProcess]
+    #[PreserveGlobalState(false)]
+    public function test_no_inlined_capability_check_blocks_the_console_path(): void
+    {
+        Monkey\setUp();
+        Functions\when('current_user_can')->justReturn(false);
+        Functions\when('get_option')->alias(static fn (string $name, mixed $default = false): mixed => $default);
+        Functions\when('is_multisite')->justReturn(false);
+        Functions\when('sanitize_title')->returnArg();
+        $GLOBALS['wpdb'] = new class
+        {
+            public string $prefix = 'wp_';
+
+            public string $last_error = '';
+
+            public function get_results(string $sql, string $output = 'OBJECT'): array
+            {
+                return [];
+            }
+        };
+
+        $control = json_decode((new DatabaseTool)->execute(['schema' => true]), true);
+        self::assertSame('FORBIDDEN', $control['error']['code'] ?? null, 'off the console the denied capability must block');
+
+        define('WP_CLI', true);
+
+        $ran = 0;
+        $forbidden = [];
+
+        foreach ($this->toolFiles() as $file) {
+            $name = basename($file, '.php');
+            $class = str_contains($file, 'WooCommerce')
+                ? 'PhpClaw\\WooCommerce\\Tools\\'.$name
+                : 'PhpClaw\\WordPress\\Tools\\'.$name;
+            $tool = new $class;
+            $result = json_decode($tool->execute(['schema' => true]), true);
+            $ran++;
+
+            if (($result['error']['code'] ?? null) === 'FORBIDDEN') {
+                $forbidden[] = $name;
+            }
+        }
+
+        Monkey\tearDown();
+
+        self::assertSame(count($this->toolFiles()), $ran);
+        self::assertSame([], $forbidden, 'tools that refuse the console with every capability denied');
     }
 }

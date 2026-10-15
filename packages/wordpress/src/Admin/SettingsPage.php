@@ -23,6 +23,24 @@ final class SettingsPage
 
     private const OPTION = 'phpclaw_settings';
 
+    private const MAX_ITERATIONS_LIMIT = 50;
+
+    private const MAX_RATE_LIMIT_RPM = 600;
+
+    private const MIN_RESPONSE_CACHE_TTL = 60;
+
+    private const MAX_RESPONSE_CACHE_TTL = 86400;
+
+    private const DEFAULT_RESPONSE_CACHE_TTL = 3600;
+
+    private const MAX_TOKEN_BUDGET = 10_000_000;
+
+    private const MAX_SYSTEM_PROMPT_LENGTH = 8000;
+
+    private const MAX_REMOTE_SKILL_URLS = 50;
+
+    private const CUSTOM_PROVIDER = 'custom';
+
     /**
      * Register the Settings submenu page under the phpClaw top-level menu.
      *
@@ -90,14 +108,9 @@ final class SettingsPage
             $fields['cloud_disable'] = __('Disable Cloud Features', 'phpclaw');
         }
 
-        foreach (Plugin::extraToolClasses() as $class) {
-            if (! class_exists($class)) {
-                continue;
-            }
-            if (is_a($class, ConfigurableToolInterface::class, true)) {
-                foreach ($class::settingsFields() as $key => $def) {
-                    $fields[$key] = $def['label'];
-                }
+        foreach (self::configurableToolClasses() as $class) {
+            foreach ($class::settingsFields() as $key => $definition) {
+                $fields[$key] = $definition['label'];
             }
         }
 
@@ -214,7 +227,7 @@ final class SettingsPage
                 '<input type="number" id="phpclaw_max_iterations" name="%s" value="%s" min="1" max="50" class="small-text" />'
                 .'<p class="description">%s</p>',
                 esc_attr($name),
-                esc_attr($value !== '' ? (string) $value : '20'),
+                esc_attr($value === '' ? '20' : (string) $value),
                 esc_html__('Maximum tool-call iterations per request. Default: 20.', 'phpclaw'),
             ),
             'cloud_key' => self::renderSecretField(
@@ -263,7 +276,7 @@ final class SettingsPage
                 '<input type="number" id="phpclaw_rate_limit_rpm" name="%s" value="%s" min="0" max="600" class="small-text" />'
                 .'<p class="description">%s</p>',
                 esc_attr($name),
-                esc_attr($value !== '' ? (string) $value : '0'),
+                esc_attr($value === '' ? '0' : (string) $value),
                 esc_html__('Most calls to the AI provider per minute, shared by every request. 0 turns it off. Maximum 600.', 'phpclaw'),
             ),
             'response_cache' => printf(
@@ -278,21 +291,21 @@ final class SettingsPage
                 '<input type="number" id="phpclaw_response_cache_ttl" name="%s" value="%s" min="60" max="86400" class="small-text" />'
                 .'<p class="description">%s</p>',
                 esc_attr($name),
-                esc_attr($value !== '' ? (string) $value : '3600'),
+                esc_attr($value === '' ? '3600' : (string) $value),
                 esc_html__('How long a cached answer is kept, in seconds: 60 to 86400. Default 3600.', 'phpclaw'),
             ),
             'max_token_budget' => printf(
                 '<input type="number" id="phpclaw_max_token_budget" name="%s" value="%s" min="0" max="10000000" class="small-text" />'
                 .'<p class="description">%s</p>',
                 esc_attr($name),
-                esc_attr($value !== '' ? (string) $value : '0'),
+                esc_attr($value === '' ? '0' : (string) $value),
                 esc_html__('Stops a run before a provider call would take its token spend over this number. 0 turns it off. Maximum 10000000.', 'phpclaw'),
             ),
             'max_tools_per_turn' => printf(
                 '<input type="number" id="phpclaw_max_tools_per_turn" name="%s" value="%s" min="-1" class="small-text" />'
                 .'<p class="description">%s</p>',
                 esc_attr($name),
-                esc_attr($value !== '' ? (string) $value : '0'),
+                esc_attr($value === '' ? '0' : (string) $value),
                 esc_html__('Tools sent to the model per turn. 0 keeps the automatic limit, -1 sends every tool.', 'phpclaw'),
             ),
             'always_include_tools' => printf(
@@ -337,7 +350,7 @@ final class SettingsPage
         }
 
         if (isset($input['max_iterations'])) {
-            $clean['max_iterations'] = max(1, min(50, (int) $input['max_iterations']));
+            $clean['max_iterations'] = max(1, min(self::MAX_ITERATIONS_LIMIT, (int) $input['max_iterations']));
         }
 
         if (isset($input['base_url'])) {
@@ -350,20 +363,14 @@ final class SettingsPage
             ) ? $url : '';
         }
 
-        foreach (Plugin::extraToolClasses() as $class) {
-            if (! class_exists($class)) {
-                continue;
-            }
-            if (! is_a($class, ConfigurableToolInterface::class, true)) {
-                continue;
-            }
-            foreach ($class::settingsFields() as $key => $def) {
+        foreach (self::configurableToolClasses() as $class) {
+            foreach ($class::settingsFields() as $key => $definition) {
                 if (! isset($input[$key])) {
                     continue;
                 }
                 $raw = trim((string) $input[$key]);
-                $clean[$key] = match ($def['type']) {
-                    'url' => filter_var($raw, FILTER_VALIDATE_URL) !== false ? $raw : '',
+                $clean[$key] = match ($definition['type']) {
+                    'url' => filter_var($raw, FILTER_VALIDATE_URL) === false ? '' : $raw,
                     'number' => (string) (int) $raw,
                     default => sanitize_text_field($raw),
                 };
@@ -371,7 +378,7 @@ final class SettingsPage
         }
 
         if (isset($input['system_prompt'])) {
-            $clean['system_prompt'] = mb_substr(sanitize_textarea_field((string) $input['system_prompt']), 0, 8000);
+            $clean['system_prompt'] = mb_substr(sanitize_textarea_field((string) $input['system_prompt']), 0, self::MAX_SYSTEM_PROMPT_LENGTH);
         }
 
         if (isset($input['cloud_key'])) {
@@ -386,13 +393,7 @@ final class SettingsPage
             $clean['cloud_disable'] = self::sanitizeNameList($input['cloud_disable']);
         }
 
-        if (isset($input['store_messages'])) {
-            $sm = $input['store_messages'];
-            $on = $sm === '1' || $sm === 1 || $sm === true;
-            $clean['store_messages'] = $on ? '1' : '0';
-        } else {
-            $clean['store_messages'] = '0';
-        }
+        $clean['store_messages'] = self::checkboxValue($input['store_messages'] ?? null);
 
         if (isset($input['remote_skill_urls'])) {
             $clean['remote_skill_urls'] = self::filterRemoteSkillUrls($input['remote_skill_urls']);
@@ -413,25 +414,19 @@ final class SettingsPage
         }
 
         if (isset($input['rate_limit_rpm'])) {
-            $clean['rate_limit_rpm'] = max(0, min(600, (int) $input['rate_limit_rpm']));
+            $clean['rate_limit_rpm'] = max(0, min(self::MAX_RATE_LIMIT_RPM, (int) $input['rate_limit_rpm']));
         }
 
-        if (isset($input['response_cache'])) {
-            $rc = $input['response_cache'];
-            $on = $rc === '1' || $rc === 1 || $rc === true;
-            $clean['response_cache'] = $on ? '1' : '0';
-        } else {
-            $clean['response_cache'] = '0';
-        }
+        $clean['response_cache'] = self::checkboxValue($input['response_cache'] ?? null);
 
         if (isset($input['response_cache_ttl'])) {
             $raw = $input['response_cache_ttl'];
-            $ttl = $raw === '' ? 3600 : (int) $raw;
-            $clean['response_cache_ttl'] = max(60, min(86400, $ttl));
+            $ttl = $raw === '' ? self::DEFAULT_RESPONSE_CACHE_TTL : (int) $raw;
+            $clean['response_cache_ttl'] = max(self::MIN_RESPONSE_CACHE_TTL, min(self::MAX_RESPONSE_CACHE_TTL, $ttl));
         }
 
         if (isset($input['max_token_budget'])) {
-            $clean['max_token_budget'] = max(0, min(10_000_000, (int) $input['max_token_budget']));
+            $clean['max_token_budget'] = max(0, min(self::MAX_TOKEN_BUDGET, (int) $input['max_token_budget']));
         }
 
         if (isset($input['max_tools_per_turn'])) {
@@ -446,6 +441,30 @@ final class SettingsPage
     }
 
     /**
+     * Normalise a submitted checkbox: '1' only for '1', 1 or true; an unchecked (absent) box is '0'.
+     *
+     * @param  mixed  $submitted  Submitted checkbox value, or null when the box was not sent.
+     * @return string '1' or '0'.
+     */
+    private static function checkboxValue(mixed $submitted): string
+    {
+        return $submitted === '1' || $submitted === 1 || $submitted === true ? '1' : '0';
+    }
+
+    /**
+     * Extra tool classes that exist and declare their own settings fields.
+     *
+     * @return list<class-string<ConfigurableToolInterface>>
+     */
+    private static function configurableToolClasses(): array
+    {
+        return array_values(array_filter(
+            Plugin::extraToolClasses(),
+            static fn (string $class): bool => class_exists($class) && is_a($class, ConfigurableToolInterface::class, true),
+        ));
+    }
+
+    /**
      * Turn a comma-separated string or a list into trimmed, sanitised names with blanks dropped.
      *
      * @param  mixed  $raw  Submitted value: a comma-separated string or an array.
@@ -454,12 +473,12 @@ final class SettingsPage
     private static function sanitizeNameList(mixed $raw): array
     {
         $items = is_array($raw)
-            ? array_map(static fn (mixed $v): string => is_scalar($v) ? (string) $v : '', $raw)
+            ? array_map(static fn (mixed $value): string => is_scalar($value) ? (string) $value : '', $raw)
             : explode(',', sanitize_text_field((string) $raw));
 
         return array_values(array_filter(
-            array_map(static fn (string $s): string => sanitize_text_field(trim($s)), $items),
-            static fn (string $s): bool => $s !== '',
+            array_map(static fn (string $name): string => sanitize_text_field(trim($name)), $items),
+            static fn (string $name): bool => $name !== '',
         ));
     }
 
@@ -476,7 +495,7 @@ final class SettingsPage
             return '';
         }
 
-        $allowed = array_diff(array_keys(ProviderCatalogue::all()), ['custom']);
+        $allowed = array_diff(array_keys(ProviderCatalogue::all()), [self::CUSTOM_PROVIDER]);
 
         if (
             in_array($candidate, $allowed, true)
@@ -505,19 +524,19 @@ final class SettingsPage
         $lines = is_array($raw) ? $raw : (preg_split('/[\r\n]+/', (string) $raw) ?: []);
 
         $valid = array_values(array_filter(
-            array_map(static fn (mixed $u): string => esc_url_raw(trim((string) $u)), $lines),
-            static function (string $u): bool {
-                if ($u === '' || ! preg_match('~^https://~i', $u)) {
+            array_map(static fn (mixed $url): string => esc_url_raw(trim((string) $url)), $lines),
+            static function (string $url): bool {
+                if ($url === '' || ! preg_match('~^https://~i', $url)) {
                     return false;
                 }
 
-                $path = (string) parse_url($u, PHP_URL_PATH);
+                $path = (string) parse_url($url, PHP_URL_PATH);
 
                 return (bool) preg_match('~\.(md|json)$~i', $path);
             },
         ));
 
-        return array_slice($valid, 0, 50);
+        return array_slice($valid, 0, self::MAX_REMOTE_SKILL_URLS);
     }
 
     /**
@@ -667,7 +686,7 @@ final class SettingsPage
 
         foreach (ProviderCatalogue::all() as $slug => $entry) {
             $key = (string) $slug;
-            if ($key === '' || $key === 'custom') {
+            if ($key === '' || $key === self::CUSTOM_PROVIDER) {
                 continue;
             }
             if (ToolRegistry::toolFormat($key) !== $primaryFormat) {
@@ -695,7 +714,7 @@ final class SettingsPage
                 continue;
             }
             $formats[$key] = ToolRegistry::toolFormat($key);
-            if ($key !== 'custom') {
+            if ($key !== self::CUSTOM_PROVIDER) {
                 $providers[$key] = (string) $entry['label'];
             }
         }
@@ -716,7 +735,7 @@ final class SettingsPage
      */
     private static function primaryToolFormat(string $primaryProvider): string
     {
-        return ToolRegistry::toolFormat($primaryProvider !== '' ? $primaryProvider : (new ClawConfig)->providerName);
+        return ToolRegistry::toolFormat($primaryProvider === '' ? (new ClawConfig)->providerName : $primaryProvider);
     }
 
     /**
@@ -729,22 +748,16 @@ final class SettingsPage
      */
     private static function renderDynamicField(string $field, string $name, string $value): void
     {
-        foreach (Plugin::extraToolClasses() as $class) {
-            if (! class_exists($class)) {
-                continue;
-            }
-            if (! is_a($class, ConfigurableToolInterface::class, true)) {
-                continue;
-            }
+        foreach (self::configurableToolClasses() as $class) {
             $fields = $class::settingsFields();
             if (! isset($fields[$field])) {
                 continue;
             }
 
-            $def = $fields[$field];
-            $type = $def['type'];
-            $placeholder = $def['placeholder'] ?? '';
-            $description = $def['description'] ?? '';
+            $definition = $fields[$field];
+            $type = $definition['type'];
+            $placeholder = $definition['placeholder'] ?? '';
+            $description = $definition['description'] ?? '';
 
             $inputType = match ($type) {
                 'url' => 'url',
@@ -755,13 +768,13 @@ final class SettingsPage
 
             printf(
                 '<input type="%s" id="%s" name="%s" value="%s" class="regular-text" placeholder="%s" />'
-                .($description !== '' ? '<p class="description">%s</p>' : '%s'),
+                .($description === '' ? '%s' : '<p class="description">%s</p>'),
                 esc_attr($inputType),
                 esc_attr('phpclaw_'.$field),
                 esc_attr($name),
                 esc_attr($value),
                 esc_attr($placeholder),
-                $description !== '' ? esc_html($description) : '',
+                $description === '' ? '' : esc_html($description),
             );
 
             return;
@@ -789,7 +802,7 @@ final class SettingsPage
      */
     private static function renderSelect(string $name, string $current, array $options, string $id = ''): void
     {
-        $idAttr = $id !== '' ? ' id="'.esc_attr($id).'"' : '';
+        $idAttr = $id === '' ? '' : ' id="'.esc_attr($id).'"';
         echo '<select'.$idAttr.' name="'.esc_attr($name).'">';
         foreach ($options as $value => $label) {
             printf(

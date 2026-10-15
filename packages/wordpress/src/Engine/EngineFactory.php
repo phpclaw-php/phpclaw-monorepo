@@ -64,6 +64,34 @@ final class EngineFactory
 
     private const DEFAULT_MAX_ITERATIONS = ClawConfig::DEFAULT_MAX_ITERATIONS;
 
+    private const DEFAULT_RESPONSE_CACHE_TTL = 3600;
+
+    private const DEFAULT_HOOK_PRIORITY = 10;
+
+    private const SITE_TOOLS = [
+        WpQueryTool::class => false,
+        OrderTool::class => true,
+        ProductTool::class => true,
+        WpUserTool::class => false,
+        StockTool::class => true,
+        CustomerTool::class => true,
+        WpOptionsTool::class => false,
+        ReportTool::class => true,
+        DatabaseTool::class => false,
+        CouponTool::class => true,
+        CategoryTool::class => true,
+        WpPluginTool::class => false,
+        ReviewTool::class => true,
+        ShippingTool::class => true,
+        TaxTool::class => true,
+        WpTaxonomyTool::class => false,
+        WpCommentTool::class => false,
+        WpMediaTool::class => false,
+        WpMenuTool::class => false,
+        WpCronTool::class => false,
+        LogTool::class => false,
+    ];
+
     /**
      * Build a fully-configured PhpClaw engine.
      *
@@ -88,70 +116,12 @@ final class EngineFactory
         $maxIterations = self::resolveMaxIterations($saved);
         $systemPrompt = (string) ($saved['system_prompt'] ?? '');
         $workspaceRoot = (string) ($config['workspace_root'] ?? '');
-        $storeMessages = self::resolveStoreMessages($saved);
+        $storeMessages = Plugin::storeMessagesEnabled($saved, true);
 
         $providerOverride = self::customProviderOverride($provider, $apiKey, $model, $systemPrompt, $saved);
         self::registerExtraProviders();
 
-        if (function_exists('apply_filters')) {
-            try {
-                foreach ((array) apply_filters('phpclaw_extra_guards', []) as $guard) {
-                    if ($guard instanceof GuardInterface) {
-                        GuardRegistry::register($guard, replace: true);
-                    }
-                }
-            } catch (\Throwable $e) {
-                error_log('phpClaw EngineFactory: extension filter failed: '.$e->getMessage());
-            }
-            try {
-                foreach ((array) apply_filters('phpclaw_extra_hooks', []) as $hook) {
-                    if (is_array($hook) && isset($hook['event'], $hook['handler'])) {
-                        HookRegistry::on($hook['event'], $hook['handler'], $hook['priority'] ?? 10);
-                    }
-                }
-            } catch (\Throwable $e) {
-                error_log('phpClaw EngineFactory: extension filter failed: '.$e->getMessage());
-            }
-            try {
-                $skills = array_merge($skills, (array) apply_filters('phpclaw_extra_skills', []));
-            } catch (\Throwable $e) {
-                error_log('phpClaw EngineFactory: extension filter failed: '.$e->getMessage());
-            }
-            try {
-                foreach ((array) apply_filters('phpclaw_extra_memory_drivers', []) as $slug => $factory) {
-                    if (is_string($slug) && is_callable($factory)) {
-                        MemoryRegistry::register($slug, $factory);
-                    }
-                }
-            } catch (\Throwable $e) {
-                error_log('phpClaw EngineFactory: extension filter failed: '.$e->getMessage());
-            }
-            try {
-                $filterHasPresets = class_exists(OpenAIPresets::class);
-                $filterNatives = Bootstrap::providers();
-                foreach ((array) apply_filters('phpclaw_extra_providers', []) as $slug => $entry) {
-                    if (! is_string($slug)) {
-                        continue;
-                    }
-                    if ($filterHasPresets && OpenAIPresets::has($slug)) {
-                        continue;
-                    }
-                    if (isset($filterNatives[$slug])) {
-                        continue;
-                    }
-                    if (is_array($entry) && isset($entry['class'])
-                        && is_string($entry['class']) && class_exists($entry['class'])) {
-                        try {
-                            ProviderRegistry::register($slug, $entry['class']);
-                        } catch (\Throwable $e) {
-                            error_log('phpClaw EngineFactory: extension filter failed: '.$e->getMessage());
-                        }
-                    }
-                }
-            } catch (\Throwable $e) {
-                error_log('phpClaw EngineFactory: extension filter failed: '.$e->getMessage());
-            }
-        }
+        $skills = self::applyExtensionFilters($skills);
 
         $memory = self::buildMemory($storeMessages);
 
@@ -184,6 +154,91 @@ final class EngineFactory
     }
 
     /**
+     * Apply the phpclaw_extra_* filters: guards, hooks, skills, memory drivers and providers; a failing filter is logged and skipped.
+     *
+     * @param  SkillInterface[]  $skills  Skills resolved so far.
+     * @return SkillInterface[] The skills plus any the phpclaw_extra_skills filter adds.
+     */
+    private static function applyExtensionFilters(array $skills): array
+    {
+        if (! function_exists('apply_filters')) {
+            return $skills;
+        }
+
+        self::runExtensionFilter(static function (): void {
+            foreach ((array) apply_filters('phpclaw_extra_guards', []) as $guard) {
+                if ($guard instanceof GuardInterface) {
+                    GuardRegistry::register($guard, replace: true);
+                }
+            }
+        });
+
+        self::runExtensionFilter(static function (): void {
+            foreach ((array) apply_filters('phpclaw_extra_hooks', []) as $hook) {
+                if (is_array($hook) && isset($hook['event'], $hook['handler'])) {
+                    HookRegistry::on($hook['event'], $hook['handler'], $hook['priority'] ?? self::DEFAULT_HOOK_PRIORITY);
+                }
+            }
+        });
+
+        self::runExtensionFilter(static function () use (&$skills): void {
+            $skills = array_merge($skills, (array) apply_filters('phpclaw_extra_skills', []));
+        });
+
+        self::runExtensionFilter(static function (): void {
+            foreach ((array) apply_filters('phpclaw_extra_memory_drivers', []) as $slug => $factory) {
+                if (is_string($slug) && is_callable($factory)) {
+                    MemoryRegistry::register($slug, $factory);
+                }
+            }
+        });
+
+        self::runExtensionFilter(static function (): void {
+            $natives = Bootstrap::providers();
+
+            foreach ((array) apply_filters('phpclaw_extra_providers', []) as $slug => $entry) {
+                if (! is_string($slug) || self::isBuiltInProvider($slug, $natives)) {
+                    continue;
+                }
+
+                if (is_array($entry) && isset($entry['class'])
+                    && is_string($entry['class']) && class_exists($entry['class'])) {
+                    self::runExtensionFilter(static fn () => ProviderRegistry::register($slug, $entry['class']));
+                }
+            }
+        });
+
+        return $skills;
+    }
+
+    /**
+     * Run one extension filter, logging and swallowing any failure so one bad extension cannot stop the engine.
+     *
+     * @param  callable(): mixed  $apply  The filter work.
+     * @return void
+     */
+    private static function runExtensionFilter(callable $apply): void
+    {
+        try {
+            $apply();
+        } catch (\Throwable $e) {
+            error_log('phpClaw EngineFactory: extension filter failed: '.$e->getMessage());
+        }
+    }
+
+    /**
+     * Whether a provider slug is already served by an OpenAI preset or a natively discovered provider.
+     *
+     * @param  string  $slug  Provider slug.
+     * @param  array<string, mixed>  $natives  Natively discovered providers keyed by slug.
+     * @return bool
+     */
+    private static function isBuiltInProvider(string $slug, array $natives): bool
+    {
+        return (class_exists(OpenAIPresets::class) && OpenAIPresets::has($slug)) || isset($natives[$slug]);
+    }
+
+    /**
      * Apply the saved fallback, rate limit, response cache and token budget; each stays off unless set.
      *
      * @param  ClawBuilder  $builder
@@ -208,7 +263,7 @@ final class EngineFactory
 
         if ((string) ($saved['response_cache'] ?? '0') === '1') {
             $ttl = (int) ($saved['response_cache_ttl'] ?? 0);
-            $builder->responseCache(new TransientCache, $ttl > 0 ? $ttl : 3600);
+            $builder->responseCache(new TransientCache, $ttl > 0 ? $ttl : self::DEFAULT_RESPONSE_CACHE_TTL);
         }
 
         $tokenBudget = (int) ($saved['max_token_budget'] ?? 0);
@@ -348,17 +403,6 @@ final class EngineFactory
     }
 
     /**
-     * Resolve whether message content may be persisted (defaults to true).
-     *
-     * @param  array<string, mixed>  $saved
-     * @return bool
-     */
-    private static function resolveStoreMessages(array $saved): bool
-    {
-        return Plugin::storeMessagesEnabled($saved, true);
-    }
-
-    /**
      * Build a provider override for the "custom" OpenAI-compatible endpoint from the saved base URL.
      *
      * @param  string  $provider
@@ -406,11 +450,10 @@ final class EngineFactory
             return;
         }
 
-        $hasPresets = class_exists(OpenAIPresets::class);
         $natives = Bootstrap::providers();
 
         foreach (ProviderCatalogue::all() as $key => $info) {
-            if (($hasPresets && OpenAIPresets::has($key)) || isset($natives[$key])) {
+            if (self::isBuiltInProvider($key, $natives)) {
                 continue;
             }
             if (class_exists($info['class']) && ! ProviderRegistry::has($key)) {
@@ -455,7 +498,7 @@ final class EngineFactory
     private static function buildTools(string $workspaceRoot, array $config, array $saved, array $extraToolClasses, bool $applyProfile = true, bool $allowPhpWrite = false): array
     {
         $hasWoo = class_exists('WooCommerce');
-        $resolvedWorkspaceRoot = $workspaceRoot !== '' ? $workspaceRoot : null;
+        $resolvedWorkspaceRoot = $workspaceRoot === '' ? null : $workspaceRoot;
         $shellAllowlist = (array) ($config['shell_allowlist'] ?? []);
 
         $coreTools = ToolCatalogue::instantiateDefaults([
@@ -468,47 +511,15 @@ final class EngineFactory
         $coreTools[] = new ZipPackagerTool($resolvedWorkspaceRoot);
         $coreTools[] = new WpZipBuilderTool($resolvedWorkspaceRoot);
 
-        if ($hasWoo) {
-            $tools = [
-                new WpQueryTool,
-                new OrderTool,
-                new ProductTool,
-                new WpUserTool,
-                new StockTool,
-                new CustomerTool,
-                new WpOptionsTool,
-                new ReportTool,
-                new DatabaseTool,
-                new CouponTool,
-                new CategoryTool,
-                new WpPluginTool,
-                new ReviewTool,
-                new ShippingTool,
-                new TaxTool,
-                new WpTaxonomyTool,
-                new WpCommentTool,
-                new WpMediaTool,
-                new WpMenuTool,
-                new WpCronTool,
-                new LogTool,
-                ...$coreTools,
-            ];
-        } else {
-            $tools = [
-                new WpQueryTool,
-                new WpUserTool,
-                new WpOptionsTool,
-                new DatabaseTool,
-                new WpPluginTool,
-                new WpTaxonomyTool,
-                new WpCommentTool,
-                new WpMediaTool,
-                new WpMenuTool,
-                new WpCronTool,
-                new LogTool,
-                ...$coreTools,
-            ];
+        $tools = [];
+
+        foreach (self::SITE_TOOLS as $class => $needsWooCommerce) {
+            if ($hasWoo || ! $needsWooCommerce) {
+                $tools[] = new $class;
+            }
         }
+
+        $tools = [...$tools, ...$coreTools];
 
         $registered = [];
         foreach ($tools as $registeredTool) {
@@ -520,8 +531,8 @@ final class EngineFactory
                 continue;
             }
 
-            $ctor = (new \ReflectionClass($class))->getConstructor();
-            if ($ctor !== null && $ctor->getNumberOfRequiredParameters() > 0) {
+            $constructor = (new \ReflectionClass($class))->getConstructor();
+            if ($constructor !== null && $constructor->getNumberOfRequiredParameters() > 0) {
                 continue;
             }
 
@@ -563,7 +574,7 @@ final class EngineFactory
     }
 
     /**
-     * Instantiate one extra-tool class name; ShellTool, FileWriteTool and FileEditTool get this adapter's configured shell allowlist, workspace root and CLI-only PHP-write rule, every other class is built with its own constructor defaults.
+     * Instantiate one extra-tool class; the shell and file-write tools get this adapter's allowlist, workspace and PHP-write rule.
      *
      * @param  class-string  $class  Extra tool class name from the phpclaw_extra_tools filter.
      * @param  ?string  $workspaceRoot  Resolved workspace root, or null to use the tool's own default.

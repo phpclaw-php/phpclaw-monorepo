@@ -19,6 +19,21 @@ final class StockTool implements ToolInterface, ToolRoutingInterface
     use ClassifiesProductFields;
     use HasToolExecutionContract;
 
+    public const EXAMPLES = [
+        [
+            'prompt' => 'show me our current stock levels',
+            'arguments' => [],
+        ],
+        [
+            'prompt' => 'how much of the catalogue is out of stock?',
+            'arguments' => ['aggregate' => true],
+        ],
+        [
+            'prompt' => 'which products are running low on stock?',
+            'arguments' => ['filter' => 'lowstock'],
+        ],
+    ];
+
     private const DEFAULT_LIMIT = 20;
 
     private const MAX_LIMIT = 50;
@@ -51,21 +66,6 @@ final class StockTool implements ToolInterface, ToolRoutingInterface
     ];
 
     private const VALID_FILTERS = ['all', 'instock', 'outofstock', 'onbackorder', 'lowstock'];
-
-    public const EXAMPLES = [
-        [
-            'prompt' => 'show me our current stock levels',
-            'arguments' => [],
-        ],
-        [
-            'prompt' => 'how much of the catalogue is out of stock?',
-            'arguments' => ['aggregate' => true],
-        ],
-        [
-            'prompt' => 'which products are running low on stock?',
-            'arguments' => ['filter' => 'lowstock'],
-        ],
-    ];
 
     private const ALLOWED_KEYS = [
         'columns', 'schema', 'aggregate', 'filter', 'limit', 'offset',
@@ -689,9 +689,9 @@ DESC;
             return false;
         }
 
-        $qty = is_callable([$product, 'get_stock_quantity']) ? $product->get_stock_quantity() : null;
+        $quantity = is_callable([$product, 'get_stock_quantity']) ? $product->get_stock_quantity() : null;
 
-        return $qty !== null && $qty > 0 && $qty <= $threshold;
+        return $quantity !== null && $quantity > 0 && $quantity <= $threshold;
     }
 
     /**

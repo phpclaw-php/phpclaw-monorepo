@@ -17,6 +17,21 @@ final class TaxTool implements ToolInterface, ToolRoutingInterface
 {
     use HasToolExecutionContract;
 
+    public const EXAMPLES = [
+        [
+            'prompt' => 'what tax rates do we charge in the UK?',
+            'arguments' => ['country' => 'GB'],
+        ],
+        [
+            'prompt' => 'how many tax rates do we have, and where?',
+            'arguments' => ['aggregate' => true],
+        ],
+        [
+            'prompt' => 'list our reduced rate tax rates',
+            'arguments' => ['tax_class' => 'reduced-rate'],
+        ],
+    ];
+
     private const DEFAULT_LIMIT = 25;
 
     private const MAX_LIMIT = 100;
@@ -44,21 +59,6 @@ final class TaxTool implements ToolInterface, ToolRoutingInterface
 
     private const ALLOWED_KEYS = [
         'columns', 'schema', 'aggregate', 'tax_class', 'country', 'limit', 'offset',
-    ];
-
-    public const EXAMPLES = [
-        [
-            'prompt' => 'what tax rates do we charge in the UK?',
-            'arguments' => ['country' => 'GB'],
-        ],
-        [
-            'prompt' => 'how many tax rates do we have, and where?',
-            'arguments' => ['aggregate' => true],
-        ],
-        [
-            'prompt' => 'list our reduced rate tax rates',
-            'arguments' => ['tax_class' => 'reduced-rate'],
-        ],
     ];
 
     /**
@@ -510,7 +510,7 @@ DESC;
         if ($wantsLocations && $rows !== []) {
             global $wpdb;
 
-            $ids = array_map(static fn ($r): int => (int) ($r->tax_rate_id ?? 0), $rows);
+            $ids = array_map(static fn ($rateRow): int => (int) ($rateRow->tax_rate_id ?? 0), $rows);
             $placeholders = implode(', ', array_fill(0, count($ids), '%d'));
             $locations = $wpdb->prefix.'woocommerce_tax_rate_locations';
 

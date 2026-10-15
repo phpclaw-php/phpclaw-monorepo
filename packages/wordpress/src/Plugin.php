@@ -47,6 +47,7 @@ use PhpClaw\WordPress\Memory\WpRouterMemory;
 use PhpClaw\WordPress\Memory\WpTransientMemory;
 use PhpClaw\WordPress\Rest\PhpClawAdminController;
 use PhpClaw\WordPress\Rest\PhpClawRestController;
+use PhpClaw\WordPress\Support\ToolHistorySplicer;
 
 /**
  * Main plugin bootstrap singleton.
@@ -54,6 +55,8 @@ use PhpClaw\WordPress\Rest\PhpClawRestController;
 class Plugin
 {
     private const FILE_STORAGE_SUBPATH = '/phpclaw-storage';
+
+    private const TITLE_MAX_LENGTH = 60;
 
     private static ?self $instance = null;
 
@@ -236,7 +239,7 @@ class Plugin
                 'nonceSend' => wp_create_nonce('phpclaw_send'),
                 'nonceStream' => wp_create_nonce('phpclaw_stream'),
                 'nonceLoad' => wp_create_nonce('phpclaw_load_conversation'),
-                'settingsUrl' => admin_url('admin.php?page=phpclaw'),
+                'settingsUrl' => current_user_can('phpclaw_use_admin_chat') ? admin_url('admin.php?page=phpclaw') : '',
             ]);
         }
 
@@ -393,7 +396,7 @@ class Plugin
             $conversation = $engine->conversation($conversationId);
 
             $toolCalls = [];
-            $this->registerToolCallCollector($toolCalls);
+            ToolHistorySplicer::collect($toolCalls);
 
             $turn = $engine->streamInConversation(
                 $conversation,
@@ -401,24 +404,7 @@ class Plugin
                 static function (string $token): void {
                     unset($token);
                 },
-                function (array $payload) use (&$toolCalls): array {
-                    $finalToolCalls = $this->filterNamedToolCalls($toolCalls);
-
-                    if ($finalToolCalls !== []) {
-                        $history = (array) ($payload['history'] ?? $payload['messages'] ?? []);
-                        $insertAt = $this->findLastAssistantIndex($history);
-                        $toolEntries = array_map(static fn (array $c): array => [
-                            'role' => 'tool',
-                            'content' => $c['tool_result'],
-                            'tool_name' => $c['tool_name'],
-                            'tool_input' => $c['tool_input'],
-                        ], $finalToolCalls);
-                        array_splice($history, $insertAt, 0, $toolEntries);
-                        $payload['history'] = $history;
-                    }
-
-                    return $payload;
-                },
+                ToolHistorySplicer::beforePersist($toolCalls),
             );
             $response = $turn->response;
 
@@ -487,18 +473,18 @@ class Plugin
                 @flush();
             };
 
-            HookRegistry::on(LifecycleEvent::ToolBefore->value, static function (array $ctx) use ($emit): void {
+            HookRegistry::on(LifecycleEvent::ToolBefore->value, static function (array $context) use ($emit): void {
                 $emit('tool_before', [
-                    'tool_name' => (string) ($ctx['tool_name'] ?? ''),
-                    'tool_input' => (array) ($ctx['tool_input'] ?? []),
+                    'tool_name' => (string) ($context['tool_name'] ?? ''),
+                    'tool_input' => (array) ($context['tool_input'] ?? []),
                 ]);
             });
 
-            HookRegistry::on(LifecycleEvent::ToolAfter->value, function (array $ctx) use ($emit, &$collectedToolCalls): void {
+            HookRegistry::on(LifecycleEvent::ToolAfter->value, function (array $context) use ($emit, &$collectedToolCalls): void {
                 $entry = [
-                    'tool_name' => (string) ($ctx['tool_name'] ?? ''),
-                    'tool_input' => (array) ($ctx['tool_input'] ?? []),
-                    'tool_result' => (string) ($ctx['tool_result'] ?? ''),
+                    'tool_name' => (string) ($context['tool_name'] ?? ''),
+                    'tool_input' => (array) ($context['tool_input'] ?? []),
+                    'tool_result' => (string) ($context['tool_result'] ?? ''),
                 ];
                 if ($entry['tool_name'] !== '') {
                     $collectedToolCalls[] = $entry;
@@ -506,39 +492,27 @@ class Plugin
                 }
             });
 
-            HookRegistry::on(LifecycleEvent::ProviderToken->value, static function (array $ctx) use ($emit): void {
-                $token = (string) ($ctx['token'] ?? '');
+            HookRegistry::on(LifecycleEvent::ProviderToken->value, static function (array $context) use ($emit): void {
+                $token = (string) ($context['token'] ?? '');
                 if ($token !== '') {
                     $emit('chunk', ['text' => $token]);
                 }
             });
 
             $title = '';
+            $splice = ToolHistorySplicer::beforePersist($collectedToolCalls);
             $turn = $engine->streamInConversation(
                 $conversation,
                 $message,
                 static function (string $token): void {
                     unset($token);
                 },
-                function (array $payload) use (&$collectedToolCalls, $isNew, $message, &$title): array {
-                    $toolCalls = $collectedToolCalls;
-
-                    if ($toolCalls !== []) {
-                        $history = (array) ($payload['history'] ?? $payload['messages'] ?? []);
-                        $insertAt = $this->findLastAssistantIndex($history);
-                        $toolEntries = array_map(static fn (array $c): array => [
-                            'role' => 'tool',
-                            'content' => $c['tool_result'],
-                            'tool_name' => $c['tool_name'],
-                            'tool_input' => $c['tool_input'],
-                        ], $toolCalls);
-                        array_splice($history, $insertAt, 0, $toolEntries);
-                        $payload['history'] = $history;
-                    }
+                function (array $payload) use ($splice, $isNew, $message, &$title): array {
+                    $payload = $splice($payload);
 
                     if ($isNew) {
-                        $payload['title'] = mb_strlen($message) > 60
-                            ? mb_substr($message, 0, 60)."\u{2026}"
+                        $payload['title'] = mb_strlen($message) > self::TITLE_MAX_LENGTH
+                            ? mb_substr($message, 0, self::TITLE_MAX_LENGTH)."\u{2026}"
                             : $message;
                     }
 
@@ -550,7 +524,7 @@ class Plugin
             $response = $turn->response;
 
             $emit('done', [
-                'text' => $response->text !== '' ? $response->text : PhpClawRestController::EMPTY_RESPONSE_TEXT,
+                'text' => $response->text === '' ? PhpClawRestController::EMPTY_RESPONSE_TEXT : $response->text,
                 'provider' => $response->provider,
                 'model' => $response->model,
                 'tokens' => ($response->inputTokens ?? 0) + ($response->outputTokens ?? 0),
@@ -594,13 +568,13 @@ class Plugin
     {
         $this->assertLoadConversationPermission();
 
-        $convId = sanitize_text_field(wp_unslash((string) ($_POST['conversation_id'] ?? '')));
-        if ($convId === '') {
+        $conversationId = sanitize_text_field(wp_unslash((string) ($_POST['conversation_id'] ?? '')));
+        if ($conversationId === '') {
             wp_send_json_error(['message' => 'conversation_id required.'], 400);
         }
 
         try {
-            $data = $this->engine()->memory()->get($convId, 'conversations');
+            $data = $this->engine()->memory()->get($conversationId, 'conversations');
             if (! is_array($data)) {
                 wp_send_json_error(['message' => 'Conversation not found.'], 404);
             }
@@ -1011,7 +985,7 @@ class Plugin
         }
 
         (new HookEventBridge(
-            static fn (string $event, array $ctx) => do_action('phpclaw_'.$event, $ctx),
+            static fn (string $event, array $context) => do_action('phpclaw_'.$event, $context),
         ))->register();
     }
 
@@ -1176,24 +1150,6 @@ class Plugin
     }
 
     /**
-     * Attach a hook listener that appends every tool.after event to the given array.
-     *
-     * @param  array<int, array{tool_name: string, tool_input: array<string, mixed>, tool_result: string}>  $calls
-     *                                                                                                              Reference array - appended to as each tool finishes.
-     * @return void
-     */
-    private function registerToolCallCollector(array &$calls): void
-    {
-        HookRegistry::on(LifecycleEvent::ToolAfter->value, function (array $ctx) use (&$calls): void {
-            $calls[] = [
-                'tool_name' => (string) ($ctx['tool_name'] ?? ''),
-                'tool_input' => (array) ($ctx['tool_input'] ?? []),
-                'tool_result' => (string) ($ctx['tool_result'] ?? ''),
-            ];
-        });
-    }
-
-    /**
      * Drop tool calls that did not carry a tool name (defensive filter).
      *
      * @param  array<int, array{tool_name: string, tool_input: array<string, mixed>, tool_result: string}>  $calls
@@ -1203,7 +1159,7 @@ class Plugin
     {
         return array_values(array_filter(
             $calls,
-            static fn (array $c): bool => $c['tool_name'] !== '',
+            static fn (array $call): bool => $call['tool_name'] !== '',
         ));
     }
 
@@ -1304,12 +1260,12 @@ class Plugin
     {
         $messages = [];
 
-        foreach ($history as $msg) {
-            if (! is_array($msg)) {
+        foreach ($history as $entry) {
+            if (! is_array($entry)) {
                 continue;
             }
 
-            $role = $msg['role'] ?? '';
+            $role = $entry['role'] ?? '';
             if (! in_array($role, ['user', 'assistant', 'tool'], true)) {
                 continue;
             }
@@ -1317,9 +1273,9 @@ class Plugin
             if ($role === 'tool') {
                 $messages[] = [
                     'role' => 'tool',
-                    'tool_name' => (string) ($msg['tool_name'] ?? ''),
-                    'tool_input' => is_array($msg['tool_input'] ?? null) ? $msg['tool_input'] : [],
-                    'tool_result' => (string) ($msg['content'] ?? ''),
+                    'tool_name' => (string) ($entry['tool_name'] ?? ''),
+                    'tool_input' => is_array($entry['tool_input'] ?? null) ? $entry['tool_input'] : [],
+                    'tool_result' => (string) ($entry['content'] ?? ''),
                 ];
 
                 continue;
@@ -1327,7 +1283,7 @@ class Plugin
 
             $messages[] = [
                 'role' => $role,
-                'content' => (string) ($msg['content'] ?? ''),
+                'content' => (string) ($entry['content'] ?? ''),
             ];
         }
 
@@ -1357,22 +1313,5 @@ class Plugin
         }
 
         phpclaw_run_migration();
-    }
-
-    /**
-     * Find the index of the last assistant message - tool rows are spliced before it.
-     *
-     * @param  array<int, mixed>  $messages  Message history in chronological order.
-     * @return int Index of the last assistant message, or -1 if none found.
-     */
-    private function findLastAssistantIndex(array $messages): int
-    {
-        for ($i = count($messages) - 1; $i >= 0; $i--) {
-            if (is_array($messages[$i]) && ($messages[$i]['role'] ?? '') === 'assistant') {
-                return $i;
-            }
-        }
-
-        return count($messages);
     }
 }

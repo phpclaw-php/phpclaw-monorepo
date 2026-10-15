@@ -17,6 +17,21 @@ final class ShippingTool implements ToolInterface, ToolRoutingInterface
 {
     use HasToolExecutionContract;
 
+    public const EXAMPLES = [
+        [
+            'prompt' => 'what shipping zones do we have?',
+            'arguments' => [],
+        ],
+        [
+            'prompt' => 'what shipping information can you look up?',
+            'arguments' => ['schema' => true],
+        ],
+        [
+            'prompt' => 'what does shipping cost in zone 1?',
+            'arguments' => ['zone_id' => 1, 'include_settings' => true],
+        ],
+    ];
+
     private const REQUIRED_CAPABILITY = 'phpclaw_use_chat';
 
     private const PHPCLAW_CAPABILITY = 'woocommerce.shipping.read';
@@ -38,21 +53,6 @@ final class ShippingTool implements ToolInterface, ToolRoutingInterface
 
     private const ALLOWED_KEYS = [
         'zone_id', 'schema', 'include_settings',
-    ];
-
-    public const EXAMPLES = [
-        [
-            'prompt' => 'what shipping zones do we have?',
-            'arguments' => [],
-        ],
-        [
-            'prompt' => 'what shipping information can you look up?',
-            'arguments' => ['schema' => true],
-        ],
-        [
-            'prompt' => 'what does shipping cost in zone 1?',
-            'arguments' => ['zone_id' => 1, 'include_settings' => true],
-        ],
     ];
 
     private $zoneFetcher;

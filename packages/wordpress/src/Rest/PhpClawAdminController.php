@@ -5,11 +5,13 @@ declare(strict_types=1);
 namespace PhpClaw\WordPress\Rest;
 
 use PhpClaw\Contracts\ClawInterface as PhpClawInterface;
+use PhpClaw\Exceptions\GuardException;
 use PhpClaw\Exceptions\ProviderException;
 use PhpClaw\Exceptions\TokenBudgetExceededException;
 use PhpClaw\Hooks\HookRegistry;
 use PhpClaw\Hooks\LifecycleEvent;
 use PhpClaw\WordPress\Exceptions\ConversationAccessDeniedException;
+use PhpClaw\WordPress\Support\ToolHistorySplicer;
 
 /**
  * WP REST controller for the chat streaming endpoint.
@@ -17,6 +19,8 @@ use PhpClaw\WordPress\Exceptions\ConversationAccessDeniedException;
 final class PhpClawAdminController
 {
     private const NAMESPACE = 'phpclaw';
+
+    private const TITLE_MAX_LENGTH = 60;
 
     /**
      * Bind the phpClaw engine and plugin configuration this controller streams with.
@@ -132,18 +136,18 @@ final class PhpClawAdminController
             $collector = [];
             $title = '';
 
-            HookRegistry::on(LifecycleEvent::ToolBefore->value, static function (array $ctx) use ($emit): void {
+            HookRegistry::on(LifecycleEvent::ToolBefore->value, static function (array $context) use ($emit): void {
                 $emit('tool_before', [
-                    'tool_name' => (string) ($ctx['tool_name'] ?? ''),
-                    'tool_input' => (array) ($ctx['tool_input'] ?? []),
+                    'tool_name' => (string) ($context['tool_name'] ?? ''),
+                    'tool_input' => (array) ($context['tool_input'] ?? []),
                 ]);
             });
 
-            HookRegistry::on(LifecycleEvent::ToolAfter->value, function (array $ctx) use ($emit, &$collector): void {
+            HookRegistry::on(LifecycleEvent::ToolAfter->value, function (array $context) use ($emit, &$collector): void {
                 $entry = [
-                    'tool_name' => (string) ($ctx['tool_name'] ?? ''),
-                    'tool_input' => (array) ($ctx['tool_input'] ?? []),
-                    'tool_result' => (string) ($ctx['tool_result'] ?? ''),
+                    'tool_name' => (string) ($context['tool_name'] ?? ''),
+                    'tool_input' => (array) ($context['tool_input'] ?? []),
+                    'tool_result' => (string) ($context['tool_result'] ?? ''),
                 ];
                 if ($entry['tool_name'] !== '') {
                     $collector[] = $entry;
@@ -151,39 +155,27 @@ final class PhpClawAdminController
                 }
             });
 
-            HookRegistry::on(LifecycleEvent::ProviderToken->value, static function (array $ctx) use ($emit): void {
-                $token = (string) ($ctx['token'] ?? '');
+            HookRegistry::on(LifecycleEvent::ProviderToken->value, static function (array $context) use ($emit): void {
+                $token = (string) ($context['token'] ?? '');
                 if ($token !== '') {
                     $emit('chunk', ['text' => $token]);
                 }
             });
 
             $conversation = $this->engine->conversation($conversationId);
+            $splice = ToolHistorySplicer::beforePersist($collector);
             $turn = $this->engine->streamInConversation(
                 $conversation,
                 $message,
                 static function (string $token): void {
                     unset($token);
                 },
-                function (array $payload) use (&$collector, $isNew, $message, &$title): array {
-                    $toolCalls = $collector;
-
-                    if ($toolCalls !== []) {
-                        $history = (array) ($payload['history'] ?? $payload['messages'] ?? []);
-                        $insertAt = $this->findLastAssistantIndex($history);
-                        $toolEntries = array_map(static fn (array $c): array => [
-                            'role' => 'tool',
-                            'content' => $c['tool_result'],
-                            'tool_name' => $c['tool_name'],
-                            'tool_input' => $c['tool_input'],
-                        ], $toolCalls);
-                        array_splice($history, $insertAt, 0, $toolEntries);
-                        $payload['history'] = $history;
-                    }
+                function (array $payload) use ($splice, $isNew, $message, &$title): array {
+                    $payload = $splice($payload);
 
                     if ($isNew) {
-                        $payload['title'] = mb_strlen($message) > 60
-                            ? mb_substr($message, 0, 60)."\u{2026}"
+                        $payload['title'] = mb_strlen($message) > self::TITLE_MAX_LENGTH
+                            ? mb_substr($message, 0, self::TITLE_MAX_LENGTH)."\u{2026}"
                             : $message;
                     }
 
@@ -196,7 +188,7 @@ final class PhpClawAdminController
             $response = $turn->response;
 
             $emit('done', [
-                'text' => $response->text !== '' ? $response->text : PhpClawRestController::EMPTY_RESPONSE_TEXT,
+                'text' => $response->text === '' ? PhpClawRestController::EMPTY_RESPONSE_TEXT : $response->text,
                 'provider' => $response->provider,
                 'model' => $response->model,
                 'tokens' => ($response->inputTokens ?? 0) + ($response->outputTokens ?? 0),
@@ -212,6 +204,14 @@ final class PhpClawAdminController
             }
             $emit('error', [
                 'message' => __('You do not have permission to access this resource.', 'phpclaw'),
+            ]);
+        } catch (GuardException $e) {
+            error_log('phpClaw: guard blocked REST stream: '.$e->getMessage());
+            if (! headers_sent()) {
+                status_header(422);
+            }
+            $emit('error', [
+                'message' => __('Your message was blocked by a security guard. Rephrase your prompt and try again.', 'phpclaw'),
             ]);
         } catch (TokenBudgetExceededException $e) {
             if (! headers_sent()) {
@@ -242,23 +242,6 @@ final class PhpClawAdminController
                 'message' => __('An internal error occurred. Please try again.', 'phpclaw'),
             ]);
         }
-    }
-
-    /**
-     * Find the index of the last assistant message - tool rows are spliced before it.
-     *
-     * @param  array<int, mixed>  $messages  The conversation history rows.
-     * @return int
-     */
-    private function findLastAssistantIndex(array $messages): int
-    {
-        for ($i = count($messages) - 1; $i >= 0; $i--) {
-            if (is_array($messages[$i]) && ($messages[$i]['role'] ?? '') === 'assistant') {
-                return $i;
-            }
-        }
-
-        return count($messages);
     }
 
     /**

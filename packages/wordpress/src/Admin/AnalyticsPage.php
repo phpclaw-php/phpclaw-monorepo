@@ -39,8 +39,8 @@ final class AnalyticsPage
 
         global $wpdb;
 
-        $convTable = $wpdb->prefix.'phpclaw_conversations';
-        $msgTable = $wpdb->prefix.'phpclaw_messages';
+        $conversationsTable = $wpdb->prefix.'phpclaw_conversations';
+        $messagesTable = $wpdb->prefix.'phpclaw_messages';
 
         $manageAll = current_user_can('phpclaw_manage_all_conversations');
         $actingUserId = get_current_user_id();
@@ -50,13 +50,13 @@ final class AnalyticsPage
         if ($totalConversations === false) {
             if ($manageAll) {
                 $totalConversations = (int) $wpdb->get_var(
-                    $wpdb->prepare('SELECT COUNT(*) FROM %i', $convTable),
+                    $wpdb->prepare('SELECT COUNT(*) FROM %i', $conversationsTable),
                 );
             } else {
                 $totalConversations = (int) $wpdb->get_var(
                     $wpdb->prepare(
                         'SELECT COUNT(*) FROM %i WHERE user_id = %d',
-                        $convTable,
+                        $conversationsTable,
                         $actingUserId,
                     ),
                 );
@@ -72,8 +72,8 @@ final class AnalyticsPage
                     $wpdb->prepare(
                         'SELECT COUNT(*) FROM %i m
                          INNER JOIN %i c ON c.id = m.conversation_id',
-                        $msgTable,
-                        $convTable,
+                        $messagesTable,
+                        $conversationsTable,
                     ),
                 );
             } else {
@@ -82,8 +82,8 @@ final class AnalyticsPage
                         'SELECT COUNT(*) FROM %i m
                          INNER JOIN %i c ON c.id = m.conversation_id
                          WHERE c.user_id = %d',
-                        $msgTable,
-                        $convTable,
+                        $messagesTable,
+                        $conversationsTable,
                         $actingUserId,
                     ),
                 );
@@ -98,7 +98,7 @@ final class AnalyticsPage
                 $activeConversations = (int) $wpdb->get_var(
                     $wpdb->prepare(
                         'SELECT COUNT(*) FROM %i WHERE updated_at >= NOW() - INTERVAL 1 DAY',
-                        $convTable,
+                        $conversationsTable,
                     ),
                 );
             } else {
@@ -106,7 +106,7 @@ final class AnalyticsPage
                     $wpdb->prepare(
                         'SELECT COUNT(*) FROM %i
                          WHERE updated_at >= NOW() - INTERVAL 1 DAY AND user_id = %d',
-                        $convTable,
+                        $conversationsTable,
                         $actingUserId,
                     ),
                 );

@@ -79,7 +79,7 @@ final class DashboardWidget
             <?php if ($provider !== '') { ?>
                 <div class="pc-widget-provider">
                     <span class="pc-widget-label"><?= esc_html__('Provider', 'phpclaw') ?></span>
-                    <span class="pc-widget-value"><?= esc_html(ucfirst($provider)) ?><?= $model !== '' ? ' &middot; '.esc_html($model) : '' ?></span>
+                    <span class="pc-widget-value"><?= esc_html(ucfirst($provider)) ?><?= $model === '' ? '' : ' &middot; '.esc_html($model) ?></span>
                 </div>
             <?php } ?>
 
@@ -125,15 +125,15 @@ final class DashboardWidget
 
         $wpdb->suppress_errors(true);
 
-        $convTable = $wpdb->prefix.'phpclaw_conversations';
-        $msgTable = $wpdb->prefix.'phpclaw_messages';
+        $conversationsTable = $wpdb->prefix.'phpclaw_conversations';
+        $messagesTable = $wpdb->prefix.'phpclaw_messages';
 
         $conversations = (int) $wpdb->get_var(
-            $wpdb->prepare('SELECT COUNT(*) FROM %i', $convTable)
+            $wpdb->prepare('SELECT COUNT(*) FROM %i', $conversationsTable)
         );
 
         $messages = (int) $wpdb->get_var(
-            $wpdb->prepare('SELECT COUNT(*) FROM %i', $msgTable)
+            $wpdb->prepare('SELECT COUNT(*) FROM %i', $messagesTable)
         );
 
         $wpdb->suppress_errors(false);

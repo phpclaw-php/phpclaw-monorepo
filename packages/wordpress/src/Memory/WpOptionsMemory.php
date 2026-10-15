@@ -19,6 +19,8 @@ final class WpOptionsMemory implements MemoryInterface
 
     private const EXPIRY_PREFIX = '_phpclaw_expiry_';
 
+    private const KEY_SEGMENT_LENGTH = 80;
+
     /**
      * Retrieve a stored value by key and namespace.
      *
@@ -31,9 +33,9 @@ final class WpOptionsMemory implements MemoryInterface
         $optionKey = $this->optionKey($namespace, $key);
 
         if ($this->isExpired($namespace, $key)) {
-            $this->deleteOption($optionKey);
-            $this->deleteOption($this->expiryKey($namespace, $key));
-            HookDispatcher::memoryRead($key, $namespace, self::DRIVER_NAME, false);
+            delete_option($optionKey);
+            delete_option($this->expiryKey($namespace, $key));
+            HookDispatcher::memoryRead($key, $namespace, self::DRIVER_NAME, hit: false);
 
             return null;
         }
@@ -41,14 +43,14 @@ final class WpOptionsMemory implements MemoryInterface
         $raw = get_option($optionKey, null);
 
         if ($raw === null || $raw === false) {
-            HookDispatcher::memoryRead($key, $namespace, self::DRIVER_NAME, false);
+            HookDispatcher::memoryRead($key, $namespace, self::DRIVER_NAME, hit: false);
 
             return null;
         }
 
         $value = $this->safeUnserialize((string) $raw);
 
-        HookDispatcher::memoryRead($key, $namespace, self::DRIVER_NAME, true);
+        HookDispatcher::memoryRead($key, $namespace, self::DRIVER_NAME, hit: true);
 
         return $value;
     }
@@ -66,7 +68,7 @@ final class WpOptionsMemory implements MemoryInterface
     {
         $optionKey = $this->optionKey($namespace, $key);
         $expiryKey = $this->expiryKey($namespace, $key);
-        $expireAt = $ttl !== null ? (string) (time() + $ttl) : '';
+        $expireAt = $ttl === null ? '' : (string) (time() + $ttl);
 
         try {
             $serialised = serialize($value);
@@ -149,7 +151,7 @@ final class WpOptionsMemory implements MemoryInterface
             'ARRAY_A',
         ) ?? [];
 
-        $out = [];
+        $entries = [];
         $prefixLen = strlen(self::PREFIX.$namespace.'_');
 
         foreach ($rows as $row) {
@@ -161,10 +163,10 @@ final class WpOptionsMemory implements MemoryInterface
                 continue;
             }
 
-            $out[$key] = $this->safeUnserialize((string) $row['option_value']);
+            $entries[$key] = $this->safeUnserialize((string) $row['option_value']);
         }
 
-        return $out;
+        return $entries;
     }
 
     /**
@@ -211,7 +213,7 @@ final class WpOptionsMemory implements MemoryInterface
      */
     private function sanitise(string $input): string
     {
-        return substr(rawurlencode($input), 0, 80);
+        return substr(rawurlencode($input), 0, self::KEY_SEGMENT_LENGTH);
     }
 
     /**
@@ -230,17 +232,6 @@ final class WpOptionsMemory implements MemoryInterface
         }
 
         return time() >= (int) $expiryRaw;
-    }
-
-    /**
-     * Delete a wp_options entry by its full option key.
-     *
-     * @param  string  $optionKey  Full wp_options key to delete.
-     * @return void
-     */
-    private function deleteOption(string $optionKey): void
-    {
-        delete_option($optionKey);
     }
 
     /**

@@ -18,6 +18,16 @@ final class WpDbConversationMemory implements MemoryInterface
 {
     private const DRIVER_NAME = 'wp_db_conv';
 
+    private const TITLE_MAX_LENGTH = 80;
+
+    private const CACHE_GROUP = 'phpclaw';
+
+    private const ANALYTICS_CACHE_METRICS = [
+        'analytics_total_conversations',
+        'analytics_total_messages',
+        'analytics_active_conversations',
+    ];
+
     private string $conversationsTable;
 
     private string $messagesTable;
@@ -59,7 +69,7 @@ final class WpDbConversationMemory implements MemoryInterface
             );
 
             if ($row === null) {
-                HookDispatcher::memoryRead($key, $namespace, self::DRIVER_NAME, false);
+                HookDispatcher::memoryRead($key, $namespace, self::DRIVER_NAME, hit: false);
 
                 return null;
             }
@@ -75,7 +85,7 @@ final class WpDbConversationMemory implements MemoryInterface
                 'history' => [],
             ];
 
-            if (self::storeMessages()) {
+            if (Plugin::storeMessagesEnabled()) {
                 $messages = $wpdb->get_results(
                     $wpdb->prepare(
                         "SELECT role, content, tool_name, tool_input
@@ -88,14 +98,14 @@ final class WpDbConversationMemory implements MemoryInterface
                 ) ?? [];
 
                 $history = [];
-                foreach ($messages as $msg) {
+                foreach ($messages as $storedMessage) {
                     $entry = [
-                        'role' => $msg['role'],
-                        'content' => $msg['content'],
-                        'tool_name' => $msg['tool_name'] ?? null,
+                        'role' => $storedMessage['role'],
+                        'content' => $storedMessage['content'],
+                        'tool_name' => $storedMessage['tool_name'] ?? null,
                     ];
-                    if (isset($msg['tool_input'])) {
-                        $decoded = json_decode((string) $msg['tool_input'], true);
+                    if (isset($storedMessage['tool_input'])) {
+                        $decoded = json_decode((string) $storedMessage['tool_input'], true);
                         $entry['tool_input'] = is_array($decoded) ? $decoded : null;
                     }
                     $history[] = $entry;
@@ -104,7 +114,7 @@ final class WpDbConversationMemory implements MemoryInterface
                 $data['history'] = $history;
             }
 
-            HookDispatcher::memoryRead($key, $namespace, self::DRIVER_NAME, true);
+            HookDispatcher::memoryRead($key, $namespace, self::DRIVER_NAME, hit: true);
 
             return $data;
         } catch (ConversationAccessDeniedException $e) {
@@ -133,15 +143,14 @@ final class WpDbConversationMemory implements MemoryInterface
                 throw new MemoryException('WpDbConversationMemory::set expects an array value.');
             }
 
-            if (! self::storeMessages()) {
+            if (! Plugin::storeMessagesEnabled()) {
                 HookDispatcher::memoryWrite($key, $namespace, self::DRIVER_NAME, $ttl);
 
                 return;
             }
 
-            wp_cache_delete('analytics_total_conversations', 'phpclaw');
-            wp_cache_delete('analytics_total_messages', 'phpclaw');
-            wp_cache_delete('analytics_active_conversations', 'phpclaw');
+            $userId = self::resolveWriteUserId();
+            self::forgetAnalyticsCounts($userId);
 
             $metadata = isset($value['metadata']) && is_array($value['metadata'])
                 ? json_encode($value['metadata'])
@@ -154,8 +163,6 @@ final class WpDbConversationMemory implements MemoryInterface
                 : self::extractTitle($history);
 
             $now = gmdate('Y-m-d H:i:s');
-
-            $userId = self::resolveWriteUserId();
 
             $wpdb->query(
                 $wpdb->prepare(
@@ -182,61 +189,7 @@ final class WpDbConversationMemory implements MemoryInterface
             }
 
             if ($history !== []) {
-                $wpdb->delete($this->messagesTable, ['conversation_id' => $key], ['%s']);
-
-                foreach ($history as $message) {
-                    if (! is_array($message)) {
-                        continue;
-                    }
-
-                    $role = $message['role'] ?? 'user';
-
-                    if ($role === 'tool_batch') {
-                        $calls = is_array($message['batch_calls'] ?? null) ? $message['batch_calls'] : [];
-                        $results = is_array($message['batch_results'] ?? null) ? $message['batch_results'] : [];
-
-                        if ($calls === []) {
-                            continue;
-                        }
-
-                        $toolNames = array_column($calls, 'tool_name');
-                        $toolInputs = array_column($calls, 'tool_input');
-
-                        $wpdb->insert(
-                            $this->messagesTable,
-                            [
-                                'id' => Ulid::generate(),
-                                'conversation_id' => $key,
-                                'role' => 'tool',
-                                'content' => json_encode($results, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
-                                'tool_name' => implode(', ', $toolNames),
-                                'tool_input' => json_encode($toolInputs, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
-                                'created_at' => $now,
-                            ],
-                            ['%s', '%s', '%s', '%s', '%s', '%s', '%s'],
-                        );
-
-                        continue;
-                    }
-
-                    if (! in_array($role, ['user', 'assistant', 'tool'], true)) {
-                        continue;
-                    }
-
-                    $wpdb->insert(
-                        $this->messagesTable,
-                        [
-                            'id' => Ulid::generate(),
-                            'conversation_id' => $key,
-                            'role' => $role,
-                            'content' => isset($message['content']) ? (string) $message['content'] : null,
-                            'tool_name' => $message['tool_name'] ?? null,
-                            'tool_input' => isset($message['tool_input']) ? json_encode($message['tool_input']) : null,
-                            'created_at' => $now,
-                        ],
-                        ['%s', '%s', '%s', '%s', '%s', '%s', '%s'],
-                    );
-                }
+                $this->replaceMessages($key, $history, $now);
             }
         } catch (MemoryException $e) {
             throw $e;
@@ -246,6 +199,79 @@ final class WpDbConversationMemory implements MemoryInterface
         }
 
         HookDispatcher::memoryWrite($key, $namespace, self::DRIVER_NAME, $ttl);
+    }
+
+    /**
+     * Replace the stored message rows of a conversation with the given history; a tool_batch row is stored as one tool row.
+     *
+     * @param  string  $key  The conversation ID.
+     * @param  array<int, mixed>  $history  Message history to store.
+     * @param  string  $now  UTC timestamp stamped on every row.
+     * @return void
+     */
+    private function replaceMessages(string $key, array $history, string $now): void
+    {
+        global $wpdb;
+
+        $wpdb->delete($this->messagesTable, ['conversation_id' => $key], ['%s']);
+
+        foreach ($history as $message) {
+            if (! is_array($message)) {
+                continue;
+            }
+
+            $row = $this->messageRow($key, $message, $now);
+
+            if ($row !== null) {
+                $wpdb->insert($this->messagesTable, $row, ['%s', '%s', '%s', '%s', '%s', '%s', '%s']);
+            }
+        }
+    }
+
+    /**
+     * Build the messages-table row for one history entry, or null for an entry that is not stored.
+     *
+     * @param  string  $key  The conversation ID.
+     * @param  array<string, mixed>  $message  One history entry.
+     * @param  string  $now  UTC timestamp stamped on the row.
+     * @return array<string, string|null>|null
+     */
+    private function messageRow(string $key, array $message, string $now): ?array
+    {
+        $role = $message['role'] ?? 'user';
+
+        if ($role === 'tool_batch') {
+            $calls = is_array($message['batch_calls'] ?? null) ? $message['batch_calls'] : [];
+            $results = is_array($message['batch_results'] ?? null) ? $message['batch_results'] : [];
+
+            if ($calls === []) {
+                return null;
+            }
+
+            return [
+                'id' => Ulid::generate(),
+                'conversation_id' => $key,
+                'role' => 'tool',
+                'content' => json_encode($results, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
+                'tool_name' => implode(', ', array_column($calls, 'tool_name')),
+                'tool_input' => json_encode(array_column($calls, 'tool_input'), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
+                'created_at' => $now,
+            ];
+        }
+
+        if (! in_array($role, ['user', 'assistant', 'tool'], true)) {
+            return null;
+        }
+
+        return [
+            'id' => Ulid::generate(),
+            'conversation_id' => $key,
+            'role' => $role,
+            'content' => isset($message['content']) ? (string) $message['content'] : null,
+            'tool_name' => $message['tool_name'] ?? null,
+            'tool_input' => isset($message['tool_input']) ? json_encode($message['tool_input']) : null,
+            'created_at' => $now,
+        ];
     }
 
     /**
@@ -415,13 +441,17 @@ final class WpDbConversationMemory implements MemoryInterface
     }
 
     /**
-     * Check whether "Save Conversations" is enabled.
+     * Drop the cached Analytics page counts for every scope this write changes: all users, and the owner.
      *
-     * @return bool
+     * @param  int  $userId  Owner of the conversation being written.
+     * @return void
      */
-    private static function storeMessages(): bool
+    private static function forgetAnalyticsCounts(int $userId): void
     {
-        return Plugin::storeMessagesEnabled();
+        foreach (self::ANALYTICS_CACHE_METRICS as $metric) {
+            wp_cache_delete($metric.'_all', self::CACHE_GROUP);
+            wp_cache_delete($metric.'_'.$userId, self::CACHE_GROUP);
+        }
     }
 
     /**
@@ -519,7 +549,7 @@ final class WpDbConversationMemory implements MemoryInterface
             if (($message['role'] ?? '') === 'user' && is_string($message['content'] ?? null)) {
                 $text = trim((string) $message['content']);
                 if ($text !== '') {
-                    return mb_substr($text, 0, 80);
+                    return mb_substr($text, 0, self::TITLE_MAX_LENGTH);
                 }
             }
         }

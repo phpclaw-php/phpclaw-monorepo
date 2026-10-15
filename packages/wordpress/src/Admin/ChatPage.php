@@ -11,6 +11,14 @@ use PhpClaw\WordPress\Plugin;
  */
 final class ChatPage
 {
+    private const MINUTE = 60;
+
+    private const HOUR = 3600;
+
+    private const DAY = 86400;
+
+    private const WEEK = 604800;
+
     /**
      * Register the Chat submenu page under the phpClaw admin menu.
      *
@@ -49,14 +57,14 @@ final class ChatPage
         $storeMessages = Plugin::storeMessagesEnabled($saved, true);
 
         $engineError = false;
-        $convs = [];
+        $conversations = [];
         $engine = null;
 
         try {
             $engine = $plugin->engine();
             $memory = $engine->memory();
             if ($storeMessages) {
-                $convs = $memory->all('conversations');
+                $conversations = $memory->all('conversations');
             }
         } catch (\Throwable $e) {
             $engineError = true;
@@ -64,26 +72,27 @@ final class ChatPage
         }
 
         $settingsUrl = admin_url('admin.php?page=phpclaw');
+        $canManageSettings = current_user_can('phpclaw_use_admin_chat');
         $ajaxUrl = admin_url('admin-ajax.php');
         $nonceSend = wp_create_nonce('phpclaw_send');
         $nonceLoad = wp_create_nonce('phpclaw_load_conversation');
-        $provLabel = self::fmtProvider($provider ?: '');
+        $providerLabel = self::formatProviderLabel($provider ?: '');
         $modelLabel = $model ?: 'default';
 
         $initConvId = '';
         $initTitle = '';
         $initMessages = [];
 
-        if ($engine !== null && $convs !== []) {
-            $initConvId = (string) array_key_first($convs);
-            $initTitle = (string) ($convs[$initConvId]['title'] ?? '');
+        if ($engine !== null && $conversations !== []) {
+            $initConvId = (string) array_key_first($conversations);
+            $initTitle = (string) ($conversations[$initConvId]['title'] ?? '');
             try {
                 $stored = $engine->memory()->get($initConvId, 'conversations');
                 if (is_array($stored)) {
-                    foreach ((array) ($stored['history'] ?? []) as $msg) {
-                        $role = $msg['role'] ?? '';
+                    foreach ((array) ($stored['history'] ?? []) as $storedMessage) {
+                        $role = $storedMessage['role'] ?? '';
                         if (in_array($role, ['user', 'assistant'], true)) {
-                            $initMessages[] = ['role' => $role, 'content' => (string) ($msg['content'] ?? '')];
+                            $initMessages[] = ['role' => $role, 'content' => (string) ($storedMessage['content'] ?? '')];
                         }
                     }
                 }
@@ -97,16 +106,18 @@ final class ChatPage
                 <h1>🤖 phpClaw</h1>
                 <div class="pc-chat-header__end">
                     <?php if ($engineError) { ?>
-                        <span class="pc-chat-header__status--error">⚠ Engine error:
+                        <span class="pc-chat-header__status--error">⚠ Engine error<?php if ($canManageSettings) { ?>:
                             <a href="<?= esc_url($settingsUrl) ?>"><?= esc_html__('Configure', 'phpclaw') ?></a>
-                        </span>
+                        <?php } ?></span>
                     <?php } else { ?>
                         <span class="pc-chat-header__status">
                             <span class="pc-dot-green">●</span>
-                            <?= esc_html($provLabel) ?> · <?= esc_html($modelLabel) ?>
+                            <?= esc_html($providerLabel) ?> · <?= esc_html($modelLabel) ?>
                         </span>
                     <?php } ?>
-                    <a href="<?= esc_url($settingsUrl) ?>" class="button">⚙ <?= esc_html__('Settings', 'phpclaw') ?></a>
+                    <?php if ($canManageSettings) { ?>
+                        <a href="<?= esc_url($settingsUrl) ?>" class="button">⚙ <?= esc_html__('Settings', 'phpclaw') ?></a>
+                    <?php } ?>
                 </div>
             </div>
 
@@ -124,24 +135,24 @@ final class ChatPage
                         <label for="phpclaw-conv-search" class="screen-reader-text"><?= esc_html__('Search conversations', 'phpclaw') ?></label>
                         <input id="phpclaw-conv-search" type="search" placeholder="<?= esc_attr__('Search conversations…', 'phpclaw') ?>" aria-label="<?= esc_attr__('Search conversations', 'phpclaw') ?>" />
                     </div>
-                    <?php if ($convs === []) { ?>
+                    <?php if ($conversations === []) { ?>
                         <p id="phpclaw-empty-sidebar" class="pc-sidebar-empty">
                             No conversations yet.<br>Send a message to start.
                         </p>
                         <div id="phpclaw-conv-list" hidden></div>
                     <?php } else { ?>
                         <div id="phpclaw-conv-list" role="list" aria-label="<?= esc_attr__('Conversation list', 'phpclaw') ?>">
-                            <?php foreach ($convs as $cid => $conv) {
+                            <?php foreach ($conversations as $conversationId => $conv) {
                                 $title = (string) ($conv['title'] ?? '');
-                                $display = $title !== '' ? $title : 'New conversation';
+                                $display = $title === '' ? 'New conversation' : $title;
                                 $when = self::relativeTime((string) ($conv['updated_at'] ?? $conv['created_at'] ?? ''));
-                                $isFirst = ($cid === $initConvId);
+                                $isFirst = ($conversationId === $initConvId);
                                 ?>
                             <div class="phpclaw-conv-item <?= $isFirst ? 'active' : '' ?>"
                                  role="listitem"
                                  tabindex="0"
                                  aria-current="<?= $isFirst ? 'true' : 'false' ?>"
-                                 data-conv-id="<?= esc_attr((string) $cid) ?>"
+                                 data-conv-id="<?= esc_attr((string) $conversationId) ?>"
                                  data-title="<?= esc_attr(strtolower($display)) ?>">
                                 <div class="phpclaw-conv-item-title"><?= esc_html($display) ?></div>
                                 <div class="phpclaw-conv-item-time"><?= esc_html($when) ?></div>
@@ -154,7 +165,7 @@ final class ChatPage
                 <div id="phpclaw-chat-area" role="main">
                     <div id="phpclaw-chat-header">
                         <?php if ($initConvId !== '') { ?>
-                            <?= esc_html($initTitle !== '' ? $initTitle : 'Conversation') ?>
+                            <?= esc_html($initTitle === '' ? 'Conversation' : $initTitle) ?>
                         <?php } else { ?>
                             New Chat
                         <?php } ?>
@@ -172,8 +183,8 @@ final class ChatPage
                                 <p>No messages stored yet. Send a message below to continue.</p>
                             </div>
                         <?php } else { ?>
-                            <?php foreach ($initMessages as $msg) { ?>
-                                <?php self::renderBubbleHtml($msg['role'], $msg['content']); ?>
+                            <?php foreach ($initMessages as $initialMessage) { ?>
+                                <?php self::renderBubbleHtml($initialMessage['role'], $initialMessage['content']); ?>
                             <?php } ?>
                         <?php } ?>
                     </div>
@@ -191,7 +202,7 @@ final class ChatPage
                             </button>
                         </div>
                         <div id="phpclaw-input-meta">
-                            <?= esc_html($provLabel) ?> · <?= esc_html($modelLabel) ?> · Responses are AI-generated. Verify before acting.
+                            <?= esc_html($providerLabel) ?> · <?= esc_html($modelLabel) ?> · Responses are AI-generated. Verify before acting.
                         </div>
                     </div>
                 </div>
@@ -236,7 +247,7 @@ final class ChatPage
      * @param  string  $provider  The provider key (e.g. 'anthropic', 'openai').
      * @return string
      */
-    private static function fmtProvider(string $provider): string
+    private static function formatProviderLabel(string $provider): string
     {
         return match (strtolower(trim($provider))) {
             'anthropic' => 'Anthropic',
@@ -264,15 +275,15 @@ final class ChatPage
             return '';
         }
 
-        $ts = (int) strtotime($datetime.' UTC');
-        $diff = time() - $ts;
+        $timestamp = (int) strtotime($datetime.' UTC');
+        $diff = time() - $timestamp;
 
         return match (true) {
-            $diff < 60 => 'just now',
-            $diff < 3600 => (int) ($diff / 60).'m ago',
-            $diff < 86400 => (int) ($diff / 3600).'h ago',
-            $diff < 604800 => (int) ($diff / 86400).'d ago',
-            default => gmdate('M j', $ts),
+            $diff < self::MINUTE => 'just now',
+            $diff < self::HOUR => (int) ($diff / self::MINUTE).'m ago',
+            $diff < self::DAY => (int) ($diff / self::HOUR).'h ago',
+            $diff < self::WEEK => (int) ($diff / self::DAY).'d ago',
+            default => gmdate('M j', $timestamp),
         };
     }
 }

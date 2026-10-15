@@ -17,6 +17,21 @@ final class CategoryTool implements ToolInterface, ToolRoutingInterface
 {
     use HasToolExecutionContract;
 
+    public const EXAMPLES = [
+        [
+            'prompt' => 'what product categories do we have?',
+            'arguments' => [],
+        ],
+        [
+            'prompt' => 'how many product categories are there?',
+            'arguments' => ['aggregate' => true],
+        ],
+        [
+            'prompt' => 'which categories actually have products in them?',
+            'arguments' => ['hide_empty' => true],
+        ],
+    ];
+
     private const TAXONOMY = 'product_cat';
 
     private const DEFAULT_LIMIT = 30;
@@ -54,21 +69,6 @@ final class CategoryTool implements ToolInterface, ToolRoutingInterface
 
     private const ALLOWED_KEYS = [
         'columns', 'schema', 'aggregate', 'search', 'hide_empty', 'parent_id', 'limit', 'offset',
-    ];
-
-    public const EXAMPLES = [
-        [
-            'prompt' => 'what product categories do we have?',
-            'arguments' => [],
-        ],
-        [
-            'prompt' => 'how many product categories are there?',
-            'arguments' => ['aggregate' => true],
-        ],
-        [
-            'prompt' => 'which categories actually have products in them?',
-            'arguments' => ['hide_empty' => true],
-        ],
     ];
 
     private $fetcher;

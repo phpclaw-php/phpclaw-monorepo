@@ -17,6 +17,21 @@ final class WpOptionsTool implements ToolInterface, ToolRoutingInterface
 {
     use HasToolExecutionContract;
 
+    public const EXAMPLES = [
+        [
+            'prompt' => 'what is this site called?',
+            'arguments' => ['option_name' => 'blogname'],
+        ],
+        [
+            'prompt' => 'how many settings does this site store?',
+            'arguments' => ['aggregate' => true],
+        ],
+        [
+            'prompt' => 'find the settings to do with the blog',
+            'arguments' => ['search' => 'blog'],
+        ],
+    ];
+
     private const DEFAULT_LIMIT = 50;
 
     private const MAX_LIMIT = 200;
@@ -78,21 +93,6 @@ final class WpOptionsTool implements ToolInterface, ToolRoutingInterface
         'include_values',
         'limit',
         'offset',
-    ];
-
-    public const EXAMPLES = [
-        [
-            'prompt' => 'what is this site called?',
-            'arguments' => ['option_name' => 'blogname'],
-        ],
-        [
-            'prompt' => 'how many settings does this site store?',
-            'arguments' => ['aggregate' => true],
-        ],
-        [
-            'prompt' => 'find the settings to do with the blog',
-            'arguments' => ['search' => 'blog'],
-        ],
     ];
 
     /**
@@ -275,32 +275,13 @@ DESC;
      */
     protected function plan(array $input): array
     {
-        if (! $this->runningInConsole() && ! $this->callerHasCapability(self::REQUIRED_CAPABILITY)) {
-            return [
-                'input' => $input,
-                'result' => $this->error(
-                    'FORBIDDEN',
-                    sprintf(
-                        'The current user lacks the "%s" WordPress capability required to read options.',
-                        self::REQUIRED_CAPABILITY,
-                    ),
-                ),
-            ];
+        $forbidden = $this->guardCapability('read options');
+
+        if ($forbidden !== null) {
+            return ['input' => $input, 'result' => $forbidden];
         }
 
-        $validationError = $this->validate($input);
-
-        if ($validationError !== null) {
-            return [
-                'input' => $input,
-                'result' => $validationError,
-            ];
-        }
-
-        return [
-            'input' => $input,
-            'result' => null,
-        ];
+        return ['input' => $input, 'result' => $this->validate($input)];
     }
 
     /**
@@ -732,14 +713,10 @@ DESC;
      */
     private function validate(array $input): ?string
     {
-        foreach (array_keys($input) as $key) {
-            if (! in_array($key, self::ALLOWED_KEYS, true)) {
-                return $this->error(
-                    'UNKNOWN_ARGUMENT',
-                    sprintf('Unknown argument "%s".', (string) $key),
-                    ['accepted_arguments' => self::ALLOWED_KEYS],
-                );
-            }
+        $unknown = $this->rejectUnknownArguments($input, self::ALLOWED_KEYS);
+
+        if ($unknown !== null) {
+            return $unknown;
         }
 
         foreach (['schema', 'aggregate', 'autoload_only'] as $flag) {
@@ -787,30 +764,10 @@ DESC;
             }
         }
 
-        if (array_key_exists('limit', $input)) {
-            if (
-                ! is_int($input['limit'])
-                || $input['limit'] < 1
-                || $input['limit'] > self::MAX_LIMIT
-            ) {
-                return $this->error(
-                    'INVALID_LIMIT',
-                    sprintf('"limit" must be an integer between 1 and %d.', self::MAX_LIMIT),
-                );
-            }
-        }
+        $paging = $this->validatePaging($input, self::MAX_LIMIT, self::MAX_OFFSET);
 
-        if (array_key_exists('offset', $input)) {
-            if (
-                ! is_int($input['offset'])
-                || $input['offset'] < 0
-                || $input['offset'] > self::MAX_OFFSET
-            ) {
-                return $this->error(
-                    'INVALID_OFFSET',
-                    sprintf('"offset" must be an integer between 0 and %d.', self::MAX_OFFSET),
-                );
-            }
+        if ($paging !== null) {
+            return $paging;
         }
 
         $isSchema = ($input['schema'] ?? false) === true;

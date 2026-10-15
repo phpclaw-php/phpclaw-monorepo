@@ -27,6 +27,13 @@ final class WpZipBuilderTool implements MutatingToolInterface, ToolInterface, To
 {
     use HasToolExecutionContract;
 
+    public const EXAMPLES = [
+        [
+            'prompt' => 'validate and package the plugin I just generated',
+            'arguments' => ['plugin_dir' => 'my-generated-plugin'],
+        ],
+    ];
+
     private const FORBIDDEN_CALLS = ['eval(', 'system(', 'exec(', 'passthru(', 'shell_exec('];
 
     private const REQUIRED_CAPABILITY = 'phpclaw_use_chat';
@@ -36,13 +43,6 @@ final class WpZipBuilderTool implements MutatingToolInterface, ToolInterface, To
     private const RISK_LEVEL = 'write';
 
     private const ALLOWED_KEYS = ['plugin_dir'];
-
-    public const EXAMPLES = [
-        [
-            'prompt' => 'validate and package the plugin I just generated',
-            'arguments' => ['plugin_dir' => 'my-generated-plugin'],
-        ],
-    ];
 
     private readonly string $workspaceRoot;
 

@@ -15,6 +15,8 @@ final class FileRouterMemory implements MemoryInterface
 {
     private const CONVERSATION_NAMESPACE = 'conversations';
 
+    private const TITLE_MAX_LENGTH = 80;
+
     private readonly FileMemory $file;
 
     /**
@@ -51,9 +53,9 @@ final class FileRouterMemory implements MemoryInterface
     public function set(string $key, mixed $value, string $namespace = 'default', ?int $ttl = null): void
     {
         if ($namespace === self::CONVERSATION_NAMESPACE && is_array($value)) {
-            $storeMsg = self::storeMessages();
+            $storeMessages = Plugin::storeMessagesEnabled();
 
-            if (! $storeMsg) {
+            if (! $storeMessages) {
                 $value['history'] = [];
             }
 
@@ -65,14 +67,14 @@ final class FileRouterMemory implements MemoryInterface
                 if ($existingTitle !== '') {
                     $value['title'] = $existingTitle;
                 } else {
-                    $value['title'] = $storeMsg ? self::extractTitle((array) ($value['history'] ?? [])) : null;
+                    $value['title'] = $storeMessages ? self::extractTitle((array) ($value['history'] ?? [])) : null;
                 }
             }
 
             $value['updated_at'] = gmdate('Y-m-d H:i:s');
             if (! isset($value['created_at'])) {
                 $existingCreated = is_array($existing) ? ($existing['created_at'] ?? '') : '';
-                $value['created_at'] = $existingCreated !== '' ? $existingCreated : $value['updated_at'];
+                $value['created_at'] = $existingCreated === '' ? $value['updated_at'] : $existingCreated;
             }
         }
 
@@ -126,16 +128,6 @@ final class FileRouterMemory implements MemoryInterface
     }
 
     /**
-     * Check whether "Save Conversations" is enabled.
-     *
-     * @return bool
-     */
-    private static function storeMessages(): bool
-    {
-        return Plugin::storeMessagesEnabled();
-    }
-
-    /**
      * Auto-generate a title from the first user message in the conversation.
      *
      * @param  array<int, array<string, mixed>>  $history
@@ -147,7 +139,7 @@ final class FileRouterMemory implements MemoryInterface
             if (($message['role'] ?? '') === 'user' && is_string($message['content'] ?? null)) {
                 $text = trim((string) $message['content']);
                 if ($text !== '') {
-                    return mb_substr($text, 0, 80);
+                    return mb_substr($text, 0, self::TITLE_MAX_LENGTH);
                 }
             }
         }

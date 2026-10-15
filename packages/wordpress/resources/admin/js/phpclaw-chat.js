@@ -158,6 +158,7 @@
         fetch(ajaxUrl, { method: 'POST', body: formData, credentials: 'same-origin' })
         .then(readJson)
         .then(function (json) {
+            if (convId !== currentConvId) { return; }
             removeTyping();
             clearMessages('');
             if (json.success) {
@@ -180,6 +181,7 @@
             }
         })
         .catch(function (err) {
+            if (convId !== currentConvId) { return; }
             removeTyping();
             clearMessages('Request failed: ' + err.message);
         });
@@ -464,7 +466,9 @@
         })(errMsg);
 
         if (isConfig) {
-            bubble.innerHTML = '\u26a0 phpClaw is not configured. <a href="' + escHtml(settingsUrl) + '" style="color:#2271b1;">Add your API key in Settings</a> \u2014 then try again.';
+            bubble.innerHTML = settingsUrl
+                ? '\u26a0 phpClaw is not configured. <a href="' + escHtml(settingsUrl) + '" style="color:#2271b1;">Add your API key in Settings</a>, then try again.'
+                : '\u26a0 phpClaw is not configured. Ask an administrator to add an API key.';
         } else {
             bubble.textContent = '\u26a0 ' + errMsg;
         }

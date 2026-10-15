@@ -17,6 +17,21 @@ final class ReportTool implements ToolInterface, ToolRoutingInterface
 {
     use HasToolExecutionContract;
 
+    public const EXAMPLES = [
+        [
+            'prompt' => 'how did sales go this month?',
+            'arguments' => [],
+        ],
+        [
+            'prompt' => 'what date ranges can you report on?',
+            'arguments' => ['schema' => true],
+        ],
+        [
+            'prompt' => 'what are our top 3 selling products?',
+            'arguments' => ['top_products' => 3],
+        ],
+    ];
+
     private const MAX_RANGE_DAYS = 366;
 
     private const DEFAULT_PERIOD = 'this_month';
@@ -33,6 +48,8 @@ final class ReportTool implements ToolInterface, ToolRoutingInterface
 
     private const RISK_LEVEL = 'read';
 
+    private const SECONDS_PER_DAY = 86400;
+
     private const COUNTED_STATUSES = ['wc-completed', 'wc-processing'];
 
     private const VALID_PERIODS = [
@@ -41,21 +58,6 @@ final class ReportTool implements ToolInterface, ToolRoutingInterface
 
     private const ALLOWED_KEYS = [
         'period', 'date_from', 'date_to', 'top_products', 'schema',
-    ];
-
-    public const EXAMPLES = [
-        [
-            'prompt' => 'how did sales go this month?',
-            'arguments' => [],
-        ],
-        [
-            'prompt' => 'what date ranges can you report on?',
-            'arguments' => ['schema' => true],
-        ],
-        [
-            'prompt' => 'what are our top 3 selling products?',
-            'arguments' => ['top_products' => 3],
-        ],
     ];
 
     private $orderFetcher;
@@ -535,7 +537,7 @@ DESC;
                 }
 
                 $name = (string) $item->get_name();
-                $qty = is_callable([$item, 'get_quantity']) ? (int) $item->get_quantity() : 0;
+                $quantity = is_callable([$item, 'get_quantity']) ? (int) $item->get_quantity() : 0;
                 $id = is_callable([$item, 'get_product_id']) ? (int) $item->get_product_id() : 0;
 
                 $key = $id > 0 ? (string) $id : $name;
@@ -543,7 +545,7 @@ DESC;
                 $sales[$key] = [
                     'product_id' => $id,
                     'name' => $name,
-                    'quantity_sold' => ($sales[$key]['quantity_sold'] ?? 0) + $qty,
+                    'quantity_sold' => ($sales[$key]['quantity_sold'] ?? 0) + $quantity,
                 ];
             }
         }
@@ -623,15 +625,15 @@ DESC;
             [$from, $to] = [$to, $from];
         }
 
-        $requestedDays = (int) floor((strtotime($to) - strtotime($from)) / 86400) + 1;
+        $requestedDays = (int) floor((strtotime($to) - strtotime($from)) / self::SECONDS_PER_DAY) + 1;
         $clamped = false;
 
         if ($requestedDays > self::MAX_RANGE_DAYS) {
-            $from = gmdate('Y-m-d', strtotime($to) - ((self::MAX_RANGE_DAYS - 1) * 86400));
+            $from = gmdate('Y-m-d', strtotime($to) - ((self::MAX_RANGE_DAYS - 1) * self::SECONDS_PER_DAY));
             $clamped = true;
         }
 
-        $days = (int) floor((strtotime($to) - strtotime($from)) / 86400) + 1;
+        $days = (int) floor((strtotime($to) - strtotime($from)) / self::SECONDS_PER_DAY) + 1;
 
         return [
             'period' => $period,

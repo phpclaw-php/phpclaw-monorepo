@@ -288,4 +288,25 @@ final class WpTaxonomyToolTest extends TestCase
         self::assertSame(['success', 'data', 'meta', 'warnings'], array_keys($decoded));
         self::assertArrayHasKey('mode', $decoded['meta']);
     }
+
+    public function test_total_counts_only_the_terms_the_search_matches(): void
+    {
+        Functions\stubs([
+            'sanitize_key' => fn ($v) => $v,
+            'sanitize_text_field' => fn ($v) => $v,
+            'is_wp_error' => fn () => false,
+        ]);
+        Functions\expect('taxonomy_exists')->with('category')->once()->andReturn(true);
+        Functions\expect('get_terms')->once()->andReturn([
+            $this->makeTerm(1, 'Uncategorized', 'uncategorized', 12),
+        ]);
+        Functions\expect('wp_count_terms')->once()->andReturnUsing(
+            static fn (array $args): int => ($args['search'] ?? null) === 'uncat' ? 1 : 10,
+        );
+
+        $result = json_decode((new WpTaxonomyTool)->execute(['taxonomy' => 'category', 'search' => 'uncat']), true);
+
+        self::assertSame(1, $result['meta']['total']);
+        self::assertFalse($result['meta']['has_more']);
+    }
 }

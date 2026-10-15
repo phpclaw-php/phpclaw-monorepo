@@ -17,6 +17,21 @@ final class ReviewTool implements ToolInterface, ToolRoutingInterface
 {
     use HasToolExecutionContract;
 
+    public const EXAMPLES = [
+        [
+            'prompt' => 'what are customers saying about our products?',
+            'arguments' => [],
+        ],
+        [
+            'prompt' => 'how many product reviews do we have?',
+            'arguments' => ['aggregate' => true],
+        ],
+        [
+            'prompt' => 'show me reviews rated 4 stars or higher',
+            'arguments' => ['min_rating' => 4],
+        ],
+    ];
+
     private const COMMENT_TYPE = 'review';
 
     private const DEFAULT_LIMIT = 20;
@@ -59,21 +74,6 @@ final class ReviewTool implements ToolInterface, ToolRoutingInterface
 
     private const ALLOWED_KEYS = [
         'columns', 'schema', 'aggregate', 'status', 'product_id', 'min_rating', 'limit', 'offset',
-    ];
-
-    public const EXAMPLES = [
-        [
-            'prompt' => 'what are customers saying about our products?',
-            'arguments' => [],
-        ],
-        [
-            'prompt' => 'how many product reviews do we have?',
-            'arguments' => ['aggregate' => true],
-        ],
-        [
-            'prompt' => 'show me reviews rated 4 stars or higher',
-            'arguments' => ['min_rating' => 4],
-        ],
     ];
 
     private $fetcher;

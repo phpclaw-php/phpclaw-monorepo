@@ -4,11 +4,45 @@ declare(strict_types=1);
 
 namespace PhpClaw\WordPress\Admin;
 
+use PhpClaw\WordPress\Engine\EngineFactory;
+use PhpClaw\WordPress\Plugin;
+
 /**
  * phpClaw - About / Marketing page.
  */
 final class AboutPage
 {
+    private const TOOL_LABELS = [
+        'wp_query' => 'Posts',
+        'wp_users' => 'Users',
+        'wp_plugins' => 'Plugins',
+        'wp_menus' => 'Menus',
+        'wp_media' => 'Media',
+        'wp_comments' => 'Comments',
+        'wp_taxonomy' => 'Taxonomies',
+        'wp_cron' => 'Cron',
+        'wp_option' => 'Options',
+        'db_query' => 'Database',
+        'read_log' => 'Logs',
+        'file_read' => 'File Read',
+        'code_search' => 'Code Search',
+        'project_info' => 'Project Info',
+        'zip_package' => 'Zip Package',
+        'wp_zip_plugin' => 'Plugin Zip Builder',
+        'wc_get_orders' => 'Orders',
+        'wc_get_products' => 'Products',
+        'wc_get_customer' => 'Customers',
+        'wc_report' => 'Reports',
+        'wc_stock' => 'Stock',
+        'wc_coupons' => 'Coupons',
+        'wc_categories' => 'Categories',
+        'wc_reviews' => 'Reviews',
+        'wc_shipping' => 'Shipping',
+        'wc_tax' => 'Tax',
+    ];
+
+    private const WOOCOMMERCE_TOOL_PREFIX = 'wc_';
+
     /**
      * Register the About submenu page under the phpClaw admin menu.
      *
@@ -88,30 +122,21 @@ final class AboutPage
                 <h2><?= esc_html__('Built-in features', 'phpclaw') ?></h2>
                 <div class="phpclaw-features-grid">
                     <?php
-                    $wcActive = class_exists('WooCommerce');
-        $wpToolNames = ['Posts', 'Users', 'Plugins', 'Menus', 'Media', 'Comments', 'Taxonomies',
-            'Cron', 'Options', 'Database', 'Logs', 'HTTP', 'File Read', 'File Write', 'File Edit',
-            'Shell', 'Code Search', 'Project Info', 'Zip Package', 'Plugin Zip Builder'];
-        $wcToolNames = ['Orders', 'Products', 'Customers', 'Reports', 'Stock', 'Coupons',
-            'Categories', 'Reviews', 'Shipping', 'Tax'];
-        $toolCount = (string) (count($wpToolNames) + ($wcActive ? count($wcToolNames) : 0));
-        $features = [
-            ['icon' => '🤖', 'title' => '8 AI Providers',     'text' => 'Anthropic Claude, OpenAI GPT, Groq, Google Gemini, Mistral, DeepSeek, Ollama (local), Custom (any OpenAI-compatible endpoint). Switch from Settings, zero code changes.'],
-            ['icon' => '🛠',  'title' => $toolCount.' Built-in Tools', 'text' => $wcActive
-                ? 'WordPress: '.implode(', ', $wpToolNames).'. WooCommerce: '.implode(', ', $wcToolNames).'.'
-                : implode(', ', $wpToolNames).'. Install WooCommerce to unlock '.count($wcToolNames).' more commerce tools.'],
-            ['icon' => '🎚', 'title' => 'Adaptive Tool Profiles', 'text' => 'Hosted models (Anthropic, OpenAI, Gemini, Mistral, DeepSeek, Custom) receive the full tool set. Local providers (Ollama, Groq) receive a focused subset so smaller models stay reliable: 8 tools for 30B class models and above, otherwise 5.'],
-            ['icon' => '💬', 'title' => 'Chat UI',             'text' => 'Chat-style conversation interface in wp-admin. Conversation history, searchable sidebar, multi-turn context. Ask anything, and the agent picks the right tool.'],
-            ['icon' => '⚡', 'title' => 'Live Tool Streaming', 'text' => 'See the agent work in real time via Server-Sent Events. Spinner placeholders appear the moment a tool fires, typed result cards (posts, users, plugins, SQL tables) replace them as soon as data is back, and the assistant reply streams token-by-token.'],
-            ['icon' => '🔌', 'title' => 'REST API',           'text' => 'POST /wp-json/phpclaw/send to integrate the AI agent into any frontend, mobile app, chatbot, or external service.'],
-            ['icon' => '🖥',  'title' => 'WP-CLI',            'text' => 'wp phpclaw send, wp phpclaw chat, wp phpclaw mcp-server: full terminal access. Script automations, run in CI/CD, or pipe output.'],
-            ['icon' => '🔒', 'title' => 'Enterprise-Grade Security',  'text' => 'Multi-layered protection against prompt injection, unsafe commands, and data leakage. Your data stays safe. Your agent stays under control.'],
-        ];
-        foreach ($features as $f) { ?>
+                    $features = [
+                        ['icon' => '🤖', 'title' => '8 AI Providers',     'text' => 'Anthropic Claude, OpenAI GPT, Groq, Google Gemini, Mistral, DeepSeek, Ollama (local), Custom (any OpenAI-compatible endpoint). Switch from Settings, zero code changes.'],
+                        ['icon' => '🛠'] + self::toolsFeature(self::builtInToolNames(), class_exists('WooCommerce')),
+                        ['icon' => '🎚', 'title' => 'Adaptive Tool Profiles', 'text' => 'Hosted models (Anthropic, OpenAI, Gemini, Mistral, DeepSeek, Custom) receive the full tool set. Local providers (Ollama, Groq) receive a focused subset so smaller models stay reliable: 8 tools for 30B class models and above, otherwise 5.'],
+                        ['icon' => '💬', 'title' => 'Chat UI',             'text' => 'Chat-style conversation interface in wp-admin. Conversation history, searchable sidebar, multi-turn context. Ask anything, and the agent picks the right tool.'],
+                        ['icon' => '⚡', 'title' => 'Live Tool Streaming', 'text' => 'See the agent work in real time via Server-Sent Events. Spinner placeholders appear the moment a tool fires, typed result cards (posts, users, plugins, SQL tables) replace them as soon as data is back, and the assistant reply streams token-by-token.'],
+                        ['icon' => '🔌', 'title' => 'REST API',           'text' => 'POST /wp-json/phpclaw/send to integrate the AI agent into any frontend, mobile app, chatbot, or external service.'],
+                        ['icon' => '🖥',  'title' => 'WP-CLI',            'text' => 'wp phpclaw send, wp phpclaw chat, wp phpclaw mcp-server: full terminal access. Script automations, run in CI/CD, or pipe output.'],
+                        ['icon' => '🔒', 'title' => 'Enterprise-Grade Security',  'text' => 'Multi-layered protection against prompt injection, unsafe commands, and data leakage. Your data stays safe. Your agent stays under control.'],
+                    ];
+        foreach ($features as $feature) { ?>
                     <div class="pc-feature-card">
-                        <div class="pc-feature-card-icon"><?= esc_html($f['icon']) ?></div>
-                        <strong class="pc-feature-card-title"><?= esc_html($f['title']) ?></strong>
-                        <p class="pc-feature-card-text"><?= esc_html($f['text']) ?></p>
+                        <div class="pc-feature-card-icon"><?= esc_html($feature['icon']) ?></div>
+                        <strong class="pc-feature-card-title"><?= esc_html($feature['title']) ?></strong>
+                        <p class="pc-feature-card-text"><?= esc_html($feature['text']) ?></p>
                     </div>
                     <?php } ?>
                 </div>
@@ -135,7 +160,7 @@ final class AboutPage
                     ['phpclaw/phpclaw-cloud',      'PhpClaw\\Cloud\\CloudManager',   'Cloud transport: lifecycle event forwarding and webhook delivery to the phpClaw Cloud service.'],
                     ['phpclaw/phpclaw-mcp',        'PhpClaw\\Mcp\\PhpClawMcpServer', 'MCP server: expose your tools to Claude Desktop, Cursor, and other MCP clients.'],
                 ];
-        foreach ($packages as [$pkg, $sentinel, $desc]) {
+        foreach ($packages as [$package, $sentinel, $description]) {
             $installed = class_exists($sentinel);
             $statusLabel = $installed
                 ? esc_html__('Installed', 'phpclaw')
@@ -143,9 +168,9 @@ final class AboutPage
             $statusIcon = $installed ? '✓' : '✗';
             ?>
                             <tr>
-                                <td><code><?= esc_html($pkg) ?></code></td>
+                                <td><code><?= esc_html($package) ?></code></td>
                                 <td><span class="pc-about-pkg-status pc-about-pkg-status-<?= $installed ? 'installed' : 'missing' ?>" aria-label="<?= $statusLabel ?>"><?= $installed ? '&#10003;' : '&#10007;' ?></span></td>
-                                <td><?= esc_html($desc) ?></td>
+                                <td><?= esc_html($description) ?></td>
                             </tr>
                             <?php } ?>
                         </tbody>
@@ -167,5 +192,52 @@ final class AboutPage
             </div>
         </div>
         <?php
+    }
+
+    /**
+     * Names of the built-in tools the engine registers with the saved settings, or null when the list can't be built.
+     *
+     * @return list<string>|null
+     */
+    private static function builtInToolNames(): ?array
+    {
+        try {
+            $tools = EngineFactory::registeredTools(
+                Plugin::getInstance()->config(),
+                (array) get_option('phpclaw_settings', []),
+            );
+        } catch (\Throwable) {
+            return null;
+        }
+
+        return array_values(array_map(static fn (object $tool): string => $tool->name(), $tools));
+    }
+
+    /**
+     * Build the tools feature card from the registered tool names: a count and the labels, split by platform.
+     *
+     * @param  list<string>|null  $names  Registered built-in tool names, or null when unavailable.
+     * @param  bool  $wooCommerceActive  Whether WooCommerce is active.
+     * @return array{title: string, text: string}
+     */
+    private static function toolsFeature(?array $names, bool $wooCommerceActive): array
+    {
+        if ($names === null) {
+            return ['title' => 'Built-in Tools', 'text' => 'Site tools for posts, users, plugins and more. The Guide page lists every registered tool.'];
+        }
+
+        $label = static fn (string $name): string => self::TOOL_LABELS[$name] ?? $name;
+        $isCommerce = static fn (string $name): bool => str_starts_with($name, self::WOOCOMMERCE_TOOL_PREFIX);
+        $siteLabels = array_map($label, array_values(array_filter($names, static fn (string $name): bool => ! $isCommerce($name))));
+        $commerceLabels = array_map($label, array_values(array_filter($names, $isCommerce)));
+        $title = count($names).' Built-in Tools';
+
+        if ($wooCommerceActive) {
+            return ['title' => $title, 'text' => 'WordPress: '.implode(', ', $siteLabels).'. WooCommerce: '.implode(', ', $commerceLabels).'.'];
+        }
+
+        $unlockable = count(array_filter(array_keys(self::TOOL_LABELS), $isCommerce));
+
+        return ['title' => $title, 'text' => implode(', ', $siteLabels).'. Install WooCommerce to unlock '.$unlockable.' more commerce tools.'];
     }
 }

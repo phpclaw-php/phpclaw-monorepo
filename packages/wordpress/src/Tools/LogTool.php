@@ -17,6 +17,21 @@ final class LogTool implements ToolInterface, ToolRoutingInterface
 {
     use HasToolExecutionContract;
 
+    public const EXAMPLES = [
+        [
+            'prompt' => 'what is in the error log right now?',
+            'arguments' => [],
+        ],
+        [
+            'prompt' => 'how many errors has this site logged in total?',
+            'arguments' => ['aggregate' => true],
+        ],
+        [
+            'prompt' => 'show me any fatal errors in the recent log',
+            'arguments' => ['level' => 'fatal', 'lines' => 200],
+        ],
+    ];
+
     private const MAX_LINES = 200;
 
     private const DEFAULT_LINES = 50;
@@ -24,6 +39,8 @@ final class LogTool implements ToolInterface, ToolRoutingInterface
     private const MAX_OUTPUT_BYTES = OutputByteCap::MAX_OUTPUT_BYTES;
 
     private const MAX_SEARCH_LENGTH = 255;
+
+    private const READ_CHUNK_BYTES = 4096;
 
     private const REQUIRED_CAPABILITY = 'phpclaw_use_chat';
 
@@ -45,21 +62,6 @@ final class LogTool implements ToolInterface, ToolRoutingInterface
         'lines',
         'search',
         'level',
-    ];
-
-    public const EXAMPLES = [
-        [
-            'prompt' => 'what is in the error log right now?',
-            'arguments' => [],
-        ],
-        [
-            'prompt' => 'how many errors has this site logged in total?',
-            'arguments' => ['aggregate' => true],
-        ],
-        [
-            'prompt' => 'show me any fatal errors in the recent log',
-            'arguments' => ['level' => 'fatal', 'lines' => 200],
-        ],
     ];
 
     /**
@@ -364,16 +366,16 @@ DESC;
             static fn (?string $term): bool => $term !== null && $term !== '',
         ));
 
-        $all = $terms === []
+        $matchedLines = $terms === []
             ? $this->readLastLines($logPath, $requested)
             : $this->readLastMatches($logPath, $requested, $terms);
 
-        $matched = count($all);
+        $matched = count($matchedLines);
         $kept = [];
         $bytes = 0;
         $truncated = false;
 
-        foreach ($all as $line) {
+        foreach ($matchedLines as $line) {
             $length = strlen($line) + 1;
 
             if ($bytes + $length > self::MAX_OUTPUT_BYTES) {
@@ -520,7 +522,7 @@ DESC;
             'parse' => 0,
         ];
         $lastError = null;
-        $lastErrorTs = null;
+        $lastErrorTimestamp = null;
 
         try {
             while (($line = fgets($handle)) !== false) {
@@ -530,11 +532,13 @@ DESC;
                 if (str_contains($upper, 'FATAL')) {
                     $counts['fatal']++;
                     $lastError = trim($line);
-                    $lastErrorTs = $this->extractTimestamp($line) ?? $lastErrorTs;
+                    $lastErrorTimestamp = $this->extractTimestamp($line) ?? $lastErrorTimestamp;
+                } elseif (str_contains($upper, 'PARSE ERROR')) {
+                    $counts['parse']++;
                 } elseif (str_contains($upper, 'ERROR')) {
                     $counts['error']++;
                     $lastError = trim($line);
-                    $lastErrorTs = $this->extractTimestamp($line) ?? $lastErrorTs;
+                    $lastErrorTimestamp = $this->extractTimestamp($line) ?? $lastErrorTimestamp;
                 } elseif (str_contains($upper, 'WARNING')) {
                     $counts['warning']++;
                 } elseif (str_contains($upper, 'DEPRECATED')) {
@@ -560,7 +564,7 @@ DESC;
             'deprecated_count' => $counts['deprecated'],
             'parse_count' => $counts['parse'],
             'last_error' => $lastError,
-            'last_error_timestamp' => $lastErrorTs,
+            'last_error_timestamp' => $lastErrorTimestamp,
             'size_bytes' => $size,
             'size_human' => $this->humanFileSize($size),
         ];
@@ -615,10 +619,8 @@ DESC;
             $buffer = '';
             $collected = 0;
             $position = $fileSize;
-            $chunkSize = 4096;
-
             while ($position > 0 && $collected < $count) {
-                $readSize = min($chunkSize, $position);
+                $readSize = min(self::READ_CHUNK_BYTES, $position);
                 $position -= $readSize;
                 fseek($handle, $position);
                 $chunk = fread($handle, $readSize);
