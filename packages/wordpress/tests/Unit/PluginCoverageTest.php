@@ -543,20 +543,6 @@ final class PluginCoverageTest extends TestCase
         self::assertContains('phpclaw-admin', $enqueued);
     }
 
-    public function test_find_last_assistant_index_returns_index_when_assistant_present(): void
-    {
-        $plugin = $this->makePluginWithConfig();
-
-        $idx = $this->invokePrivate($plugin, 'findLastAssistantIndex', [[
-            ['role' => 'user',      'content' => 'hi'],
-            ['role' => 'assistant', 'content' => 'hello'],
-            ['role' => 'user',      'content' => 'thanks'],
-            ['role' => 'assistant', 'content' => 'welcome'],
-        ]]);
-
-        self::assertSame(3, $idx);
-    }
-
     public function test_extra_tool_classes_appends_phpclaw_extra_tools_filter(): void
     {
         Functions\when('apply_filters')->alias(static function (string $tag, mixed $value): mixed {
@@ -827,18 +813,6 @@ final class PluginCoverageTest extends TestCase
             $bridgeClass->getFileName(),
             'HookEventBridge must load from vendor/phpclaw/phpclaw/src/Hooks/, not adapter src/',
         );
-    }
-
-    public function test_find_last_assistant_index_returns_count_when_no_assistant(): void
-    {
-        $plugin = $this->makePluginWithConfig();
-
-        $idx = $this->invokePrivate($plugin, 'findLastAssistantIndex', [[
-            ['role' => 'user', 'content' => 'a'],
-            ['role' => 'user', 'content' => 'b'],
-        ]]);
-
-        self::assertSame(2, $idx);
     }
 
     public function test_handle_ajax_send_splices_tool_calls_into_history(): void

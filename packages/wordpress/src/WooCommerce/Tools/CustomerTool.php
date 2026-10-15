@@ -17,6 +17,17 @@ final class CustomerTool implements ToolInterface, ToolRoutingInterface
 {
     use HasToolExecutionContract;
 
+    public const EXAMPLES = [
+        [
+            'prompt' => 'what has customer 1 bought from us?',
+            'arguments' => ['customer_id' => 1],
+        ],
+        [
+            'prompt' => 'what can you tell me about a customer?',
+            'arguments' => ['schema' => true],
+        ],
+    ];
+
     private const REQUIRED_CAPABILITY = 'phpclaw_use_chat';
 
     private const PHPCLAW_CAPABILITY = 'woocommerce.customers.read';
@@ -40,17 +51,6 @@ final class CustomerTool implements ToolInterface, ToolRoutingInterface
     private const ALLOWED_KEYS = [
         'customer_id',
         'schema',
-    ];
-
-    public const EXAMPLES = [
-        [
-            'prompt' => 'what has customer 1 bought from us?',
-            'arguments' => ['customer_id' => 1],
-        ],
-        [
-            'prompt' => 'what can you tell me about a customer?',
-            'arguments' => ['schema' => true],
-        ],
     ];
 
     private $resolver;
@@ -188,32 +188,13 @@ DESC;
      */
     protected function plan(array $input): array
     {
-        if (! $this->runningInConsole() && ! $this->callerHasCapability(self::REQUIRED_CAPABILITY)) {
-            return [
-                'input' => $input,
-                'result' => $this->error(
-                    'FORBIDDEN',
-                    sprintf(
-                        'The current user lacks the "%s" capability required to read customers.',
-                        self::REQUIRED_CAPABILITY,
-                    ),
-                ),
-            ];
+        $forbidden = $this->guardCapability('read customers');
+
+        if ($forbidden !== null) {
+            return ['input' => $input, 'result' => $forbidden];
         }
 
-        $validationError = $this->validate($input);
-
-        if ($validationError !== null) {
-            return [
-                'input' => $input,
-                'result' => $validationError,
-            ];
-        }
-
-        return [
-            'input' => $input,
-            'result' => null,
-        ];
+        return ['input' => $input, 'result' => $this->validate($input)];
     }
 
     /**
@@ -362,14 +343,10 @@ DESC;
      */
     private function validate(array $input): ?string
     {
-        foreach (array_keys($input) as $key) {
-            if (! in_array($key, self::ALLOWED_KEYS, true)) {
-                return $this->error(
-                    'UNKNOWN_ARGUMENT',
-                    sprintf('Unknown argument "%s".', (string) $key),
-                    ['accepted_arguments' => self::ALLOWED_KEYS],
-                );
-            }
+        $unknown = $this->rejectUnknownArguments($input, self::ALLOWED_KEYS);
+
+        if ($unknown !== null) {
+            return $unknown;
         }
 
         if (array_key_exists('schema', $input) && ! is_bool($input['schema'])) {

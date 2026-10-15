@@ -21,6 +21,8 @@ final class WpTransientMemory implements MemoryInterface
 
     private const DEFAULT_TTL = 86400;
 
+    private const MAX_TRANSIENT_KEY_LENGTH = 172;
+
     /**
      * Retrieve a stored value by key and namespace.
      *
@@ -123,10 +125,10 @@ final class WpTransientMemory implements MemoryInterface
             $result = [];
 
             foreach ($known as $shortKey) {
-                $val = get_transient($this->transientKey($namespace, $shortKey));
+                $storedValue = get_transient($this->transientKey($namespace, $shortKey));
 
-                if ($val !== false) {
-                    $result[$shortKey] = $val;
+                if ($storedValue !== false) {
+                    $result[$shortKey] = $storedValue;
                 }
             }
 
@@ -165,7 +167,7 @@ final class WpTransientMemory implements MemoryInterface
     {
         $raw = self::PREFIX.$namespace.'_'.$key;
 
-        if (strlen($raw) > 172) {
+        if (strlen($raw) > self::MAX_TRANSIENT_KEY_LENGTH) {
             $raw = self::PREFIX.md5($namespace.'_'.$key);
         }
 
@@ -223,7 +225,7 @@ final class WpTransientMemory implements MemoryInterface
     {
         $optionName = $this->trackerOptionName($namespace);
         $known = (array) get_option($optionName, []);
-        $filtered = array_values(array_filter($known, fn ($k) => $k !== $shortKey));
+        $filtered = array_values(array_filter($known, static fn ($knownKey) => $knownKey !== $shortKey));
 
         if ($filtered === []) {
             delete_option($optionName);

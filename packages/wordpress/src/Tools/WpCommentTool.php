@@ -17,6 +17,21 @@ final class WpCommentTool implements ToolInterface, ToolRoutingInterface
 {
     use HasToolExecutionContract;
 
+    public const EXAMPLES = [
+        [
+            'prompt' => 'show me the latest comments',
+            'arguments' => [],
+        ],
+        [
+            'prompt' => 'how many comments are there, and in what state?',
+            'arguments' => ['aggregate' => true],
+        ],
+        [
+            'prompt' => 'which comments are waiting to be moderated?',
+            'arguments' => ['status' => 'hold'],
+        ],
+    ];
+
     private const DEFAULT_LIMIT = 20;
 
     private const MAX_LIMIT = 50;
@@ -30,6 +45,8 @@ final class WpCommentTool implements ToolInterface, ToolRoutingInterface
     private const PHPCLAW_CAPABILITY = 'wordpress.comments.read';
 
     private const RISK_LEVEL = 'read';
+
+    private const CONTENT_PREVIEW_LENGTH = 300;
 
     private const DEFAULT_COLUMNS = [
         'id', 'author', 'content', 'date', 'status', 'post_title',
@@ -60,21 +77,6 @@ final class WpCommentTool implements ToolInterface, ToolRoutingInterface
     private const ALLOWED_KEYS = [
         'columns', 'schema', 'aggregate', 'status', 'post_id', 'search',
         'type', 'date_after', 'date_before', 'orderby', 'order', 'limit', 'offset',
-    ];
-
-    public const EXAMPLES = [
-        [
-            'prompt' => 'show me the latest comments',
-            'arguments' => [],
-        ],
-        [
-            'prompt' => 'how many comments are there, and in what state?',
-            'arguments' => ['aggregate' => true],
-        ],
-        [
-            'prompt' => 'which comments are waiting to be moderated?',
-            'arguments' => ['status' => 'hold'],
-        ],
     ];
 
     /**
@@ -697,28 +699,28 @@ DESC;
         ];
 
         $columnGetters = [
-            'id' => static fn ($c): int => (int) $c->comment_ID,
-            'author' => static fn ($c): string => (string) $c->comment_author,
-            'author_email' => static fn ($c): string => (string) $c->comment_author_email,
-            'author_url' => static fn ($c): string => (string) $c->comment_author_url,
-            'author_ip' => static fn ($c): string => (string) $c->comment_author_IP,
-            'content' => static fn ($c): string => mb_substr(strip_tags((string) $c->comment_content), 0, 300),
-            'date' => static fn ($c): string => (string) $c->comment_date,
-            'status' => static function ($c) use ($statusMap): string {
-                $raw = (string) $c->comment_approved;
+            'id' => static fn ($comment): int => (int) $comment->comment_ID,
+            'author' => static fn ($comment): string => (string) $comment->comment_author,
+            'author_email' => static fn ($comment): string => (string) $comment->comment_author_email,
+            'author_url' => static fn ($comment): string => (string) $comment->comment_author_url,
+            'author_ip' => static fn ($comment): string => (string) $comment->comment_author_IP,
+            'content' => static fn ($comment): string => mb_substr(strip_tags((string) $comment->comment_content), 0, self::CONTENT_PREVIEW_LENGTH),
+            'date' => static fn ($comment): string => (string) $comment->comment_date,
+            'status' => static function ($comment) use ($statusMap): string {
+                $raw = (string) $comment->comment_approved;
 
                 return $statusMap[$raw] ?? $raw;
             },
-            'post_id' => static fn ($c): int => (int) $c->comment_post_ID,
-            'post_title' => static fn ($c): string => get_the_title((int) $c->comment_post_ID),
-            'parent' => static fn ($c): int => (int) $c->comment_parent,
-            'type' => static fn ($c): string => (string) ($c->comment_type ?: 'comment'),
+            'post_id' => static fn ($comment): int => (int) $comment->comment_post_ID,
+            'post_title' => static fn ($comment): string => get_the_title((int) $comment->comment_post_ID),
+            'parent' => static fn ($comment): int => (int) $comment->comment_parent,
+            'type' => static fn ($comment): string => (string) ($comment->comment_type ?: 'comment'),
         ];
 
         $row = [];
-        foreach ($columns as $col) {
-            if (isset($columnGetters[$col])) {
-                $row[$col] = $columnGetters[$col]($comment);
+        foreach ($columns as $column) {
+            if (isset($columnGetters[$column])) {
+                $row[$column] = $columnGetters[$column]($comment);
             }
         }
 

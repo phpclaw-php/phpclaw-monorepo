@@ -19,6 +19,21 @@ final class ProductTool implements ToolInterface, ToolRoutingInterface
     use ClassifiesProductFields;
     use HasToolExecutionContract;
 
+    public const EXAMPLES = [
+        [
+            'prompt' => 'show me the products we sell',
+            'arguments' => [],
+        ],
+        [
+            'prompt' => 'how many products are in stock?',
+            'arguments' => ['aggregate' => true],
+        ],
+        [
+            'prompt' => 'which products are out of stock?',
+            'arguments' => ['stock_status' => 'outofstock'],
+        ],
+    ];
+
     private const DEFAULT_LIMIT = 20;
 
     private const MAX_LIMIT = 50;
@@ -51,21 +66,6 @@ final class ProductTool implements ToolInterface, ToolRoutingInterface
     ];
 
     private const VALID_STOCK_STATUSES = ['all', 'instock', 'outofstock', 'onbackorder'];
-
-    public const EXAMPLES = [
-        [
-            'prompt' => 'show me the products we sell',
-            'arguments' => [],
-        ],
-        [
-            'prompt' => 'how many products are in stock?',
-            'arguments' => ['aggregate' => true],
-        ],
-        [
-            'prompt' => 'which products are out of stock?',
-            'arguments' => ['stock_status' => 'outofstock'],
-        ],
-    ];
 
     private const ALLOWED_KEYS = [
         'columns', 'schema', 'aggregate', 'stock_status', 'search', 'limit', 'offset',

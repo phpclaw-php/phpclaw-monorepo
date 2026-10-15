@@ -22,6 +22,9 @@ if (! defined('ABSPATH')) {
     exit;
 }
 
+use Automattic\WooCommerce\Utilities\FeaturesUtil;
+use PhpClaw\WordPress\Plugin;
+
 add_action('before_woocommerce_init', static function (): void {
     if (class_exists(FeaturesUtil::class)) {
         FeaturesUtil::declare_compatibility(
@@ -37,15 +40,12 @@ define('PHPCLAW_PLUGIN_FILE', __FILE__);
 $_phpclaw_header = function_exists('get_file_data')
     ? get_file_data(__FILE__, ['Version' => 'Version'])
     : ['Version' => ''];
-define('PHPCLAW_VERSION', $_phpclaw_header['Version'] !== '' ? $_phpclaw_header['Version'] : '0.0.0');
+define('PHPCLAW_VERSION', $_phpclaw_header['Version'] === '' ? '0.0.0' : $_phpclaw_header['Version']);
 unset($_phpclaw_header);
 
 if (file_exists(__DIR__.'/vendor/autoload.php')) {
     require_once __DIR__.'/vendor/autoload.php';
 }
-
-use Automattic\WooCommerce\Utilities\FeaturesUtil;
-use PhpClaw\WordPress\Plugin;
 
 register_activation_hook(__FILE__, static function (): void {
     if (file_exists(__DIR__.'/vendor/autoload.php')) {

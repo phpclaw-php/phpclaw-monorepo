@@ -17,6 +17,24 @@ final class AutoUpdater
 
     private const FAILED_CHECK_CACHE_SECONDS = 3600;
 
+    private const CHECK_CACHE_SECONDS = 43200;
+
+    private const CACHE_KEY = 'phpclaw_update_check';
+
+    private const HTTPS_PREFIX = 'https://';
+
+    private const DEFAULT_HOMEPAGE = 'https://phpclaw.ai';
+
+    private const DEFAULT_REQUIRES_PHP = '8.1';
+
+    private const DEFAULT_REQUIRES_WORDPRESS = '6.0';
+
+    private readonly string $pluginFile;
+
+    private readonly string $currentVersion;
+
+    private readonly string $updateUrl;
+
     private string $pluginSlug;
 
     /**
@@ -26,11 +44,11 @@ final class AutoUpdater
      * @param  string  $currentVersion  Currently installed plugin version string.
      * @param  string  $updateUrl  Remote URL that returns the update JSON payload.
      */
-    private function __construct(
-        private readonly string $pluginFile,
-        private readonly string $currentVersion,
-        private readonly string $updateUrl,
-    ) {
+    private function __construct(string $pluginFile, string $currentVersion, string $updateUrl)
+    {
+        $this->pluginFile = $pluginFile;
+        $this->currentVersion = $currentVersion;
+        $this->updateUrl = $updateUrl;
         $this->pluginSlug = plugin_basename($this->pluginFile);
     }
 
@@ -85,9 +103,9 @@ final class AutoUpdater
                 'plugin' => $this->pluginSlug,
                 'new_version' => $remote['version'],
                 'package' => $remote['download_url'],
-                'url' => $remote['homepage'] ?? 'https://phpclaw.ai',
-                'requires_php' => $remote['requires_php'] ?? '8.1',
-                'requires' => $remote['requires'] ?? '6.0',
+                'url' => $remote['homepage'] ?? self::DEFAULT_HOMEPAGE,
+                'requires_php' => $remote['requires_php'] ?? self::DEFAULT_REQUIRES_PHP,
+                'requires' => $remote['requires'] ?? self::DEFAULT_REQUIRES_WORDPRESS,
                 'tested' => $remote['tested'] ?? '',
             ];
         }
@@ -128,10 +146,10 @@ final class AutoUpdater
             'slug' => dirname($this->pluginSlug),
             'version' => $remote['version'],
             'author' => '<a href="https://phpclaw.ai">phpClaw</a>',
-            'homepage' => $remote['homepage'] ?? 'https://phpclaw.ai',
+            'homepage' => $remote['homepage'] ?? self::DEFAULT_HOMEPAGE,
             'download_link' => $remote['download_url'],
-            'requires_php' => $remote['requires_php'] ?? '8.1',
-            'requires' => $remote['requires'] ?? '6.0',
+            'requires_php' => $remote['requires_php'] ?? self::DEFAULT_REQUIRES_PHP,
+            'requires' => $remote['requires'] ?? self::DEFAULT_REQUIRES_WORDPRESS,
             'tested' => $remote['tested'] ?? '',
             'sections' => [
                 'description' => $remote['description'] ?? 'Universal AI agent engine for WordPress.',
@@ -174,7 +192,7 @@ final class AutoUpdater
      */
     private function isTrustedPackageUrl(string $url): bool
     {
-        if (! str_starts_with(strtolower($url), 'https://')) {
+        if (! str_starts_with(strtolower($url), self::HTTPS_PREFIX)) {
             return false;
         }
 
@@ -190,14 +208,13 @@ final class AutoUpdater
      */
     private function fetchRemoteInfo(): ?array
     {
-        if (! str_starts_with(strtolower($this->updateUrl), 'https://')) {
+        if (! str_starts_with(strtolower($this->updateUrl), self::HTTPS_PREFIX)) {
             error_log('phpClaw AutoUpdater: update endpoint must use HTTPS: check skipped.');
 
             return null;
         }
 
-        $cacheKey = 'phpclaw_update_check';
-        $cached = get_transient($cacheKey);
+        $cached = get_transient(self::CACHE_KEY);
 
         if ($cached !== false) {
             return is_array($cached) ? $cached : null;
@@ -212,9 +229,9 @@ final class AutoUpdater
         ]);
 
         if (is_wp_error($response) || wp_remote_retrieve_response_code($response) !== 200) {
-            $errMsg = is_wp_error($response) ? $response->get_error_message() : wp_remote_retrieve_response_code($response);
-            error_log("phpClaw AutoUpdater: update check failed: {$errMsg}");
-            set_transient($cacheKey, 'none', self::FAILED_CHECK_CACHE_SECONDS);
+            $failure = is_wp_error($response) ? $response->get_error_message() : wp_remote_retrieve_response_code($response);
+            error_log("phpClaw AutoUpdater: update check failed: {$failure}");
+            set_transient(self::CACHE_KEY, 'none', self::FAILED_CHECK_CACHE_SECONDS);
 
             return null;
         }
@@ -223,12 +240,12 @@ final class AutoUpdater
 
         if (! is_array($body) || ! isset($body['version'], $body['download_url'])) {
             error_log('phpClaw AutoUpdater: update server returned unexpected response body.');
-            set_transient($cacheKey, 'none', 12 * HOUR_IN_SECONDS);
+            set_transient(self::CACHE_KEY, 'none', self::CHECK_CACHE_SECONDS);
 
             return null;
         }
 
-        set_transient($cacheKey, $body, 12 * HOUR_IN_SECONDS);
+        set_transient(self::CACHE_KEY, $body, self::CHECK_CACHE_SECONDS);
 
         return $body;
     }

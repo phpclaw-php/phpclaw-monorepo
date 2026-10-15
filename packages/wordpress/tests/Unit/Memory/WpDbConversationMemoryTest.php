@@ -11,6 +11,8 @@ use PhpClaw\Exceptions\MemoryException;
 use PhpClaw\WordPress\Exceptions\ConversationAccessDeniedException;
 use PhpClaw\WordPress\Memory\WpDbConversationMemory;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\PreserveGlobalState;
+use PHPUnit\Framework\Attributes\RunInSeparateProcess;
 use PHPUnit\Framework\TestCase;
 
 #[CoversClass(WpDbConversationMemory::class)]
@@ -669,5 +671,26 @@ final class WpDbConversationMemoryTest extends TestCase
 
         $memory = new WpDbConversationMemory;
         $memory->get('legacy-conv', 'conversations');
+    }
+
+    #[RunInSeparateProcess]
+    #[PreserveGlobalState(false)]
+    public function test_set_clears_the_analytics_cache_keys_the_analytics_page_reads(): void
+    {
+        $deleted = [];
+        Functions\when('wp_cache_delete')->alias(static function (string $key) use (&$deleted): bool {
+            $deleted[] = $key;
+
+            return true;
+        });
+
+        (new WpDbConversationMemory)->set('01JQABCDEFGHJKMNPQRSTVWXYZ', [
+            'history' => [['role' => 'user', 'content' => 'hello']],
+        ], 'conversations');
+
+        foreach (['analytics_total_conversations', 'analytics_total_messages', 'analytics_active_conversations'] as $metric) {
+            self::assertContains($metric.'_all', $deleted);
+            self::assertContains($metric.'_5', $deleted);
+        }
     }
 }

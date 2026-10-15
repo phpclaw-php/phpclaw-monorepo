@@ -469,4 +469,21 @@ final class LogToolTest extends TestCase
 
         self::assertStringContainsString('"'.$tool->requiredCapability().'"', $tool->description());
     }
+
+    public function test_aggregate_counts_a_real_php_parse_error_line_as_parse(): void
+    {
+        file_put_contents(
+            $this->tmpLog,
+            "[27-Apr-2026 14:30:00 UTC] PHP Parse error:  syntax error, unexpected token \"}\" in /x.php on line 3\n".
+            "[27-Apr-2026 14:31:00 UTC] PHP Fatal error:  Uncaught Error: boom\n".
+            "[27-Apr-2026 14:32:00 UTC] PHP Warning:  Undefined variable \$a\n",
+        );
+
+        $data = json_decode((new LogTool($this->tmpLog))->execute(['aggregate' => true]), true)['data'];
+
+        self::assertSame(1, $data['parse_count']);
+        self::assertSame(0, $data['error_count']);
+        self::assertSame(1, $data['fatal_count']);
+        self::assertSame(1, $data['warning_count']);
+    }
 }

@@ -17,6 +17,21 @@ final class WpMediaTool implements ToolInterface, ToolRoutingInterface
 {
     use HasToolExecutionContract;
 
+    public const EXAMPLES = [
+        [
+            'prompt' => 'what is in the media library?',
+            'arguments' => [],
+        ],
+        [
+            'prompt' => 'how many files have we uploaded, and of what kinds?',
+            'arguments' => ['aggregate' => true],
+        ],
+        [
+            'prompt' => 'show me the JPEG images',
+            'arguments' => ['mime_type' => 'image/jpeg'],
+        ],
+    ];
+
     private const DEFAULT_LIMIT = 20;
 
     private const MAX_OFFSET = 10000;
@@ -34,21 +49,6 @@ final class WpMediaTool implements ToolInterface, ToolRoutingInterface
     private const ALLOWED_KEYS = [
         'columns', 'schema', 'aggregate', 'search', 'mime_type', 'post_parent',
         'author', 'date_after', 'date_before', 'orderby', 'order', 'limit', 'offset',
-    ];
-
-    public const EXAMPLES = [
-        [
-            'prompt' => 'what is in the media library?',
-            'arguments' => [],
-        ],
-        [
-            'prompt' => 'how many files have we uploaded, and of what kinds?',
-            'arguments' => ['aggregate' => true],
-        ],
-        [
-            'prompt' => 'show me the JPEG images',
-            'arguments' => ['mime_type' => 'image/jpeg'],
-        ],
     ];
 
     private const MAX_LIMIT = 100;
@@ -174,7 +174,7 @@ DESC;
                 ],
                 'orderby' => [
                     'type' => 'string',
-                    'description' => 'Sort field: date, modified, title, mime_type. Default: date.',
+                    'description' => 'Sort field: '.implode(', ', self::VALID_ORDERBY_INPUT).'. Default: date.',
                     'default' => 'date',
                 ],
                 'order' => [
@@ -471,7 +471,7 @@ DESC;
         try {
             $query = new \WP_Query($args);
         } catch (\Throwable $e) {
-            error_log('phpClaw WpMediaTool: query failed: '.$e->getMessage());
+            $this->logExecutionError($e);
             throw new ToolException('WpMediaTool: query failed', previous: $e);
         }
 
@@ -541,7 +541,7 @@ DESC;
                 $bindings === [] ? $unattachedSql : $wpdb->prepare($unattachedSql, ...$bindings)
             );
         } catch (\Throwable $e) {
-            error_log('phpClaw WpMediaTool: aggregate failed: '.$e->getMessage());
+            $this->logExecutionError($e);
             throw new ToolException('WpMediaTool: aggregate failed', previous: $e);
         }
 
@@ -671,8 +671,8 @@ DESC;
         $metadata = wp_get_attachment_metadata($post->ID) ?: [];
         $row = [];
 
-        foreach ($columns as $col) {
-            $row[$col] = match ($col) {
+        foreach ($columns as $column) {
+            $row[$column] = match ($column) {
                 'id' => $post->ID,
                 'title' => $post->post_title,
                 'url' => wp_get_attachment_url($post->ID) ?: '',
@@ -714,7 +714,7 @@ DESC;
 
         $valid = array_filter(
             $requested,
-            static fn (string $c): bool => in_array($c, self::AVAILABLE_COLUMNS, true)
+            static fn (string $column): bool => in_array($column, self::AVAILABLE_COLUMNS, true)
         );
 
         if (! in_array('id', $valid, true)) {
@@ -732,9 +732,7 @@ DESC;
      */
     private function safeOrderBy(string $orderby): string
     {
-        $allowed = ['date', 'modified', 'title', 'mime_type'];
-
-        return in_array($orderby, $allowed, true) ? $orderby : 'date';
+        return in_array($orderby, self::VALID_ORDERBY_INPUT, true) ? $orderby : 'date';
     }
 
     /**
@@ -746,15 +744,15 @@ DESC;
     private static function humanSize(int $bytes): string
     {
         $units = ['B', 'KB', 'MB', 'GB'];
-        $i = 0;
+        $unit = 0;
         $size = (float) $bytes;
 
-        while ($size >= 1024 && $i < 3) {
+        while ($size >= 1024 && $unit < 3) {
             $size /= 1024;
-            $i++;
+            $unit++;
         }
 
-        return round($size, 1).' '.$units[$i];
+        return round($size, 1).' '.$units[$unit];
     }
 
     /**

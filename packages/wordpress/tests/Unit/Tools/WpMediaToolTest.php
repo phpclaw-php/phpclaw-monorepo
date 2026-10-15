@@ -290,7 +290,8 @@ final class WpMediaToolTest extends TestCase
 
         self::assertSame('date', $m->invoke($tool, 'unknown'));
         self::assertSame('title', $m->invoke($tool, 'title'));
-        self::assertSame('mime_type', $m->invoke($tool, 'mime_type'));
+        self::assertSame('ID', $m->invoke($tool, 'ID'));
+        self::assertSame('date', $m->invoke($tool, 'mime_type'));
     }
 
     public function test_human_size_formats(): void
@@ -365,5 +366,30 @@ final class WpMediaToolTest extends TestCase
         self::assertTrue($decoded['success']);
         self::assertSame(['success', 'data', 'meta', 'warnings'], array_keys($decoded));
         self::assertArrayHasKey('mode', $decoded['meta']);
+    }
+
+    public function test_orderby_id_sorts_the_query_by_id(): void
+    {
+        (new WpMediaTool)->execute(['orderby' => 'ID', 'order' => 'ASC']);
+
+        self::assertSame(['ID' => 'ASC'], \WP_Query::$lastArgs['orderby']);
+    }
+
+    public function test_orderby_author_sorts_the_query_by_author_then_id(): void
+    {
+        (new WpMediaTool)->execute(['orderby' => 'author']);
+
+        self::assertSame(['author' => 'DESC', 'ID' => 'DESC'], \WP_Query::$lastArgs['orderby']);
+    }
+
+    public function test_the_orderby_description_names_every_accepted_value(): void
+    {
+        $description = (new WpMediaTool)->inputSchema()['properties']['orderby']['description'];
+
+        foreach (['date', 'title', 'ID', 'modified', 'author', 'name'] as $value) {
+            self::assertStringContainsString($value, $description);
+            $result = json_decode((new WpMediaTool)->execute(['orderby' => $value]), true);
+            self::assertTrue($result['success'], $value.' must be accepted');
+        }
     }
 }

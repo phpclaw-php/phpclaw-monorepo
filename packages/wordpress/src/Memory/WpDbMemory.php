@@ -50,21 +50,21 @@ final class WpDbMemory implements MemoryInterface
         );
 
         if (! $row) {
-            HookDispatcher::memoryRead($key, $namespace, self::DRIVER_NAME, false);
+            HookDispatcher::memoryRead($key, $namespace, self::DRIVER_NAME, hit: false);
 
             return null;
         }
 
         if ($this->isExpired($row['expires_at'])) {
             $this->forget($key, $namespace);
-            HookDispatcher::memoryRead($key, $namespace, self::DRIVER_NAME, false);
+            HookDispatcher::memoryRead($key, $namespace, self::DRIVER_NAME, hit: false);
 
             return null;
         }
 
         $value = $this->safeUnserialize((string) $row['value']);
 
-        HookDispatcher::memoryRead($key, $namespace, self::DRIVER_NAME, true);
+        HookDispatcher::memoryRead($key, $namespace, self::DRIVER_NAME, hit: true);
 
         return $value;
     }
@@ -196,16 +196,16 @@ final class WpDbMemory implements MemoryInterface
             'ARRAY_A',
         ) ?? [];
 
-        $out = [];
+        $entries = [];
 
         foreach ($rows as $row) {
             if ($this->isExpired($row['expires_at'])) {
                 continue;
             }
-            $out[(string) $row['lookup_key']] = $this->safeUnserialize((string) $row['value']);
+            $entries[(string) $row['lookup_key']] = $this->safeUnserialize((string) $row['value']);
         }
 
-        return $out;
+        return $entries;
     }
 
     /**
@@ -232,7 +232,7 @@ final class WpDbMemory implements MemoryInterface
             return false;
         }
 
-        $result = unserialize($raw, ['allowed_classes' => false]);
+        $result = @unserialize($raw, ['allowed_classes' => false]);
 
         return $result === false ? $raw : $result;
     }

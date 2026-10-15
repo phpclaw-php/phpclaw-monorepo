@@ -17,21 +17,6 @@ final class WpTaxonomyTool implements ToolInterface, ToolRoutingInterface
 {
     use HasToolExecutionContract;
 
-    private const MAX_LIMIT = 200;
-
-    private const MAX_OFFSET = 10000;
-
-    private const REQUIRED_CAPABILITY = 'phpclaw_use_chat';
-
-    private const PHPCLAW_CAPABILITY = 'wordpress.taxonomies.read';
-
-    private const RISK_LEVEL = 'read';
-
-    private const ALLOWED_KEYS = [
-        'columns', 'schema', 'aggregate', 'taxonomy', 'search', 'parent',
-        'hide_empty', 'with_post_count', 'orderby', 'order', 'limit',
-    ];
-
     public const EXAMPLES = [
         [
             'prompt' => 'what categories and tags do we use?',
@@ -45,6 +30,21 @@ final class WpTaxonomyTool implements ToolInterface, ToolRoutingInterface
             'prompt' => 'list the tags on this site',
             'arguments' => ['taxonomy' => 'post_tag'],
         ],
+    ];
+
+    private const MAX_LIMIT = 200;
+
+    private const MAX_OFFSET = 10000;
+
+    private const REQUIRED_CAPABILITY = 'phpclaw_use_chat';
+
+    private const PHPCLAW_CAPABILITY = 'wordpress.taxonomies.read';
+
+    private const RISK_LEVEL = 'read';
+
+    private const ALLOWED_KEYS = [
+        'columns', 'schema', 'aggregate', 'taxonomy', 'search', 'parent',
+        'hide_empty', 'with_post_count', 'orderby', 'order', 'limit',
     ];
 
     private const DEFAULT_LIMIT = 50;
@@ -449,18 +449,18 @@ DESC;
             $totalTerms = 0;
             $emptyTerms = 0;
 
-            foreach ($taxonomies as $tax) {
-                if ($taxonomyFilter !== null && $tax->name !== $taxonomyFilter) {
+            foreach ($taxonomies as $taxonomyObject) {
+                if ($taxonomyFilter !== null && $taxonomyObject->name !== $taxonomyFilter) {
                     continue;
                 }
 
-                $allCount = (int) wp_count_terms(['taxonomy' => $tax->name, 'hide_empty' => false]);
-                $nonEmptyCount = (int) wp_count_terms(['taxonomy' => $tax->name, 'hide_empty' => true]);
+                $allCount = (int) wp_count_terms(['taxonomy' => $taxonomyObject->name, 'hide_empty' => false]);
+                $nonEmptyCount = (int) wp_count_terms(['taxonomy' => $taxonomyObject->name, 'hide_empty' => true]);
                 $emptyCount = $allCount - $nonEmptyCount;
 
                 $byTaxonomy[] = [
-                    'taxonomy' => $tax->name,
-                    'label' => $tax->label,
+                    'taxonomy' => $taxonomyObject->name,
+                    'label' => $taxonomyObject->label,
                     'total' => $allCount,
                     'with_posts' => $nonEmptyCount,
                     'empty' => $emptyCount,
@@ -476,7 +476,7 @@ DESC;
                 'by_taxonomy' => $byTaxonomy,
             ];
         } catch (\Throwable $e) {
-            error_log('phpClaw WpTaxonomyTool: aggregate failed: '.$e->getMessage());
+            $this->logExecutionError($e);
             throw new ToolException('WpTaxonomyTool: aggregate failed', previous: $e);
         }
     }
@@ -525,7 +525,7 @@ DESC;
             $args['taxonomy'] = $taxonomy;
         } else {
             $publicTaxonomies = $this->getPublicTaxonomies();
-            $args['taxonomy'] = array_map(fn ($t) => $t->name, $publicTaxonomies);
+            $args['taxonomy'] = array_map(static fn ($taxonomyObject) => $taxonomyObject->name, $publicTaxonomies);
         }
 
         if ($search !== '') {
@@ -539,13 +539,14 @@ DESC;
         try {
             $terms = get_terms($args);
         } catch (\Throwable $e) {
-            error_log('phpClaw WpTaxonomyTool: query failed: '.$e->getMessage());
+            $this->logExecutionError($e);
             throw new ToolException('WpTaxonomyTool: query failed', previous: $e);
         }
 
         if (is_wp_error($terms)) {
-            error_log('phpClaw WpTaxonomyTool: query error: '.$terms->get_error_message());
-            throw new ToolException('WpTaxonomyTool: query error');
+            $failure = new \RuntimeException((string) $terms->get_error_message());
+            $this->logExecutionError($failure);
+            throw new ToolException('WpTaxonomyTool: query error', previous: $failure);
         }
 
         $parentCache = [];
@@ -554,12 +555,12 @@ DESC;
         foreach ($terms as $term) {
             $row = [];
 
-            foreach ($columns as $col) {
-                if ($col === 'count' && ! $withPostCount) {
+            foreach ($columns as $column) {
+                if ($column === 'count' && ! $withPostCount) {
                     continue;
                 }
 
-                $row[$col] = match ($col) {
+                $row[$column] = match ($column) {
                     'id' => $term->term_id,
                     'name' => $term->name,
                     'slug' => $term->slug,
@@ -576,13 +577,7 @@ DESC;
         }
 
         $taxonomyLabel = $taxonomy ?? 'all';
-        $totalArgs = ['hide_empty' => false];
-        if ($taxonomy !== null) {
-            $totalArgs['taxonomy'] = $taxonomy;
-        } else {
-            $totalArgs['taxonomy'] = $args['taxonomy'];
-        }
-        $totalTerms = (int) wp_count_terms($totalArgs);
+        $totalTerms = (int) wp_count_terms(array_diff_key($args, ['number' => true, 'orderby' => true, 'order' => true]));
 
         return [
             'taxonomy' => $taxonomyLabel,
@@ -648,7 +643,7 @@ DESC;
 
         $valid = array_filter(
             $requested,
-            fn ($c) => in_array($c, self::AVAILABLE_COLUMNS, true)
+            static fn ($column) => in_array($column, self::AVAILABLE_COLUMNS, true)
         );
 
         if (! in_array('id', $valid, true)) {
@@ -668,9 +663,9 @@ DESC;
         $all = get_taxonomies([], 'objects');
         $public = [];
 
-        foreach ($all as $tax) {
-            if ($tax->public) {
-                $public[$tax->name] = $tax;
+        foreach ($all as $taxonomyObject) {
+            if ($taxonomyObject->public) {
+                $public[$taxonomyObject->name] = $taxonomyObject;
             }
         }
 
@@ -687,11 +682,11 @@ DESC;
         $taxonomies = $this->getPublicTaxonomies();
         $available = [];
 
-        foreach ($taxonomies as $tax) {
+        foreach ($taxonomies as $taxonomyObject) {
             $available[] = [
-                'slug' => $tax->name,
-                'label' => $tax->label,
-                'count' => (int) wp_count_terms(['taxonomy' => $tax->name]),
+                'slug' => $taxonomyObject->name,
+                'label' => $taxonomyObject->label,
+                'count' => (int) wp_count_terms(['taxonomy' => $taxonomyObject->name]),
             ];
         }
 

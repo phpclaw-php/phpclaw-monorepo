@@ -17,6 +17,21 @@ final class WpCronTool implements ToolInterface, ToolRoutingInterface
 {
     use HasToolExecutionContract;
 
+    public const EXAMPLES = [
+        [
+            'prompt' => 'what scheduled tasks are set up on this site?',
+            'arguments' => [],
+        ],
+        [
+            'prompt' => 'how many scheduled jobs are there?',
+            'arguments' => ['aggregate' => true],
+        ],
+        [
+            'prompt' => 'which scheduled tasks belong to WordPress core?',
+            'arguments' => ['search' => 'wp_'],
+        ],
+    ];
+
     private const DEFAULT_LIMIT = 25;
 
     private const MAX_LIMIT = 100;
@@ -48,21 +63,6 @@ final class WpCronTool implements ToolInterface, ToolRoutingInterface
         'search',
         'limit',
         'offset',
-    ];
-
-    public const EXAMPLES = [
-        [
-            'prompt' => 'what scheduled tasks are set up on this site?',
-            'arguments' => [],
-        ],
-        [
-            'prompt' => 'how many scheduled jobs are there?',
-            'arguments' => ['aggregate' => true],
-        ],
-        [
-            'prompt' => 'which scheduled tasks belong to WordPress core?',
-            'arguments' => ['search' => 'wp_'],
-        ],
     ];
 
     /**
@@ -550,7 +550,7 @@ DESC;
         return [
             'hook' => $hookName,
             'next_run' => gmdate('Y-m-d H:i:s', $timestamp),
-            'schedule' => $scheduleName !== false && $scheduleName !== '' ? (string) $scheduleName : 'one-time',
+            'schedule' => $scheduleName === false || $scheduleName === '' ? 'one-time' : (string) $scheduleName,
             'interval' => (int) ($data['interval'] ?? 0),
             'args' => $data['args'] ?? [],
             'is_overdue' => $isOverdue,

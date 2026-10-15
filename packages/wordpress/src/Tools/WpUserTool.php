@@ -17,6 +17,21 @@ final class WpUserTool implements ToolInterface, ToolRoutingInterface
 {
     use HasToolExecutionContract;
 
+    public const EXAMPLES = [
+        [
+            'prompt' => 'who are the newest people to sign up?',
+            'arguments' => ['orderby' => 'registered', 'order' => 'DESC'],
+        ],
+        [
+            'prompt' => 'how many users do we have, and in what roles?',
+            'arguments' => ['aggregate' => true],
+        ],
+        [
+            'prompt' => 'who are the editors on this site?',
+            'arguments' => ['role' => 'editor'],
+        ],
+    ];
+
     private const DEFAULT_LIMIT = 20;
 
     private const MAX_LIMIT = 100;
@@ -94,21 +109,6 @@ final class WpUserTool implements ToolInterface, ToolRoutingInterface
         'order',
         'limit',
         'offset',
-    ];
-
-    public const EXAMPLES = [
-        [
-            'prompt' => 'who are the newest people to sign up?',
-            'arguments' => ['orderby' => 'registered', 'order' => 'DESC'],
-        ],
-        [
-            'prompt' => 'how many users do we have, and in what roles?',
-            'arguments' => ['aggregate' => true],
-        ],
-        [
-            'prompt' => 'who are the editors on this site?',
-            'arguments' => ['role' => 'editor'],
-        ],
     ];
 
     /**
@@ -296,32 +296,13 @@ DESC;
      */
     protected function plan(array $input): array
     {
-        if (! $this->runningInConsole() && ! $this->callerHasCapability(self::REQUIRED_CAPABILITY)) {
-            return [
-                'input' => $input,
-                'result' => $this->error(
-                    'FORBIDDEN',
-                    sprintf(
-                        'The current user lacks the "%s" WordPress capability required to read users.',
-                        self::REQUIRED_CAPABILITY,
-                    ),
-                ),
-            ];
+        $forbidden = $this->guardCapability('read users');
+
+        if ($forbidden !== null) {
+            return ['input' => $input, 'result' => $forbidden];
         }
 
-        $validationError = $this->validate($input);
-
-        if ($validationError !== null) {
-            return [
-                'input' => $input,
-                'result' => $validationError,
-            ];
-        }
-
-        return [
-            'input' => $input,
-            'result' => null,
-        ];
+        return ['input' => $input, 'result' => $this->validate($input)];
     }
 
     /**
@@ -1151,28 +1132,10 @@ DESC;
     private function validate(
         array $input
     ): ?string {
-        foreach (
-            array_keys($input) as $key
-        ) {
-            if (
-                ! is_string($key) ||
-                ! in_array(
-                    $key,
-                    self::ALLOWED_KEYS,
-                    true
-                )
-            ) {
-                return $this->error(
-                    'UNKNOWN_ARGUMENT',
-                    sprintf(
-                        'Unknown argument "%s".',
-                        (string) $key
-                    ),
-                    [
-                        'accepted_arguments' => self::ALLOWED_KEYS,
-                    ]
-                );
-            }
+        $unknown = $this->rejectUnknownArguments($input, self::ALLOWED_KEYS);
+
+        if ($unknown !== null) {
+            return $unknown;
         }
 
         foreach (
@@ -1344,38 +1307,10 @@ DESC;
             );
         }
 
-        if (
-            isset($input['limit']) &&
-            (
-                ! is_int($input['limit']) ||
-                $input['limit'] < 1 ||
-                $input['limit'] > self::MAX_LIMIT
-            )
-        ) {
-            return $this->error(
-                'INVALID_LIMIT',
-                sprintf(
-                    'The "limit" value must be an integer between 1 and %d.',
-                    self::MAX_LIMIT
-                )
-            );
-        }
+        $paging = $this->validatePaging($input, self::MAX_LIMIT, self::MAX_OFFSET);
 
-        if (
-            isset($input['offset']) &&
-            (
-                ! is_int($input['offset']) ||
-                $input['offset'] < 0 ||
-                $input['offset'] > self::MAX_OFFSET
-            )
-        ) {
-            return $this->error(
-                'INVALID_OFFSET',
-                sprintf(
-                    'The "offset" value must be an integer between 0 and %d.',
-                    self::MAX_OFFSET
-                )
-            );
+        if ($paging !== null) {
+            return $paging;
         }
 
         return null;

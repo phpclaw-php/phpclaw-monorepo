@@ -16,17 +16,20 @@ final class ToolHistorySplicer
      * Register a listener that collects every tool call for the current turn.
      *
      * @param  array<int, array{tool_name: string, tool_input: array<string, mixed>, tool_result: string}>  $calls
-     * @return void
+     * @return \Closure The registered listener, for a caller that removes it after the turn.
      */
-    public static function collect(array &$calls): void
+    public static function collect(array &$calls): \Closure
     {
-        HookRegistry::on(LifecycleEvent::ToolAfter->value, function (array $ctx) use (&$calls): void {
+        $listener = static function (array $context) use (&$calls): void {
             $calls[] = [
-                'tool_name' => (string) ($ctx['tool_name'] ?? ''),
-                'tool_input' => (array) ($ctx['tool_input'] ?? []),
-                'tool_result' => (string) ($ctx['tool_result'] ?? ''),
+                'tool_name' => (string) ($context['tool_name'] ?? ''),
+                'tool_input' => (array) ($context['tool_input'] ?? []),
+                'tool_result' => (string) ($context['tool_result'] ?? ''),
             ];
-        });
+        };
+        HookRegistry::on(LifecycleEvent::ToolAfter->value, $listener);
+
+        return $listener;
     }
 
     /**
@@ -63,7 +66,7 @@ final class ToolHistorySplicer
     }
 
     /**
-     * Find the index of the last assistant message, or -1 when there is none.
+     * Find the index of the last assistant message, or the history length when there is none.
      *
      * @param  array<int, mixed>  $messages
      * @return int

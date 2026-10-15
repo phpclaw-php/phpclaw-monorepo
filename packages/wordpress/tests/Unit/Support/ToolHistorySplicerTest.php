@@ -140,4 +140,26 @@ final class ToolHistorySplicerTest extends TestCase
             array_column($result['history'], 'role'),
         );
     }
+
+    public function test_non_array_history_entries_are_skipped_when_finding_the_splice_point(): void
+    {
+        $calls = [['tool_name' => 'wp_query', 'tool_input' => [], 'tool_result' => 'R']];
+
+        $result = (ToolHistorySplicer::beforePersist($calls))([
+            'history' => [['role' => 'assistant', 'content' => 'A'], 'not-a-row', ['role' => 'user', 'content' => 'U']],
+        ]);
+
+        self::assertSame('tool', $result['history'][0]['role']);
+        self::assertSame('assistant', $result['history'][1]['role']);
+    }
+
+    public function test_tool_entries_fill_an_empty_history(): void
+    {
+        $calls = [['tool_name' => 'wp_query', 'tool_input' => [], 'tool_result' => 'R']];
+
+        $result = (ToolHistorySplicer::beforePersist($calls))(['history' => []]);
+
+        self::assertCount(1, $result['history']);
+        self::assertSame('wp_query', $result['history'][0]['tool_name']);
+    }
 }

@@ -11,6 +11,7 @@ use PhpClaw\Agent\AgentResponse;
 use PhpClaw\Agent\Conversation;
 use PhpClaw\Agent\ConversationTurn;
 use PhpClaw\Contracts\ClawInterface as PhpClawInterface;
+use PhpClaw\Exceptions\GuardException;
 use PhpClaw\Exceptions\ProviderException;
 use PhpClaw\Exceptions\TokenBudgetExceededException;
 use PhpClaw\Hooks\HookRegistry;
@@ -518,63 +519,6 @@ final class PhpClawAdminControllerTest extends TestCase
         self::assertStringContainsString('"ok":true', $captured);
     }
 
-    public function test_find_last_assistant_index_returns_correct_index(): void
-    {
-        $controller = new PhpClawAdminController(null, []);
-        $ref = new \ReflectionMethod(PhpClawAdminController::class, 'findLastAssistantIndex');
-        $ref->setAccessible(true);
-
-        $messages = [
-            ['role' => 'user',      'content' => 'hello'],
-            ['role' => 'assistant', 'content' => 'hi'],
-            ['role' => 'user',      'content' => 'more'],
-        ];
-
-        $index = $ref->invoke($controller, $messages);
-        self::assertSame(1, $index);
-    }
-
-    public function test_find_last_assistant_index_returns_count_when_no_assistant(): void
-    {
-        $controller = new PhpClawAdminController(null, []);
-        $ref = new \ReflectionMethod(PhpClawAdminController::class, 'findLastAssistantIndex');
-        $ref->setAccessible(true);
-
-        $messages = [
-            ['role' => 'user', 'content' => 'hello'],
-            ['role' => 'user', 'content' => 'again'],
-        ];
-
-        $index = $ref->invoke($controller, $messages);
-        self::assertSame(2, $index);
-    }
-
-    public function test_find_last_assistant_index_returns_zero_for_empty_messages(): void
-    {
-        $controller = new PhpClawAdminController(null, []);
-        $ref = new \ReflectionMethod(PhpClawAdminController::class, 'findLastAssistantIndex');
-        $ref->setAccessible(true);
-
-        $index = $ref->invoke($controller, []);
-        self::assertSame(0, $index);
-    }
-
-    public function test_find_last_assistant_index_skips_non_array_entries(): void
-    {
-        $controller = new PhpClawAdminController(null, []);
-        $ref = new \ReflectionMethod(PhpClawAdminController::class, 'findLastAssistantIndex');
-        $ref->setAccessible(true);
-
-        $messages = [
-            'not-an-array',
-            ['role' => 'assistant', 'content' => 'hi'],
-            'also-not-array',
-        ];
-
-        $index = $ref->invoke($controller, $messages);
-        self::assertSame(1, $index);
-    }
-
     public function test_stream_chat_before_persist_callback_splices_tool_calls_into_history(): void
     {
         Functions\when('wp_json_encode')->alias(static fn (array $d) => json_encode($d));
@@ -782,5 +726,32 @@ final class PhpClawAdminControllerTest extends TestCase
 
         $events = array_column($captured, 'event');
         self::assertContains('done', $events);
+    }
+
+    public function test_stream_chat_reports_a_guard_block_as_a_guard_error_with_status_422(): void
+    {
+        Functions\when('wp_json_encode')->alias(static fn (array $d) => json_encode($d));
+        Functions\when('__')->returnArg();
+        Functions\when('headers_sent')->justReturn(false);
+        Functions\expect('status_header')->once()->with(422);
+
+        $engine = \Mockery::mock(PhpClawInterface::class);
+        $engine->expects('conversation')->once()->andThrow(new GuardException('Prompt injection detected.'));
+
+        $captured = [];
+        $emit = static function (string $event, array $data) use (&$captured): void {
+            $captured[] = ['event' => $event, 'data' => $data];
+        };
+
+        $controller = new PhpClawAdminController($engine, []);
+        $ref = new \ReflectionMethod(PhpClawAdminController::class, 'streamChat');
+        $ref->invoke($controller, 'hi', '', $emit);
+
+        self::assertCount(1, $captured);
+        self::assertSame('error', $captured[0]['event']);
+        self::assertSame(
+            'Your message was blocked by a security guard. Rephrase your prompt and try again.',
+            $captured[0]['data']['message'],
+        );
     }
 }

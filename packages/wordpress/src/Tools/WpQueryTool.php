@@ -17,6 +17,21 @@ final class WpQueryTool implements ToolInterface, ToolRoutingInterface
 {
     use HasToolExecutionContract;
 
+    public const EXAMPLES = [
+        [
+            'prompt' => 'what have we published recently?',
+            'arguments' => [],
+        ],
+        [
+            'prompt' => 'how many posts and pages do we have?',
+            'arguments' => ['aggregate' => true],
+        ],
+        [
+            'prompt' => 'show me our unfinished draft pages',
+            'arguments' => ['post_type' => 'page', 'post_status' => 'draft'],
+        ],
+    ];
+
     private const MAX_POSTS = 50;
 
     private const MAX_SEARCH_LENGTH = 255;
@@ -33,21 +48,6 @@ final class WpQueryTool implements ToolInterface, ToolRoutingInterface
         'columns', 'schema', 'aggregate', 'search', 'post_type', 'post_status',
         'author_id', 'category_name', 'tag', 'date_after', 'date_before',
         'min_comment_count', 'featured', 'orderby', 'order', 'posts_per_page', 'paged',
-    ];
-
-    public const EXAMPLES = [
-        [
-            'prompt' => 'what have we published recently?',
-            'arguments' => [],
-        ],
-        [
-            'prompt' => 'how many posts and pages do we have?',
-            'arguments' => ['aggregate' => true],
-        ],
-        [
-            'prompt' => 'show me our unfinished draft pages',
-            'arguments' => ['post_type' => 'page', 'post_status' => 'draft'],
-        ],
     ];
 
     private const DEFAULT_LIMIT = 10;
@@ -567,7 +567,7 @@ DESC;
                 $query = new \WP_Query($args);
                 $count = (int) $query->found_posts;
             } catch (\Throwable $e) {
-                error_log("phpClaw WpQueryTool: WP_Query aggregate failed: {$e->getMessage()}");
+                $this->logExecutionError($e);
                 throw new ToolException('WP_Query aggregate failed', previous: $e);
             }
 
@@ -575,28 +575,12 @@ DESC;
             $total += $count;
         }
 
-        $typeArgs = [
-            'post_type' => $postType,
-            'post_status' => 'any',
-            'posts_per_page' => 1,
-            'no_found_rows' => false,
-            'fields' => 'ids',
-            'suppress_filters' => true,
-        ];
-
-        try {
-            $totalQuery = new \WP_Query($typeArgs);
-            $totalPages = (int) $totalQuery->max_num_pages;
-        } catch (\Throwable) {
-            $totalPages = 0;
-        }
-
         $postTypes = get_post_types(['public' => true], 'names');
         $byType = [];
 
-        foreach ($postTypes as $pt) {
-            $ptArgs = [
-                'post_type' => $pt,
+        foreach ($postTypes as $publicType) {
+            $typeArgs = [
+                'post_type' => $publicType,
                 'post_status' => 'publish',
                 'posts_per_page' => 1,
                 'no_found_rows' => false,
@@ -605,10 +589,10 @@ DESC;
             ];
 
             try {
-                $ptQuery = new \WP_Query($ptArgs);
-                $byType[$pt] = (int) $ptQuery->found_posts;
+                $typeQuery = new \WP_Query($typeArgs);
+                $byType[$publicType] = (int) $typeQuery->found_posts;
             } catch (\Throwable) {
-                $byType[$pt] = 0;
+                $byType[$publicType] = 0;
             }
         }
 
@@ -661,7 +645,7 @@ DESC;
         try {
             $query = new \WP_Query($args);
         } catch (\Throwable $e) {
-            error_log("phpClaw WpQueryTool: WP_Query failed: {$e->getMessage()}");
+            $this->logExecutionError($e);
             throw new ToolException('WP_Query failed', previous: $e);
         }
 
@@ -715,9 +699,9 @@ DESC;
 
         $row = [];
 
-        foreach ($columns as $col) {
-            if (isset($map[$col])) {
-                $row[$col] = $map[$col]();
+        foreach ($columns as $column) {
+            if (isset($map[$column])) {
+                $row[$column] = $map[$column]();
             }
         }
 
@@ -746,8 +730,8 @@ DESC;
 
         $valid = array_filter(
             $requested,
-            fn ($c) => is_string($c)
-                && in_array($c, self::AVAILABLE_COLUMNS, true)
+            fn ($column) => is_string($column)
+                && in_array($column, self::AVAILABLE_COLUMNS, true)
         );
 
         if (! in_array('id', $valid, true)) {

@@ -288,4 +288,28 @@ final class WpDbMemoryTest extends TestCase
         self::assertMatchesRegularExpression('/expires_at.*VALUES/', $sql);
         self::assertStringContainsString('myns', $sql);
     }
+
+    public function test_get_of_a_malformed_stored_value_raises_no_php_warning(): void
+    {
+        $this->wpdb->nextGetRow = ['value' => 'a:2:{broken', 'expires_at' => null];
+        $warnings = [];
+        $previousLevel = error_reporting(E_ALL);
+        set_error_handler(static function (int $level, string $message) use (&$warnings): bool {
+            if ((error_reporting() & $level) !== 0) {
+                $warnings[] = $message;
+            }
+
+            return true;
+        });
+
+        try {
+            $value = (new WpDbMemory)->get('k', 'ns');
+        } finally {
+            restore_error_handler();
+            error_reporting($previousLevel);
+        }
+
+        self::assertSame([], $warnings);
+        self::assertSame('a:2:{broken', $value);
+    }
 }

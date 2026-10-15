@@ -157,10 +157,10 @@ final class GuidePage
                     ['What is the current site URL?',          'Reads wp_options for the site URL.'],
                     ['List users with the editor role',        'Queries users by role.'],
                 ];
-        foreach ($examples as [$prompt, $desc]) { ?>
+        foreach ($examples as [$prompt, $description]) { ?>
                 <tr>
                     <td><code><?= esc_html($prompt) ?></code></td>
-                    <td><?= esc_html($desc) ?></td>
+                    <td><?= esc_html($description) ?></td>
                 </tr>
                 <?php } ?>
             </tbody>
@@ -208,10 +208,10 @@ final class GuidePage
             ['Response Cache TTL (seconds)',         'How long a cached response stays valid. Default: 3600 (1 hour).'],
             ['Max Token Budget',                    'Stops a run once its estimated token spend would exceed this ceiling. 0 = unlimited.'],
         ];
-        foreach ($advanced as [$field, $desc]) { ?>
+        foreach ($advanced as [$field, $description]) { ?>
                 <tr>
                     <td><code><?= esc_html($field) ?></code></td>
-                    <td><?= esc_html($desc) ?></td>
+                    <td><?= esc_html($description) ?></td>
                 </tr>
                 <?php } ?>
             </tbody>
@@ -241,7 +241,8 @@ final class GuidePage
             'WpZipBuilderTool' => ['name' => 'Plugin Zip Builder', 'desc' => 'Package a plugin directory into a distributable ZIP archive.', 'prompts' => 'Zip up my custom plugin · Build a release archive for phpclaw'],
         ];
 
-        $toolRows = self::wordpressToolRows($meta);
+        $liveTools = self::liveTools();
+        $toolRows = self::wordpressToolRows($meta, $liveTools);
         ?>
         <h2 class="pc-mt-0">Available Tools</h2>
         <p class="pc-text-muted">The AI agent automatically picks the right tool based on your prompt.</p>
@@ -260,11 +261,11 @@ final class GuidePage
                 </tr>
             </thead>
             <tbody>
-                <?php foreach ($toolRows as $t) { ?>
+                <?php foreach ($toolRows as $row) { ?>
                 <tr>
-                    <td><strong><?= esc_html($t['name']) ?></strong></td>
-                    <td><?= esc_html($t['desc']) ?></td>
-                    <td class="pc-prompts-cell"><?= esc_html($t['prompts']) ?></td>
+                    <td><strong><?= esc_html($row['name']) ?></strong></td>
+                    <td><?= esc_html($row['desc']) ?></td>
+                    <td class="pc-prompts-cell"><?= esc_html($row['prompts']) ?></td>
                 </tr>
                 <?php } ?>
             </tbody>
@@ -294,11 +295,11 @@ final class GuidePage
                     ['name' => 'Shipping Tool', 'desc' => 'Shipping zones, methods (flat rate, free, local pickup), and rates.',       'prompts' => 'Shipping zones · Free shipping rules · Which zone covers India?'],
                     ['name' => 'Tax Tool',      'desc' => 'Tax settings, classes, and rates by country/state.',                        'prompts' => 'Is tax enabled? · Tax rates for US · What tax classes exist?'],
                 ];
-            foreach ($wcTools as $t) { ?>
+            foreach ($wcTools as $row) { ?>
                 <tr>
-                    <td><strong><?= esc_html($t['name']) ?></strong></td>
-                    <td><?= esc_html($t['desc']) ?></td>
-                    <td class="pc-prompts-cell"><?= esc_html($t['prompts']) ?></td>
+                    <td><strong><?= esc_html($row['name']) ?></strong></td>
+                    <td><?= esc_html($row['desc']) ?></td>
+                    <td class="pc-prompts-cell"><?= esc_html($row['prompts']) ?></td>
                 </tr>
                 <?php } ?>
             </tbody>
@@ -312,14 +313,13 @@ final class GuidePage
         <h3 class="pc-mt-24">Core Utility Tools <span class="pc-tools-subtitle">ships with <code>phpclaw/phpclaw</code>, no extra install</span></h3>
         <?php
         $coreTools = [];
-        $liveCore = self::liveCoreToolClasses();
+        $liveCore = self::liveCoreToolClasses($liveTools);
         foreach (self::discovered('tools') as $class => $attr) {
             if (empty($attr['default']) && ! in_array((string) $class, $liveCore, true)) {
                 continue;
             }
-            $base = strrchr((string) $class, '\\');
             $coreTools[] = [
-                'tool' => $base === false ? (string) $class : substr($base, 1),
+                'tool' => self::shortName((string) $class),
                 'desc' => (string) ($attr['description'] ?? ''),
                 'dep' => ! empty($attr['deprecated']),
             ];
@@ -338,17 +338,17 @@ final class GuidePage
                 </tr>
             </thead>
             <tbody>
-                <?php foreach ($coreTools as $t) { ?>
+                <?php foreach ($coreTools as $coreTool) { ?>
                 <tr>
-                    <td><code><?= esc_html($t['tool']) ?></code></td>
+                    <td><code><?= esc_html($coreTool['tool']) ?></code></td>
                     <td>
-                        <?php if ($t['dep']) { ?>
+                        <?php if ($coreTool['dep']) { ?>
                         <span class="pc-status-warn">⚠ Deprecated</span>
                         <?php } else { ?>
                         <span class="pc-status-active">✔ Ready</span>
                         <?php } ?>
                     </td>
-                    <td><?= esc_html($t['desc']) ?></td>
+                    <td><?= esc_html($coreTool['desc']) ?></td>
                 </tr>
                 <?php } ?>
             </tbody>
@@ -359,25 +359,34 @@ final class GuidePage
     }
 
     /**
-     * Class names of the core `PhpClaw\Tools\` tools the engine registers, or [] when the live list can't be read.
+     * The tools the engine registers with the saved settings, or null when the live list can't be built.
      *
-     * @return list<string>
+     * @return array<int, object>|null
      */
-    private static function liveCoreToolClasses(): array
+    private static function liveTools(): ?array
     {
         try {
-            $live = EngineFactory::registeredTools(
+            return EngineFactory::registeredTools(
                 Plugin::getInstance()->config(),
                 (array) get_option('phpclaw_settings', []),
                 Plugin::extraToolClasses(),
             );
         } catch (\Throwable) {
-            return [];
+            return null;
         }
+    }
 
+    /**
+     * Class names of the core `PhpClaw\Tools\` tools in the live list, or [] when it can't be read.
+     *
+     * @param  array<int, object>|null  $liveTools  Tools from liveTools().
+     * @return list<string>
+     */
+    private static function liveCoreToolClasses(?array $liveTools): array
+    {
         $classes = [];
 
-        foreach ($live as $tool) {
+        foreach ($liveTools ?? [] as $tool) {
             if (str_starts_with($tool::class, 'PhpClaw\\Tools\\')) {
                 $classes[] = $tool::class;
             }
@@ -390,39 +399,28 @@ final class GuidePage
      * Rows for the WordPress tools table, falling back to the built-in copy when the live engine list can't be read.
      *
      * @param  array<string, array{name: string, desc: string, prompts: string}>  $meta
+     * @param  array<int, object>|null  $liveTools  Tools from liveTools().
      * @return list<array{name: string, desc: string, prompts: string}>
      */
-    private static function wordpressToolRows(array $meta): array
+    private static function wordpressToolRows(array $meta, ?array $liveTools): array
     {
-        try {
-            $live = EngineFactory::registeredTools(
-                Plugin::getInstance()->config(),
-                (array) get_option('phpclaw_settings', []),
-                Plugin::extraToolClasses(),
-            );
-        } catch (\Throwable) {
-            $live = null;
-        }
-
-        if ($live === null) {
+        if ($liveTools === null) {
             return array_values($meta);
         }
 
         $rows = [];
 
-        foreach ($live as $tool) {
+        foreach ($liveTools as $tool) {
             $class = $tool::class;
             if (str_starts_with($class, 'PhpClaw\\WooCommerce\\') || str_starts_with($class, 'PhpClaw\\Tools\\')) {
                 continue;
             }
 
-            $base = strrchr($class, '\\');
-            $base = $base === false ? $class : substr($base, 1);
-            $m = $meta[$base] ?? [];
+            $toolMeta = $meta[self::shortName($class)] ?? [];
             $rows[] = [
-                'name' => (string) ($m['name'] ?? $tool->name()),
-                'desc' => (string) ($m['desc'] ?? $tool->description()),
-                'prompts' => (string) ($m['prompts'] ?? ''),
+                'name' => (string) ($toolMeta['name'] ?? $tool->name()),
+                'desc' => (string) ($toolMeta['desc'] ?? $tool->description()),
+                'prompts' => (string) ($toolMeta['prompts'] ?? ''),
             ];
         }
 
@@ -514,7 +512,6 @@ final class GuidePage
      */
     private static function renderTabProviders(): void
     {
-
         $live = self::liveProviders();
 
         $meta = [
@@ -569,13 +566,13 @@ final class GuidePage
 
         $providers = [];
         foreach ($live as $slug => $info) {
-            $m = $meta[$slug] ?? [];
+            $providerMeta = $meta[$slug] ?? [];
             $providers[] = [
-                'name' => (string) ($m['name'] ?? $info['label']) ?: ucfirst($slug),
+                'name' => (string) ($providerMeta['name'] ?? $info['label']) ?: ucfirst($slug),
                 'key' => $slug,
-                'models' => (string) ($m['models'] ?? $info['defaultModel']),
-                'signup' => (string) ($m['signup'] ?? ''),
-                'notes' => (string) ($m['notes'] ?? ''),
+                'models' => (string) ($providerMeta['models'] ?? $info['defaultModel']),
+                'signup' => (string) ($providerMeta['signup'] ?? ''),
+                'notes' => (string) ($providerMeta['notes'] ?? ''),
             ];
         }
         ?>
@@ -596,20 +593,20 @@ final class GuidePage
                 </tr>
             </thead>
             <tbody>
-                <?php foreach ($providers as $p) { ?>
+                <?php foreach ($providers as $provider) { ?>
                 <tr>
-                    <td><strong><?= esc_html($p['name']) ?></strong></td>
-                    <td><code class="pc-code-sm"><?= esc_html($p['models']) ?></code></td>
+                    <td><strong><?= esc_html($provider['name']) ?></strong></td>
+                    <td><code class="pc-code-sm"><?= esc_html($provider['models']) ?></code></td>
                     <td>
-                        <?php if ($p['signup'] !== '') { ?>
-                        <a href="<?= esc_url($p['signup']) ?>" target="_blank" rel="noopener">
+                        <?php if ($provider['signup'] !== '') { ?>
+                        <a href="<?= esc_url($provider['signup']) ?>" target="_blank" rel="noopener">
                             <?= esc_html__('Get API key →', 'phpclaw') ?>
                         </a>
                         <?php } else { ?>
                         <?= esc_html__('n/a', 'phpclaw') ?>
                         <?php } ?>
                     </td>
-                    <td><?= esc_html($p['notes']) ?></td>
+                    <td><?= esc_html($provider['notes']) ?></td>
                 </tr>
                 <?php } ?>
             </tbody>
@@ -676,9 +673,9 @@ final class GuidePage
      */
     private static function shortName(string $class): string
     {
-        $pos = strrchr($class, '\\');
+        $basename = strrchr($class, '\\');
 
-        return $pos === false ? $class : substr($pos, 1);
+        return $basename === false ? $class : substr($basename, 1);
     }
 
     /**
@@ -706,16 +703,16 @@ final class GuidePage
             $defaultModels = [];
         }
 
-        $out = [];
+        $providers = [];
         foreach ($catalogue as $slug => $info) {
             $slug = (string) $slug;
-            $out[$slug] = [
+            $providers[$slug] = [
                 'label' => $info['label'],
                 'defaultModel' => $defaultModels[$slug] ?? '',
             ];
         }
 
-        return $out;
+        return $providers;
     }
 
     /**
@@ -754,14 +751,14 @@ final class GuidePage
                     <?php if (! is_object($guard)) {
                         continue;
                     } ?>
-                    <?php $cls = $guard::class; ?>
+                    <?php $guardClass = $guard::class; ?>
                 <tr>
-                    <td><code><?= esc_html(self::shortName($cls)) ?></code></td>
-                    <td><?= esc_html(self::shortName($cls)) ?></td>
+                    <td><code><?= esc_html(self::shortName($guardClass)) ?></code></td>
+                    <td><?= esc_html(self::shortName($guardClass)) ?></td>
                     <td></td>
                     <td>✔</td>
                     <td>wordpress</td>
-                    <td><small><code><?= esc_html($cls) ?></code></small></td>
+                    <td><small><code><?= esc_html($guardClass) ?></code></small></td>
                 </tr>
                 <?php } ?>
                 <?php if (GuardRegistry::hasClass(self::CLOUD_SCAN_GUARD)) { ?>
@@ -804,34 +801,34 @@ final class GuidePage
             </thead>
             <tbody>
                 <?php foreach ($hooks as $class => $listeners) { ?>
-                    <?php foreach ((array) $listeners as $l) { ?>
+                    <?php foreach ((array) $listeners as $listener) { ?>
                     <tr>
-                        <td><code><?= esc_html((string) ($l['event'] ?? '')) ?></code></td>
-                        <td><?= esc_html((string) ($l['name'] ?? '')) ?></td>
-                        <td><?= esc_html((string) (int) ($l['priority'] ?? 0)) ?></td>
-                        <td><?= ! empty($l['enabledByDefault']) ? '✔' : '✗' ?></td>
+                        <td><code><?= esc_html((string) ($listener['event'] ?? '')) ?></code></td>
+                        <td><?= esc_html((string) ($listener['name'] ?? '')) ?></td>
+                        <td><?= esc_html((string) (int) ($listener['priority'] ?? 0)) ?></td>
+                        <td><?= ! empty($listener['enabledByDefault']) ? '✔' : '✗' ?></td>
                         <td><?= esc_html(self::discoverySource((string) $class)) ?></td>
                         <td><small><code><?= esc_html((string) $class) ?></code></small></td>
                     </tr>
                     <?php } ?>
                 <?php } ?>
-                <?php foreach ($extraHooks as $l) { ?>
-                    <?php if (! is_array($l) || ! isset($l['event'])) {
+                <?php foreach ($extraHooks as $listener) { ?>
+                    <?php if (! is_array($listener) || ! isset($listener['event'])) {
                         continue;
                     } ?>
                     <?php
-                    $handler = $l['handler'] ?? null;
-                    $hClass = is_array($handler) ? ($handler[0] ?? '') : $handler;
-                    $hClass = is_object($hClass) ? $hClass::class : (string) $hClass;
-                    $hMethod = is_array($handler) ? (string) ($handler[1] ?? '') : '';
+                    $handler = $listener['handler'] ?? null;
+                    $handlerClass = is_array($handler) ? ($handler[0] ?? '') : $handler;
+                    $handlerClass = is_object($handlerClass) ? $handlerClass::class : (string) $handlerClass;
+                    $handlerMethod = is_array($handler) ? (string) ($handler[1] ?? '') : '';
                     ?>
                     <tr>
-                        <td><code><?= esc_html((string) $l['event']) ?></code></td>
-                        <td><?= esc_html($hMethod !== '' ? $hMethod : self::shortName($hClass)) ?></td>
-                        <td><?= esc_html((string) (int) ($l['priority'] ?? 10)) ?></td>
+                        <td><code><?= esc_html((string) $listener['event']) ?></code></td>
+                        <td><?= esc_html($handlerMethod === '' ? self::shortName($handlerClass) : $handlerMethod) ?></td>
+                        <td><?= esc_html((string) (int) ($listener['priority'] ?? 10)) ?></td>
                         <td>✔</td>
                         <td>wordpress</td>
-                        <td><small><code><?= esc_html($hClass) ?></code></small></td>
+                        <td><small><code><?= esc_html($handlerClass) ?></code></small></td>
                     </tr>
                 <?php } ?>
             </tbody>
@@ -879,16 +876,16 @@ final class GuidePage
                         continue;
                     } ?>
                     <?php
-                    $cls = $skill::class;
-                    $sName = method_exists($skill, 'name') ? (string) $skill->name() : self::shortName($cls);
-                    $sKw = method_exists($skill, 'tags') ? array_map('strval', (array) $skill->tags()) : [];
+                    $skillClass = $skill::class;
+                    $skillName = method_exists($skill, 'name') ? (string) $skill->name() : self::shortName($skillClass);
+                    $skillTags = method_exists($skill, 'tags') ? array_map('strval', (array) $skill->tags()) : [];
                     ?>
                 <tr>
-                    <td><code><?= esc_html($sName) ?></code></td>
-                    <td><?= esc_html($sName) ?></td>
-                    <td><small><?= esc_html(implode(', ', $sKw)) ?></small></td>
+                    <td><code><?= esc_html($skillName) ?></code></td>
+                    <td><?= esc_html($skillName) ?></td>
+                    <td><small><?= esc_html(implode(', ', $skillTags)) ?></small></td>
                     <td>wordpress</td>
-                    <td><small><code><?= esc_html($cls) ?></code></small></td>
+                    <td><small><code><?= esc_html($skillClass) ?></code></small></td>
                 </tr>
                 <?php } ?>
             </tbody>
@@ -912,16 +909,16 @@ final class GuidePage
         foreach ($skills as $attr) {
             $knownNames[(string) ($attr['name'] ?? '')] = true;
         }
-        foreach ($extraSkills as $s) {
-            if (is_object($s) && method_exists($s, 'name')) {
-                $knownNames[(string) $s->name()] = true;
+        foreach ($extraSkills as $extraSkill) {
+            if (is_object($extraSkill) && method_exists($extraSkill, 'name')) {
+                $knownNames[(string) $extraSkill->name()] = true;
             }
         }
 
         $remoteSkills = class_exists(SkillRegistry::class)
             ? array_values(array_filter(
                 SkillRegistry::all(),
-                static fn ($s) => ! isset($knownNames[$s->name()]),
+                static fn ($skill) => ! isset($knownNames[$skill->name()]),
             ))
             : [];
         ?>

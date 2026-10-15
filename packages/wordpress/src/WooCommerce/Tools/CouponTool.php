@@ -19,6 +19,21 @@ final class CouponTool implements ToolInterface, ToolRoutingInterface
     use ClassifiesProductFields;
     use HasToolExecutionContract;
 
+    public const EXAMPLES = [
+        [
+            'prompt' => 'list our discount coupons',
+            'arguments' => [],
+        ],
+        [
+            'prompt' => 'how many coupons are still active?',
+            'arguments' => ['aggregate' => true],
+        ],
+        [
+            'prompt' => 'which coupons have expired?',
+            'arguments' => ['status' => 'expired'],
+        ],
+    ];
+
     private const DEFAULT_LIMIT = 20;
 
     private const MAX_LIMIT = 50;
@@ -63,21 +78,6 @@ final class CouponTool implements ToolInterface, ToolRoutingInterface
     ];
 
     private const VALID_STATUSES = ['all', 'active', 'expired'];
-
-    public const EXAMPLES = [
-        [
-            'prompt' => 'list our discount coupons',
-            'arguments' => [],
-        ],
-        [
-            'prompt' => 'how many coupons are still active?',
-            'arguments' => ['aggregate' => true],
-        ],
-        [
-            'prompt' => 'which coupons have expired?',
-            'arguments' => ['status' => 'expired'],
-        ],
-    ];
 
     private const ALLOWED_KEYS = [
         'columns', 'schema', 'aggregate', 'status', 'search', 'limit', 'offset',

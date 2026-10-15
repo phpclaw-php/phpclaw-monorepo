@@ -17,6 +17,17 @@ final class WpMenuTool implements ToolInterface, ToolRoutingInterface
 {
     use HasToolExecutionContract;
 
+    public const EXAMPLES = [
+        [
+            'prompt' => 'what navigation menus does this site have?',
+            'arguments' => [],
+        ],
+        [
+            'prompt' => 'how many items are in our menus?',
+            'arguments' => ['aggregate' => true],
+        ],
+    ];
+
     private const DEFAULT_LIMIT = 50;
 
     private const MAX_OFFSET = 10000;
@@ -29,17 +40,6 @@ final class WpMenuTool implements ToolInterface, ToolRoutingInterface
 
     private const ALLOWED_KEYS = [
         'columns', 'schema', 'aggregate', 'menu', 'parent', 'depth', 'limit',
-    ];
-
-    public const EXAMPLES = [
-        [
-            'prompt' => 'what navigation menus does this site have?',
-            'arguments' => [],
-        ],
-        [
-            'prompt' => 'how many items are in our menus?',
-            'arguments' => ['aggregate' => true],
-        ],
     ];
 
     private const MAX_LIMIT = 200;
@@ -459,7 +459,7 @@ DESC;
     private function listMenusData(array $input): array
     {
         $locations = get_nav_menu_locations();
-        $locNames = get_registered_nav_menus();
+        $locationNames = get_registered_nav_menus();
         $menus = wp_get_nav_menus();
         $limit = $this->resolveLimit($input);
         $columns = $this->resolveColumns($input['columns'] ?? []);
@@ -468,9 +468,9 @@ DESC;
         foreach ($menus as $menu) {
             $assignedTo = [];
 
-            foreach ($locations as $loc => $menuId) {
-                if ($menuId === $menu->term_id && isset($locNames[$loc])) {
-                    $assignedTo[] = $locNames[$loc];
+            foreach ($locations as $location => $menuId) {
+                if ($menuId === $menu->term_id && isset($locationNames[$location])) {
+                    $assignedTo[] = $locationNames[$location];
                 }
             }
 
@@ -493,7 +493,7 @@ DESC;
             'menus' => $result,
             'total' => count($menus),
             'columns' => $columns,
-            'locations' => array_values($locNames),
+            'locations' => array_values($locationNames),
             'has_more' => count($menus) > count($result),
         ];
     }
@@ -589,9 +589,9 @@ DESC;
 
         $row = [];
 
-        foreach ($columns as $col) {
-            if (array_key_exists($col, $allFields)) {
-                $row[$col] = $allFields[$col];
+        foreach ($columns as $column) {
+            if (array_key_exists($column, $allFields)) {
+                $row[$column] = $allFields[$column];
             }
         }
 
@@ -651,7 +651,7 @@ DESC;
 
         $valid = array_filter(
             $requested,
-            static fn ($c) => in_array($c, self::AVAILABLE_COLUMNS, true)
+            static fn ($column) => in_array($column, self::AVAILABLE_COLUMNS, true)
         );
 
         if (! in_array('id', $valid, true)) {

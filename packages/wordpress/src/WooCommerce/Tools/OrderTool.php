@@ -18,6 +18,21 @@ final class OrderTool implements ToolInterface, ToolRoutingInterface
 {
     use HasToolExecutionContract;
 
+    public const EXAMPLES = [
+        [
+            'prompt' => 'show me the latest orders',
+            'arguments' => [],
+        ],
+        [
+            'prompt' => 'how many orders are in each status?',
+            'arguments' => ['aggregate' => true],
+        ],
+        [
+            'prompt' => 'which orders still need processing?',
+            'arguments' => ['status' => 'processing'],
+        ],
+    ];
+
     private const DEFAULT_LIMIT = 10;
 
     private const MAX_LIMIT = 50;
@@ -85,21 +100,6 @@ final class OrderTool implements ToolInterface, ToolRoutingInterface
     ];
 
     private const SORT_DIRECTIONS = ['ASC', 'DESC'];
-
-    public const EXAMPLES = [
-        [
-            'prompt' => 'show me the latest orders',
-            'arguments' => [],
-        ],
-        [
-            'prompt' => 'how many orders are in each status?',
-            'arguments' => ['aggregate' => true],
-        ],
-        [
-            'prompt' => 'which orders still need processing?',
-            'arguments' => ['status' => 'processing'],
-        ],
-    ];
 
     private $fetcher;
 
@@ -586,29 +586,29 @@ DESC;
     private function buildRow(mixed $order, array $columns): array
     {
         $getters = [
-            'id' => static fn ($o): int => (int) $o->get_id(),
-            'status' => static fn ($o): string => (string) $o->get_status(),
-            'total' => static fn ($o): string => (string) $o->get_total(),
-            'currency' => static fn ($o): string => is_callable([$o, 'get_currency']) ? (string) $o->get_currency() : '',
-            'date_created' => static fn ($o): string => is_callable([$o, 'get_date_created']) && $o->get_date_created()
-                ? (string) $o->get_date_created()->date('Y-m-d H:i:s')
+            'id' => static fn ($order): int => (int) $order->get_id(),
+            'status' => static fn ($order): string => (string) $order->get_status(),
+            'total' => static fn ($order): string => (string) $order->get_total(),
+            'currency' => static fn ($order): string => is_callable([$order, 'get_currency']) ? (string) $order->get_currency() : '',
+            'date_created' => static fn ($order): string => is_callable([$order, 'get_date_created']) && $order->get_date_created()
+                ? (string) $order->get_date_created()->date('Y-m-d H:i:s')
                 : '',
-            'date_paid' => static fn ($o): string => is_callable([$o, 'get_date_paid']) && $o->get_date_paid()
-                ? (string) $o->get_date_paid()->date('Y-m-d H:i:s')
+            'date_paid' => static fn ($order): string => is_callable([$order, 'get_date_paid']) && $order->get_date_paid()
+                ? (string) $order->get_date_paid()->date('Y-m-d H:i:s')
                 : '',
-            'payment_method_title' => static fn ($o): string => is_callable([$o, 'get_payment_method_title'])
-                ? (string) $o->get_payment_method_title()
+            'payment_method_title' => static fn ($order): string => is_callable([$order, 'get_payment_method_title'])
+                ? (string) $order->get_payment_method_title()
                 : '',
-            'customer_id' => static fn ($o): int => is_callable([$o, 'get_customer_id']) ? (int) $o->get_customer_id() : 0,
-            'item_count' => static fn ($o): int => is_callable([$o, 'get_item_count']) ? (int) $o->get_item_count() : 0,
-            'billing_email' => static fn ($o): string => is_callable([$o, 'get_billing_email']) ? (string) $o->get_billing_email() : '',
-            'billing_phone' => static fn ($o): string => is_callable([$o, 'get_billing_phone']) ? (string) $o->get_billing_phone() : '',
-            'billing_city' => static fn ($o): string => is_callable([$o, 'get_billing_city']) ? (string) $o->get_billing_city() : '',
-            'billing_country' => static fn ($o): string => is_callable([$o, 'get_billing_country']) ? (string) $o->get_billing_country() : '',
-            'shipping_city' => static fn ($o): string => is_callable([$o, 'get_shipping_city']) ? (string) $o->get_shipping_city() : '',
-            'shipping_country' => static fn ($o): string => is_callable([$o, 'get_shipping_country']) ? (string) $o->get_shipping_country() : '',
-            'customer_ip' => static fn ($o): string => is_callable([$o, 'get_customer_ip_address'])
-                ? (string) $o->get_customer_ip_address()
+            'customer_id' => static fn ($order): int => is_callable([$order, 'get_customer_id']) ? (int) $order->get_customer_id() : 0,
+            'item_count' => static fn ($order): int => is_callable([$order, 'get_item_count']) ? (int) $order->get_item_count() : 0,
+            'billing_email' => static fn ($order): string => is_callable([$order, 'get_billing_email']) ? (string) $order->get_billing_email() : '',
+            'billing_phone' => static fn ($order): string => is_callable([$order, 'get_billing_phone']) ? (string) $order->get_billing_phone() : '',
+            'billing_city' => static fn ($order): string => is_callable([$order, 'get_billing_city']) ? (string) $order->get_billing_city() : '',
+            'billing_country' => static fn ($order): string => is_callable([$order, 'get_billing_country']) ? (string) $order->get_billing_country() : '',
+            'shipping_city' => static fn ($order): string => is_callable([$order, 'get_shipping_city']) ? (string) $order->get_shipping_city() : '',
+            'shipping_country' => static fn ($order): string => is_callable([$order, 'get_shipping_country']) ? (string) $order->get_shipping_country() : '',
+            'customer_ip' => static fn ($order): string => is_callable([$order, 'get_customer_ip_address'])
+                ? (string) $order->get_customer_ip_address()
                 : '',
         ];
 

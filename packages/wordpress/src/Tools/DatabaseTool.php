@@ -21,6 +21,21 @@ final class DatabaseTool implements ToolInterface, ToolRoutingInterface
 {
     use HasToolExecutionContract;
 
+    public const EXAMPLES = [
+        [
+            'prompt' => 'what tables can you read?',
+            'arguments' => ['schema' => true],
+        ],
+        [
+            'prompt' => 'how many published posts are there?',
+            'arguments' => ['sql' => 'SELECT COUNT(*) AS published FROM {prefix}posts WHERE post_status = %s', 'bindings' => ['publish']],
+        ],
+        [
+            'prompt' => 'list a few page titles straight from the database',
+            'arguments' => ['sql' => 'SELECT post_title FROM {prefix}posts WHERE post_type = %s LIMIT 3', 'bindings' => ['page']],
+        ],
+    ];
+
     private const MAX_OUTPUT_BYTES = OutputByteCap::MAX_OUTPUT_BYTES;
 
     private const AUTO_LIMIT = 200;
@@ -47,21 +62,6 @@ final class DatabaseTool implements ToolInterface, ToolRoutingInterface
         'bindings',
         'schema',
         'limit',
-    ];
-
-    public const EXAMPLES = [
-        [
-            'prompt' => 'what tables can you read?',
-            'arguments' => ['schema' => true],
-        ],
-        [
-            'prompt' => 'how many published posts are there?',
-            'arguments' => ['sql' => 'SELECT COUNT(*) AS published FROM {prefix}posts WHERE post_status = %s', 'bindings' => ['publish']],
-        ],
-        [
-            'prompt' => 'list a few page titles straight from the database',
-            'arguments' => ['sql' => 'SELECT post_title FROM {prefix}posts WHERE post_type = %s LIMIT 3', 'bindings' => ['page']],
-        ],
     ];
 
     /**

@@ -17,6 +17,21 @@ final class WpPluginTool implements ToolInterface, ToolRoutingInterface
 {
     use HasToolExecutionContract;
 
+    public const EXAMPLES = [
+        [
+            'prompt' => 'what plugins are installed?',
+            'arguments' => [],
+        ],
+        [
+            'prompt' => 'how many plugins are active?',
+            'arguments' => ['aggregate' => true],
+        ],
+        [
+            'prompt' => 'which plugins are switched off?',
+            'arguments' => ['status' => 'inactive'],
+        ],
+    ];
+
     private const DEFAULT_LIMIT = 50;
 
     private const MAX_LIMIT = 200;
@@ -57,21 +72,6 @@ final class WpPluginTool implements ToolInterface, ToolRoutingInterface
         'search',
         'limit',
         'offset',
-    ];
-
-    public const EXAMPLES = [
-        [
-            'prompt' => 'what plugins are installed?',
-            'arguments' => [],
-        ],
-        [
-            'prompt' => 'how many plugins are active?',
-            'arguments' => ['aggregate' => true],
-        ],
-        [
-            'prompt' => 'which plugins are switched off?',
-            'arguments' => ['status' => 'inactive'],
-        ],
     ];
 
     /**
@@ -647,9 +647,9 @@ DESC;
         ];
 
         $row = [];
-        foreach ($columns as $col) {
-            if (array_key_exists($col, $allFields)) {
-                $row[$col] = $allFields[$col];
+        foreach ($columns as $column) {
+            if (array_key_exists($column, $allFields)) {
+                $row[$column] = $allFields[$column];
             }
         }
 

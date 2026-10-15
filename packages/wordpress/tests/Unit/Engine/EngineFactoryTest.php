@@ -187,17 +187,6 @@ final class EngineFactoryTest extends TestCase
         self::assertSame(5, $this->invoke('resolveMaxIterations', ['max_iterations' => 5]));
     }
 
-    public function test_resolve_store_messages_uses_saved_when_set(): void
-    {
-        self::assertTrue($this->invoke('resolveStoreMessages', ['store_messages' => '1']));
-        self::assertFalse($this->invoke('resolveStoreMessages', ['store_messages' => '0']));
-    }
-
-    public function test_resolve_store_messages_defaults_to_true(): void
-    {
-        self::assertTrue($this->invoke('resolveStoreMessages', []));
-    }
-
     public function test_build_memory_returns_privacy_aware_wrapper(): void
     {
         $memory = $this->invoke('buildMemory', true);

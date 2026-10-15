@@ -22,6 +22,8 @@ final class PhpClawRestController
 
     private const ROUTE = '/send';
 
+    private const MAX_MESSAGE_LENGTH = 40000;
+
     /**
      * Create a new REST controller instance.
      *
@@ -124,7 +126,7 @@ final class PhpClawRestController
             $response = $turn->response;
 
             return new \WP_REST_Response([
-                'text' => $response->text !== '' ? $response->text : self::EMPTY_RESPONSE_TEXT,
+                'text' => $response->text === '' ? self::EMPTY_RESPONSE_TEXT : $response->text,
                 'provider' => $response->provider,
                 'model' => $response->model,
                 'tokens' => ($response->inputTokens ?? 0) + ($response->outputTokens ?? 0),
@@ -191,11 +193,11 @@ final class PhpClawRestController
                 'type' => 'string',
                 'required' => true,
                 'sanitize_callback' => 'sanitize_text_field',
-                'validate_callback' => static function ($v): bool|\WP_Error {
-                    if (! is_string($v) || strlen(trim($v)) === 0) {
+                'validate_callback' => static function ($value): bool|\WP_Error {
+                    if (! is_string($value) || strlen(trim($value)) === 0) {
                         return new \WP_Error('phpclaw_empty', 'Message cannot be empty.', ['status' => 400]);
                     }
-                    if (mb_strlen($v) > 40000) {
+                    if (mb_strlen($value) > self::MAX_MESSAGE_LENGTH) {
                         return new \WP_Error('phpclaw_too_long', 'Message exceeds 40 000 character limit.', ['status' => 400]);
                     }
 
@@ -208,8 +210,8 @@ final class PhpClawRestController
                 'required' => false,
                 'default' => '',
                 'sanitize_callback' => 'sanitize_text_field',
-                'validate_callback' => static function ($v): bool|\WP_Error {
-                    if ($v !== '' && ! preg_match('/^[0-9A-Z]{26}$/', (string) $v)) {
+                'validate_callback' => static function ($value): bool|\WP_Error {
+                    if ($value !== '' && ! preg_match('/^[0-9A-Z]{26}$/', (string) $value)) {
                         return new \WP_Error('phpclaw_invalid_id', 'Invalid conversation_id format.', ['status' => 400]);
                     }
 
