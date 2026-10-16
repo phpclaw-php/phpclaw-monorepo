@@ -5,6 +5,14 @@ DeepSeek, Ollama or any OpenAI-compatible endpoint, runs tools in a ReAct loop, 
 through guards, remembers conversations, and powers every phpClaw adapter. Zero framework
 dependencies, PHP 8.1 and later.
 
+## 0.1.5 (2026-10-16)
+
+### Added
+- Configurable per-turn tool cap and always-include tools (#158)
+
+### Fixed
+- Load a skill by name regardless of case and _ versus - (#196)
+
 ## 0.1.4 (2026-10-09)
 
 ### Added
