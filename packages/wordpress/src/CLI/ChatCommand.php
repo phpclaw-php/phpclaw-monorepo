@@ -216,7 +216,8 @@ ART;
     }
 
     /**
-     * Stream one turn in the session's conversation; a failure is printed and the session goes on.
+     * Stream one turn in the session's conversation, then reload it from memory so the next turn keeps this turn's
+     * tool rows; a failure is printed and the session goes on.
      *
      * @param  string  $message  What the user typed.
      * @return void
@@ -233,7 +234,9 @@ ART;
         }
 
         $this->writeLine('');
-        $this->conversation = $turn->conversation;
+        $this->conversation = $this->engine->storeMessages()
+            ? $this->engine->conversation($turn->conversation->id)
+            : $turn->conversation;
         $this->rememberConversation($turn->conversation->id);
         $this->writeLine($this->dim($this->turnSummary($turn)));
     }
