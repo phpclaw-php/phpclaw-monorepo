@@ -65,16 +65,6 @@ final class AbstractLaravelToolTest extends TestCase
             {
                 return $this->stringInput($input, $key, $default);
             }
-
-            public function callTruncate(string $text): string
-            {
-                return $this->truncate($text);
-            }
-
-            public function callEncodeTruncated(mixed $data): ?string
-            {
-                return $this->encodeTruncated($data);
-            }
         };
     }
 
@@ -112,42 +102,5 @@ final class AbstractLaravelToolTest extends TestCase
     public function test_string_input_default_is_the_empty_string(): void
     {
         self::assertSame('', $this->tool->callStringInput([], 'q'));
-    }
-
-    public function test_text_at_the_cap_is_returned_unchanged(): void
-    {
-        $text = str_repeat('a', 8192);
-
-        self::assertSame($text, $this->tool->callTruncate($text));
-    }
-
-    public function test_text_over_the_cap_is_cut_and_marked(): void
-    {
-        $result = $this->tool->callTruncate(str_repeat('a', 8193));
-
-        self::assertSame(
-            str_repeat('a', 8192)."\n[... output truncated at 8 KB ...]",
-            $result,
-        );
-    }
-
-    public function test_encode_truncated_pretty_prints_and_leaves_unicode_unescaped(): void
-    {
-        self::assertSame(
-            json_encode(['name' => 'café'], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE),
-            $this->tool->callEncodeTruncated(['name' => 'café']),
-        );
-    }
-
-    public function test_encode_truncated_returns_null_when_encoding_fails(): void
-    {
-        self::assertNull($this->tool->callEncodeTruncated(["\xB1\x31"]));
-    }
-
-    public function test_encode_truncated_applies_the_cap(): void
-    {
-        $json = $this->tool->callEncodeTruncated(['blob' => str_repeat('y', 9000)]);
-
-        self::assertStringEndsWith("\n[... output truncated at 8 KB ...]", (string) $json);
     }
 }

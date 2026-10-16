@@ -8,6 +8,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Orchestra\Testbench\TestCase;
 use PhpClaw\Hooks\HookRegistry;
+use PhpClaw\Hooks\HookRunContext;
 use PhpClaw\Laravel\Memory\DatabaseMemory;
 use PhpClaw\Laravel\PhpClawServiceProvider;
 
@@ -265,6 +266,27 @@ final class DatabaseMemoryTest extends TestCase
         ]);
 
         $this->assertFalse($this->memory->has('has_expired_key'));
+    }
+
+    public function test_memory_events_inside_a_run_carry_the_run_id(): void
+    {
+        $runIds = [];
+        foreach (['memory.write', 'memory.read', 'memory.forget'] as $event) {
+            HookRegistry::on($event, function (array $context) use (&$runIds, $event): void {
+                $runIds[$event] = $context['run_id'] ?? null;
+            });
+        }
+
+        HookRunContext::withRun('01RUNMEMORYEVENTS00000000A', function (): void {
+            $this->memory->set('run_key', 'value', 'run_ns');
+            $this->memory->get('run_key', 'run_ns');
+            $this->memory->forget('run_key', 'run_ns');
+        });
+
+        $this->assertSame(
+            ['memory.write' => '01RUNMEMORYEVENTS00000000A', 'memory.read' => '01RUNMEMORYEVENTS00000000A', 'memory.forget' => '01RUNMEMORYEVENTS00000000A'],
+            $runIds,
+        );
     }
 
     public function test_set_fires_memory_write_event_with_key_payload(): void

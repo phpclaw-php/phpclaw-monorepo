@@ -15,6 +15,7 @@ use PhpClaw\Contracts\ClawInterface as PhpClawInterface;
 use PhpClaw\Exceptions\GuardException;
 use PhpClaw\Laravel\Http\Controllers\PhpClawController;
 use PhpClaw\Laravel\PhpClawServiceProvider;
+use PhpClaw\Laravel\Tests\Feature\ToolCallingClawFake;
 use PhpClaw\Memory\Contracts\MemoryInterface;
 use PhpClaw\Support\Ulid;
 use RuntimeException;
@@ -362,5 +363,25 @@ final class PhpClawControllerCallbackTest extends TestCase
 
         $this->assertIsArray($json['tool_calls']);
         $this->assertCount(0, $json['tool_calls']);
+    }
+
+    public function test_send_stores_the_tool_calls_with_the_conversation(): void
+    {
+        $agent = new ToolCallingClawFake;
+        $this->app->instance(PhpClawInterface::class, $agent);
+
+        $this->asUser()->postJson('/phpclaw/send', ['message' => 'how many rows?'], $this->token())->assertStatus(200);
+
+        $this->assertSame(['user', 'tool', 'assistant'], $agent->storedRoles());
+        $this->assertSame('db_query', $agent->persisted['history'][1]['tool_name']);
+    }
+
+    public function test_stream_stores_the_tool_calls_with_the_conversation(): void
+    {
+        $agent = new ToolCallingClawFake;
+
+        $this->invokeStreamCallback(new PhpClawController($agent), $this->makeStreamRequest('how many rows?'));
+
+        $this->assertSame(['user', 'tool', 'assistant'], $agent->storedRoles());
     }
 }

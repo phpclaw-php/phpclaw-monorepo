@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace PhpClaw\Laravel\Tests\Unit\Tools;
 
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Orchestra\Testbench\TestCase;
 use PhpClaw\Laravel\PhpClawServiceProvider;
 use PhpClaw\Laravel\Tools\QueueStatusTool;
@@ -101,6 +104,21 @@ final class QueueStatusToolTest extends TestCase
         $codes = array_column($envelope['warnings'], 'code');
         $this->assertContains('NOT_FOUND', $codes);
         $this->assertCount(2, $envelope['warnings']);
+    }
+
+    public function test_counts_come_from_the_configured_queue_tables(): void
+    {
+        config(['queue.connections.database.table' => 'app_jobs', 'queue.failed.table' => 'app_failed_jobs']);
+        Schema::create('app_jobs', static fn (Blueprint $table) => $table->id());
+        Schema::create('app_failed_jobs', static fn (Blueprint $table) => $table->id());
+        DB::table('app_jobs')->insert([['id' => 1], ['id' => 2]]);
+        DB::table('app_failed_jobs')->insert([['id' => 1]]);
+
+        $result = json_decode($this->tool->execute([]), associative: true);
+
+        $this->assertSame(2, $result['data']['pending']);
+        $this->assertSame(1, $result['data']['failed']);
+        $this->assertSame([], $result['warnings']);
     }
 
     public function test_execute_is_read_only(): void

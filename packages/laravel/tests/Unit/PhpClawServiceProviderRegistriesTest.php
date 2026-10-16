@@ -313,6 +313,22 @@ final class PhpClawServiceProviderRegistriesTest extends TestCase
         $this->assertSame(2, HookRegistry::count());
     }
 
+    public function test_hook_entry_whose_handler_cannot_be_called_is_skipped(): void
+    {
+        HookRegistry::reset();
+
+        $this->app['config']->set('phpclaw.events.bridge', false);
+        $this->app['config']->set('phpclaw.hooks', [
+            ['event' => 'agent.before', 'handler' => 'No\\Such\\Listener::handle'],
+        ]);
+
+        $provider = new PhpClawServiceProvider($this->app);
+        $provider->register();
+        $provider->boot();
+
+        $this->assertSame(2, HookRegistry::count());
+    }
+
     public function test_multiple_hooks_for_different_events_registered(): void
     {
         HookRegistry::reset();

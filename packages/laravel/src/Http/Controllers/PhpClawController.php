@@ -34,6 +34,8 @@ final class PhpClawController extends Controller
 
     private const RATE_LIMITED = 'Rate limit reached, try again shortly.';
 
+    private const KEYLESS_PROVIDERS = ['ollama', 'custom'];
+
     /**
      * Bind the resolved phpClaw engine this controller sends and streams through.
      *
@@ -45,7 +47,7 @@ final class PhpClawController extends Controller
     ) {}
 
     /**
-     * POST /phpclaw/send, send a message and return the full agent response.
+     * POST /phpclaw/send, send a message, store its tool calls with the conversation and return the full agent response.
      *
      * @param  Request  $request
      * @return JsonResponse
@@ -66,7 +68,7 @@ final class PhpClawController extends Controller
         $apiKey = (string) config('phpclaw.api_key', '');
         $provider = (string) config('phpclaw.provider', '');
 
-        if ($apiKey === '' && $provider !== '' && $provider !== 'ollama') {
+        if ($apiKey === '' && $provider !== '' && ! in_array($provider, self::KEYLESS_PROVIDERS, true)) {
             return response()->json(['error' => 'phpClaw is not configured. Set your provider and API key.'], 503);
         }
 
@@ -74,7 +76,12 @@ final class PhpClawController extends Controller
 
         try {
             $conversation = $this->agent->conversation($conversationId);
-            $turn = $this->agent->sendInConversation($conversation, $message);
+            $turn = $this->agent->streamInConversation(
+                $conversation,
+                $message,
+                static function (string $token): void {},
+                StreamEventBridge::toolCallPersister(),
+            );
             $response = $turn->response;
 
             return response()->json([
@@ -137,7 +144,7 @@ final class PhpClawController extends Controller
     }
 
     /**
-     * POST /phpclaw/chat/stream, stream a conversation turn as SSE.
+     * POST /phpclaw/chat/stream, stream a conversation turn as SSE and store its tool calls with the conversation.
      *
      * @param  Request  $request
      * @return StreamedResponse
@@ -171,7 +178,7 @@ final class PhpClawController extends Controller
             $apiKey = (string) config('phpclaw.api_key', '');
             $provider = (string) config('phpclaw.provider', '');
 
-            if ($apiKey === '' && $provider !== '' && $provider !== 'ollama') {
+            if ($apiKey === '' && $provider !== '' && ! in_array($provider, self::KEYLESS_PROVIDERS, true)) {
                 $emit('error', ['message' => 'phpClaw is not configured. Set your provider and API key.']);
 
                 return;
@@ -189,6 +196,7 @@ final class PhpClawController extends Controller
                             $emit('chunk', ['text' => $token]);
                         }
                     },
+                    StreamEventBridge::toolCallPersister(),
                 );
 
                 $response = $turn->response;

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace PhpClaw\Laravel\Tests\Feature\Durable;
 
+use PhpClaw\Exceptions\ProviderException;
 use PhpClaw\Providers\Contracts\ProviderInterface;
 
 final class ScriptedProvider implements ProviderInterface
@@ -17,6 +18,10 @@ final class ScriptedProvider implements ProviderInterface
 
         if ($reply === 'throw') {
             throw new \RuntimeException('provider down');
+        }
+
+        if ($reply === 'provider-error') {
+            throw new ProviderException('provider down', 503);
         }
 
         return $reply + ['input_tokens' => 5, 'output_tokens' => 0];

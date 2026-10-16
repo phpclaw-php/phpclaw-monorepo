@@ -22,6 +22,8 @@ final class LogTool extends AbstractLaravelTool
 
     private const ALLOWED_KEYS = ['lines', 'level'];
 
+    private const READ_CHUNK_BYTES = 4096;
+
     /**
      * Bind the log path this tool reads, or empty to resolve storage/logs/laravel.log.
      *
@@ -71,7 +73,7 @@ final class LogTool extends AbstractLaravelTool
                 ],
                 'level' => [
                     'type' => 'string',
-                    'description' => 'Filter to only show lines containing this log level (debug/info/notice/warning/error/critical/alert/emergency)',
+                    'description' => 'Only entries logged at this level (debug/info/notice/warning/error/critical/alert/emergency)',
                     'enum' => self::VALID_LEVELS,
                 ],
             ],
@@ -97,7 +99,7 @@ final class LogTool extends AbstractLaravelTool
     {
         return new ToolRoutingMetadata(
             domains: ['diagnostics', 'system'],
-            tags: ['log', 'logs', 'error', 'errors', 'warning', 'notice', 'debug', 'exception', 'stack', 'trace', 'laravel', 'tail'],
+            tags: ['log', 'logs', 'error', 'errors', 'warning', 'notice', 'debug', 'exception', 'stack', 'trace', 'laravel', 'tail', 'logged', 'crash', 'crashed', 'failure'],
             intents: ['read the log', 'show recent errors', 'tail the laravel log'],
             examples: ['show me the most recent log entries'],
         );
@@ -127,7 +129,7 @@ final class LogTool extends AbstractLaravelTool
             && (! is_int($input['lines']) || $input['lines'] < 1 || $input['lines'] > self::MAX_LINES)) {
             return [
                 'input' => $input,
-                'result' => $this->error('INVALID_ARGUMENT', '"lines" must be an integer between 1 and 200.'),
+                'result' => $this->error('INVALID_ARGUMENT', sprintf('"lines" must be an integer between 1 and %d.', self::MAX_LINES)),
             ];
         }
 
@@ -159,7 +161,7 @@ final class LogTool extends AbstractLaravelTool
         $rawLevel = isset($input['level']) && is_string($input['level']) ? strtolower($input['level']) : null;
         $level = ($rawLevel !== null && in_array($rawLevel, self::VALID_LEVELS, strict: true)) ? $rawLevel : null;
 
-        $logPath = $this->logPath !== '' ? $this->logPath : storage_path('logs/laravel.log');
+        $logPath = $this->logPath === '' ? storage_path('logs/laravel.log') : $this->logPath;
 
         if (! file_exists($logPath)) {
             throw new ToolException("read_log: log file not found at '{$logPath}'.");
@@ -232,7 +234,7 @@ final class LogTool extends AbstractLaravelTool
         if ($execution['truncated']) {
             $warnings[] = [
                 'code' => 'OUTPUT_TRUNCATED',
-                'message' => $dropped.' line(s) were dropped from this response to keep it within the 8 KB output limit. Ask for fewer lines.',
+                'message' => sprintf('%d line(s) were dropped from this response to keep it within the %d KB output limit. Ask for fewer lines.', $dropped, self::MAX_OUTPUT_BYTES / self::BYTES_PER_KB),
             ];
         }
 
@@ -259,11 +261,11 @@ final class LogTool extends AbstractLaravelTool
     }
 
     /**
-     * Scan the whole log and keep the last $count lines that contain the level, case-insensitive.
+     * Scan the whole log and keep the last $count entries logged at the level (Laravel writes it as `.LEVEL:`).
      *
      * @param  string  $path  Absolute path to the log file.
      * @param  int  $count  Maximum number of matching lines to keep.
-     * @param  string  $level  Level substring a line must contain.
+     * @param  string  $level  Lower-case level name.
      * @return string[] Last matching lines, newest last.
      *
      * @throws ToolException When the file cannot be opened.
@@ -277,12 +279,13 @@ final class LogTool extends AbstractLaravelTool
         }
 
         $kept = [];
+        $marker = '.'.strtoupper($level).':';
 
         try {
             while (($line = fgets($handle)) !== false) {
                 $line = rtrim($line, "\n");
 
-                if (stripos($line, $level) === false) {
+                if (! str_contains($line, $marker)) {
                     continue;
                 }
 
@@ -327,10 +330,8 @@ final class LogTool extends AbstractLaravelTool
             $buffer = '';
             $collected = 0;
             $position = $fileSize;
-            $chunkSize = 4096;
-
             while ($position > 0 && $collected < $count) {
-                $readSize = min($chunkSize, $position);
+                $readSize = min(self::READ_CHUNK_BYTES, $position);
                 $position -= $readSize;
                 fseek($handle, $position);
                 $chunk = fread($handle, $readSize);

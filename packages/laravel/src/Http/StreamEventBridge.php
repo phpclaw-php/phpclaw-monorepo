@@ -50,6 +50,34 @@ final class StreamEventBridge implements HookInterface
     }
 
     /**
+     * Build the beforePersist callback that stores the tool calls collected since begin() as tool rows before the
+     * last assistant message.
+     *
+     * @return \Closure(array<string, mixed>): array<string, mixed>
+     */
+    public static function toolCallPersister(): \Closure
+    {
+        return static function (array $payload): array {
+            if (self::$toolCalls === []) {
+                return $payload;
+            }
+
+            $history = (array) ($payload['history'] ?? []);
+            $rows = array_map(static fn (array $call): array => [
+                'role' => 'tool',
+                'content' => $call['tool_result'],
+                'tool_name' => $call['tool_name'],
+                'tool_input' => $call['tool_input'],
+            ], self::$toolCalls);
+
+            array_splice($history, self::lastAssistantIndex($history), 0, $rows);
+            $payload['history'] = $history;
+
+            return $payload;
+        };
+    }
+
+    /**
      * Relay a ToolBefore/ToolAfter event to the active SSE emitter.
      *
      * @param  array<string, mixed>  $context  Event context (carries the fired event name under 'event').
@@ -88,5 +116,22 @@ final class StreamEventBridge implements HookInterface
             self::$toolCalls[] = $entry;
             $emit('tool_after', $entry);
         }
+    }
+
+    /**
+     * Index of the last assistant message, or the history length when there is none.
+     *
+     * @param  array<int, mixed>  $history  Conversation history.
+     * @return int
+     */
+    private static function lastAssistantIndex(array $history): int
+    {
+        for ($index = count($history) - 1; $index >= 0; $index--) {
+            if (is_array($history[$index]) && ($history[$index]['role'] ?? '') === 'assistant') {
+                return $index;
+            }
+        }
+
+        return count($history);
     }
 }

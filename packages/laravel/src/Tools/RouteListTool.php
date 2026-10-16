@@ -133,7 +133,7 @@ final class RouteListTool extends AbstractLaravelTool
             $routes[] = [
                 'methods' => implode('|', $route->methods()),
                 'uri' => $uri,
-                'name' => $name !== '' ? $name : null,
+                'name' => $name === '' ? null : $name,
                 'action' => $action,
             ];
         }
@@ -193,8 +193,9 @@ final class RouteListTool extends AbstractLaravelTool
             $warnings[] = [
                 'code' => 'OUTPUT_TRUNCATED',
                 'message' => sprintf(
-                    '%d route(s) omitted because the output exceeded the 8 KB cap.',
+                    '%d route(s) omitted because the output exceeded the %d KB cap.',
                     $dropped,
+                    self::MAX_OUTPUT_BYTES / self::BYTES_PER_KB,
                 ),
             ];
         }

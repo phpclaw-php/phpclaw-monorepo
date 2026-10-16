@@ -17,15 +17,15 @@ abstract class AbstractDatabaseMemory implements MemoryInterface
      * Run a memory operation, translating any unexpected failure into a MemoryException.
      *
      * @param  string  $operation  Label used in the wrapped message.
-     * @param  \Closure  $fn  The operation to run.
+     * @param  \Closure  $work  The operation to run.
      * @return mixed
      *
      * @throws MemoryException
      */
-    protected function guard(string $operation, \Closure $fn): mixed
+    protected function guard(string $operation, \Closure $work): mixed
     {
         try {
-            return $fn();
+            return $work();
         } catch (ConversationAccessDeniedException|MemoryException $e) {
             throw $e;
         } catch (\Throwable $e) {

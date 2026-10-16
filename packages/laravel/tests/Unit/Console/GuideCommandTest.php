@@ -8,6 +8,7 @@ use Illuminate\Contracts\Console\Kernel;
 use Illuminate\Support\Facades\Artisan;
 use Orchestra\Testbench\TestCase;
 use PhpClaw\Laravel\PhpClawServiceProvider;
+use PhpClaw\Laravel\Tools\LogTool;
 use PhpClaw\Providers\OpenAIProvider;
 use PhpClaw\Providers\ProviderCatalogue;
 use PhpClaw\Skills\ArraySkill;
@@ -107,11 +108,34 @@ final class GuideCommandTest extends TestCase
             ->expectsOutputToContain('MEMORY');
     }
 
-    public function test_section_hooks_lists_registered_listeners_only(): void
+    public function test_section_hooks_says_none_are_configured_when_the_config_has_none(): void
     {
         $this->artisan('phpclaw:guide', ['--section' => 'hooks'])
             ->assertSuccessful()
-            ->expectsOutputToContain('No hooks registered');
+            ->expectsOutputToContain('No hooks configured in config/phpclaw.php.')
+            ->doesntExpectOutputToContain('No hooks registered');
+    }
+
+    public function test_section_hooks_lists_the_configured_hook_events(): void
+    {
+        config()->set('phpclaw.hooks', [['event' => 'agent.after', 'handler' => [self::class, 'class']]]);
+
+        $this->artisan('phpclaw:guide', ['--section' => 'hooks'])
+            ->assertSuccessful()
+            ->expectsOutputToContain('Hooks configured in config/phpclaw.php (1):')
+            ->expectsOutputToContain('agent.after');
+    }
+
+    public function test_section_tools_lists_the_active_tools(): void
+    {
+        config()->set('phpclaw.tools', [LogTool::class]);
+
+        $this->artisan('phpclaw:guide', ['--section' => 'tools'])
+            ->assertSuccessful()
+            ->expectsOutputToContain('Active tools (')
+            ->expectsOutputToContain('  read_log')
+            ->expectsOutputToContain('  code_search')
+            ->expectsOutputToContain('test_run');
     }
 
     public function test_section_skills_lists_registered_skills_dynamically(): void

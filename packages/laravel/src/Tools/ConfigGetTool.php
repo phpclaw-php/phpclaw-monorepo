@@ -142,10 +142,10 @@ final class ConfigGetTool implements ToolInterface, ToolRoutingInterface
     }
 
     /**
-     * Read the config value for the validated key, redacting secrets.
+     * Read the config value for the validated key, redacting secrets; a non-string scalar keeps its type.
      *
      * @param  array<string, mixed>  $input  Validated runtime input.
-     * @return array{key: string, value: string|null, found: bool, redacted: bool, kind: string}
+     * @return array{key: string, value: string|int|float|bool|null, found: bool, redacted: bool, kind: string}
      */
     protected function perform(array $input): array
     {
@@ -169,7 +169,7 @@ final class ConfigGetTool implements ToolInterface, ToolRoutingInterface
             return ['key' => $key, 'value' => null, 'found' => true, 'redacted' => false, 'kind' => 'non_scalar'];
         }
 
-        return ['key' => $key, 'value' => $this->stripUrlCredentials((string) $value), 'found' => true, 'redacted' => false, 'kind' => 'scalar'];
+        return ['key' => $key, 'value' => is_string($value) ? $this->stripUrlCredentials($value) : $value, 'found' => true, 'redacted' => false, 'kind' => 'scalar'];
     }
 
     /**
@@ -281,7 +281,7 @@ final class ConfigGetTool implements ToolInterface, ToolRoutingInterface
     {
         return (string) preg_replace_callback(
             '#([a-z][a-z0-9+.\-]*://)[^/\s:@]+:[^/\s:@]+@#i',
-            static fn (array $m): string => $m[1].self::REDACTION.'@',
+            static fn (array $match): string => $match[1].self::REDACTION.'@',
             $value,
         );
     }

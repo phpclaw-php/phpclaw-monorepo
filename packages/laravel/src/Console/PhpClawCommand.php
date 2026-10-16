@@ -15,6 +15,7 @@ use PhpClaw\Exceptions\ToolException;
 use PhpClaw\Laravel\Console\Concerns\RendersToolTrace;
 use PhpClaw\Laravel\Console\Concerns\ReportsAgentTurns;
 use PhpClaw\Laravel\Console\Concerns\TracksLastConversation;
+use PhpClaw\Laravel\Http\StreamEventBridge;
 
 /**
  * Artisan command `php artisan phpclaw "<message>"`, sends one message to the agent and prints the response and a summary.
@@ -37,7 +38,7 @@ final class PhpClawCommand extends Command
     protected $description = 'Send a message to the phpClaw AI agent';
 
     /**
-     * Send the message argument to the agent and print the response.
+     * Send the message argument to the agent, store its tool calls with the conversation and print the response.
      *
      * @return int Artisan exit code.
      */
@@ -60,22 +61,22 @@ final class PhpClawCommand extends Command
             return self::FAILURE;
         }
 
+        $stream = (bool) $this->option('stream');
+        StreamEventBridge::begin(static function (string $event, array $payload): void {});
+
         try {
             $conversation = $this->openConversation($phpclaw, (string) $this->option('conv-id'), (bool) $this->option('continue'));
-
-            if ($this->option('stream')) {
-                $turn = $phpclaw->streamInConversation(
-                    $conversation,
-                    $message,
-                    function (string $token): void {
+            $turn = $phpclaw->streamInConversation(
+                $conversation,
+                $message,
+                function (string $token) use ($stream): void {
+                    if ($stream) {
                         $this->output->write($token);
-                    },
-                );
-                $this->line('');
-            } else {
-                $turn = $phpclaw->sendInConversation($conversation, $message);
-                $this->line($turn->response->text);
-            }
+                    }
+                },
+                StreamEventBridge::toolCallPersister(),
+            );
+            $this->line($stream ? '' : $turn->response->text);
 
             $this->rememberConversation($turn->conversation->id);
 
@@ -92,6 +93,7 @@ final class PhpClawCommand extends Command
 
             return self::FAILURE;
         } finally {
+            StreamEventBridge::end();
             $this->stopToolTrace();
         }
     }

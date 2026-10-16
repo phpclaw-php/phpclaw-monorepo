@@ -220,6 +220,41 @@ final class StreamEventBridgeTest extends TestCase
         $this->assertSame([], StreamEventBridge::toolCalls());
     }
 
+    public function test_the_persister_stores_collected_tool_calls_before_the_last_reply(): void
+    {
+        StreamEventBridge::begin(static function (string $event, array $data): void {});
+        (new StreamEventBridge)->handle(['event' => LifecycleEvent::ToolAfter->value, 'tool_name' => 'read_log', 'tool_input' => ['lines' => 5], 'tool_result' => 'five lines']);
+
+        $payload = (StreamEventBridge::toolCallPersister())(['history' => [
+            ['role' => 'user', 'content' => 'show the log'],
+            ['role' => 'assistant', 'content' => 'Here it is.'],
+        ]]);
+
+        $this->assertSame([
+            ['role' => 'user', 'content' => 'show the log'],
+            ['role' => 'tool', 'content' => 'five lines', 'tool_name' => 'read_log', 'tool_input' => ['lines' => 5]],
+            ['role' => 'assistant', 'content' => 'Here it is.'],
+        ], $payload['history']);
+    }
+
+    public function test_the_persister_leaves_the_payload_alone_when_no_tool_ran(): void
+    {
+        StreamEventBridge::begin(static function (string $event, array $data): void {});
+        $payload = ['history' => [['role' => 'user', 'content' => 'hi'], ['role' => 'assistant', 'content' => 'hello']]];
+
+        $this->assertSame($payload, (StreamEventBridge::toolCallPersister())($payload));
+    }
+
+    public function test_the_persister_appends_when_there_is_no_reply_yet(): void
+    {
+        StreamEventBridge::begin(static function (string $event, array $data): void {});
+        (new StreamEventBridge)->handle(['event' => LifecycleEvent::ToolAfter->value, 'tool_name' => 'route_list', 'tool_input' => [], 'tool_result' => '[]']);
+
+        $payload = (StreamEventBridge::toolCallPersister())(['history' => [['role' => 'user', 'content' => 'routes?']]]);
+
+        $this->assertSame(['user', 'tool'], array_column($payload['history'], 'role'));
+    }
+
     public function test_handle_ignores_unknown_event_types(): void
     {
         $emitted = [];

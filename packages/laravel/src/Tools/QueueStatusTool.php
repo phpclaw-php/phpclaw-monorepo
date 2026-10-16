@@ -16,6 +16,10 @@ final class QueueStatusTool extends AbstractLaravelTool
 {
     private const ALLOWED_KEYS = [];
 
+    private const DEFAULT_JOBS_TABLE = 'jobs';
+
+    private const DEFAULT_FAILED_TABLE = 'failed_jobs';
+
     /**
      * Return the tool identifier used by the agent to invoke this tool.
      *
@@ -98,19 +102,23 @@ final class QueueStatusTool extends AbstractLaravelTool
     }
 
     /**
-     * Query the queue connection and job table row counts.
+     * Query the queue connection and the row counts of the job tables the queue config names.
      *
      * @param  array<string, mixed>  $input  Validated runtime input.
-     * @return array{connection: string, pending: int|null, failed: int|null}
+     * @return array{connection: string, pending: int|null, failed: int|null, jobs_table: string, failed_table: string}
      */
     protected function perform(array $input): array
     {
         $connection = config('queue.default', 'sync');
+        $jobsTable = (string) config('queue.connections.database.table', self::DEFAULT_JOBS_TABLE);
+        $failedTable = (string) config('queue.failed.table', self::DEFAULT_FAILED_TABLE);
 
         return [
             'connection' => is_string($connection) ? $connection : 'sync',
-            'pending' => $this->countTable('jobs'),
-            'failed' => $this->countTable('failed_jobs'),
+            'pending' => $this->countTable($jobsTable),
+            'failed' => $this->countTable($failedTable),
+            'jobs_table' => $jobsTable,
+            'failed_table' => $failedTable,
         ];
     }
 
@@ -146,14 +154,14 @@ final class QueueStatusTool extends AbstractLaravelTool
         if ($execution['pending'] === null) {
             $warnings[] = [
                 'code' => 'NOT_FOUND',
-                'message' => 'The "jobs" table was not found, so the pending count is unavailable.',
+                'message' => sprintf('The "%s" table was not found, so the pending count is unavailable.', $execution['jobs_table']),
             ];
         }
 
         if ($execution['failed'] === null) {
             $warnings[] = [
                 'code' => 'NOT_FOUND',
-                'message' => 'The "failed_jobs" table was not found, so the failed count is unavailable.',
+                'message' => sprintf('The "%s" table was not found, so the failed count is unavailable.', $execution['failed_table']),
             ];
         }
 

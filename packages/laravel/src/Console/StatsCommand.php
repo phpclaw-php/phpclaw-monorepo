@@ -13,14 +13,14 @@ use PhpClaw\Laravel\Memory\DatabaseConversationMemory;
  */
 final class StatsCommand extends Command
 {
-    protected $signature = 'phpclaw:stats';
-
-    protected $description = 'Display phpClaw conversation and message statistics';
-
     private const DATABASE_DRIVERS = [
         'database', 'database_kv', 'database_conversation',
         'eloquent', 'eloquent_kv', 'eloquent_conversation',
     ];
+
+    protected $signature = 'phpclaw:stats';
+
+    protected $description = 'Display phpClaw conversation and message statistics';
 
     /**
      * Print conversation, message, and 24-hour activity counts.

@@ -133,7 +133,18 @@ final class TestRunTool extends AbstractLaravelTool implements MutatingToolInter
 
         [$exitCode, $output] = ($this->runner)($command, base_path());
 
-        return ['exit_code' => $exitCode, 'output' => substr($output, -self::MAX_OUTPUT_BYTES), 'command' => $command];
+        return ['exit_code' => $exitCode, 'output' => self::outputTail($output), 'command' => $command];
+    }
+
+    /**
+     * At most the last MAX_OUTPUT_BYTES bytes of the output, starting on a whole character.
+     *
+     * @param  string  $output  Combined command output.
+     * @return string
+     */
+    private static function outputTail(string $output): string
+    {
+        return (string) preg_replace('/^[\x80-\xBF]+/', '', substr($output, -self::MAX_OUTPUT_BYTES));
     }
 
     /**

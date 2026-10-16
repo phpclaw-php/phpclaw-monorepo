@@ -143,6 +143,16 @@ final class CacheInspectToolTest extends TestCase
         $this->assertLessThanOrEqual(256, strlen($preview));
     }
 
+    public function test_a_long_preview_is_cut_on_a_character_boundary(): void
+    {
+        Cache::put('phpclaw_utf8_key', str_repeat('a', 255).'é and more', 60);
+
+        $envelope = json_decode($this->tool->execute(['key' => 'phpclaw_utf8_key']), associative: true);
+
+        $this->assertTrue($envelope['success']);
+        $this->assertSame(str_repeat('a', 255), $envelope['data']['preview']);
+    }
+
     public function test_execute_never_mutates_cache(): void
     {
         Cache::put('phpclaw_immutable_key', 'original', 60);

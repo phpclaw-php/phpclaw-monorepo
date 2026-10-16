@@ -144,10 +144,7 @@ final class SkillResolverDelegationTest extends TestCase
             ['class' => $skillClass],
         ]);
 
-        $method = new \ReflectionMethod(EngineFactory::class, 'resolveSkills');
-        $method->setAccessible(true);
-        /** @var SkillInterface[] $resolved */
-        $resolved = $method->invoke(null);
+        $resolved = EngineFactory::build($this->app)->config()->skills;
 
         $names = array_map(static fn (SkillInterface $s): string => $s->name(), $resolved);
 

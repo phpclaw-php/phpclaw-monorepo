@@ -74,7 +74,7 @@ return [
     ))),
 
     // Tools sent to the model per turn: 0 uses the profile and model limit, -1 sends every tool, N sends N.
-    'max_tools_per_turn' => (int) env('PHPCLAW_MAX_TOOLS_PER_TURN', 0),
+    'max_tools_per_turn' => max(-1, (int) env('PHPCLAW_MAX_TOOLS_PER_TURN', 0)),
 
     // Tool names sent on every turn, outside max_tools_per_turn, e.g. file_read,file_edit.
     'always_include_tools' => array_values(array_filter(array_map(
@@ -92,10 +92,10 @@ return [
 
     'skills' => [],
 
-    'remote_skill_urls' => array_values(array_filter(array_map(
-        'trim',
-        explode(',', (string) env('PHPCLAW_REMOTE_SKILL_URLS', ''))
-    ))),
+    'remote_skill_urls' => array_values(array_filter(
+        array_map('trim', explode(',', (string) env('PHPCLAW_REMOTE_SKILL_URLS', ''))),
+        static fn (string $url): bool => str_starts_with($url, 'https://'),
+    )),
 
     'events' => [
         'bridge' => env('PHPCLAW_EVENTS_BRIDGE', true),

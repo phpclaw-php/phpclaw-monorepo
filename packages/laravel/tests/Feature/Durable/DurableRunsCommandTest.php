@@ -137,6 +137,16 @@ final class DurableRunsCommandTest extends TestCase
         self::assertSame(['user', 'assistant'], $this->roles($conversationId));
     }
 
+    public function test_resume_reports_a_provider_failure_as_one_line_and_exit_1(): void
+    {
+        [$runId] = $this->startAsUser($this->engine(ScriptedProvider::lookupPlan(2), stepBudget: 1, pauseForApproval: false), 7, 'look twice');
+        $this->engine([ScriptedProvider::lookupPlan(2)[0], 'provider-error'], pauseForApproval: false);
+
+        $this->artisan('phpclaw:runs', ['action' => 'resume', 'run' => $runId])
+            ->expectsOutputToContain('Provider error: the LLM provider returned an error.')
+            ->assertFailed();
+    }
+
     public function test_resume_due_finishes_due_runs_as_their_owners_and_prints_the_counts(): void
     {
         [, $conversationId] = $this->startAsUser($this->engine(ScriptedProvider::lookupPlan(2), stepBudget: 1, pauseForApproval: false), 7, 'look twice');

@@ -18,7 +18,6 @@ use PhpClaw\Memory\PrivacyAwareMemory;
 use PhpClaw\Providers\Contracts\ProviderInterface;
 use PhpClaw\Providers\OpenAIPresets;
 use PhpClaw\Providers\OpenAIProvider;
-use PhpClaw\Skills\Contracts\SkillInterface;
 use PhpClaw\Skills\SkillResolver;
 use PhpClaw\Tools\Contracts\ToolInterface;
 use PhpClaw\Tools\FileEditTool;
@@ -43,6 +42,22 @@ final class EngineFactory
         'group:admin' => [],
     ];
 
+    private const CUSTOM_PROVIDER = 'custom';
+
+    private const MAX_ITERATIONS = 50;
+
+    private const MAX_SYSTEM_PROMPT_LENGTH = 8000;
+
+    private const MAX_REMOTE_SKILL_URLS = 50;
+
+    private const MAX_RATE_LIMIT_RPM = 600;
+
+    private const MIN_RESPONSE_CACHE_TTL = 60;
+
+    private const MAX_RESPONSE_CACHE_TTL = 86_400;
+
+    private const DEFAULT_RESPONSE_CACHE_TTL = 3600;
+
     /**
      * Build a fully-configured engine from the application container and config.
      *
@@ -60,7 +75,7 @@ final class EngineFactory
         $override = self::buildCustomProviderOverride();
 
         $providerSlug = (string) config('phpclaw.provider', '');
-        if ($providerSlug === 'custom' && $override === null) {
+        if ($providerSlug === self::CUSTOM_PROVIDER && $override === null) {
             $providerSlug = '';
         }
 
@@ -69,19 +84,19 @@ final class EngineFactory
             ->provider($providerSlug)
             ->model((string) config('phpclaw.model', ''))
             ->storeMessages((bool) config('phpclaw.store_messages', true))
-            ->maxIterations(max(1, min(50, (int) config('phpclaw.max_iterations', ClawConfig::DEFAULT_MAX_ITERATIONS))))
+            ->maxIterations(max(1, min(self::MAX_ITERATIONS, (int) config('phpclaw.max_iterations', ClawConfig::DEFAULT_MAX_ITERATIONS))))
             ->maxToolsPerTurn(self::resolveMaxToolsPerTurn($providerSlug))
             ->alwaysIncludeTools((array) config('phpclaw.always_include_tools', []))
             ->tools(self::resolveTools($app))
             ->shellAllowlist((array) config('phpclaw.shell_allowlist', []))
             ->memory($memory)
-            ->systemPrompt(mb_substr((string) config('phpclaw.system_prompt', ''), 0, 8000))
+            ->systemPrompt(self::systemPrompt())
             ->maxTokens((int) config('phpclaw.max_tokens', 0))
             ->promptCache((bool) config('phpclaw.prompt_cache', false))
             ->thinkingBudget((int) config('phpclaw.thinking_budget', 0))
-            ->skills(self::resolveSkills());
+            ->skills(SkillResolver::resolve((array) config('phpclaw.skills', [])));
 
-        $remoteSkillUrls = array_slice((array) config('phpclaw.remote_skill_urls', []), 0, 50);
+        $remoteSkillUrls = array_slice((array) config('phpclaw.remote_skill_urls', []), 0, self::MAX_REMOTE_SKILL_URLS);
         foreach ($remoteSkillUrls as $url) {
             if (is_string($url) && trim($url) !== '') {
                 $builder->withRemoteSkills(trim($url));
@@ -143,10 +158,10 @@ final class EngineFactory
      */
     private static function applyAgentPrimitives(ClawBuilder $builder, Application $app, string $primaryProvider): void
     {
-        $resolvedPrimary = $primaryProvider !== '' ? $primaryProvider : (new ClawConfig)->providerName;
+        $resolvedPrimary = $primaryProvider === '' ? (new ClawConfig)->providerName : $primaryProvider;
         $fallbackProvider = (string) config('phpclaw.fallback_provider', '');
         $fallbackCompatible = $fallbackProvider !== ''
-            && $fallbackProvider !== 'custom'
+            && $fallbackProvider !== self::CUSTOM_PROVIDER
             && ToolRegistry::toolFormat($fallbackProvider) === ToolRegistry::toolFormat($resolvedPrimary);
 
         if ($fallbackCompatible) {
@@ -161,7 +176,7 @@ final class EngineFactory
             ]);
         }
 
-        $rateLimit = max(0, min(600, (int) config('phpclaw.rate_limit_rpm', 0)));
+        $rateLimit = max(0, min(self::MAX_RATE_LIMIT_RPM, (int) config('phpclaw.rate_limit_rpm', 0)));
         $cacheOn = (bool) config('phpclaw.response_cache', false);
 
         if ($rateLimit > 0 || $cacheOn) {
@@ -172,7 +187,7 @@ final class EngineFactory
             }
 
             if ($cacheOn) {
-                $ttl = max(60, min(86_400, (int) config('phpclaw.response_cache_ttl', 3600)));
+                $ttl = max(self::MIN_RESPONSE_CACHE_TTL, min(self::MAX_RESPONSE_CACHE_TTL, (int) config('phpclaw.response_cache_ttl', self::DEFAULT_RESPONSE_CACHE_TTL)));
                 $builder->responseCache($store, $ttl);
             }
         }
@@ -195,6 +210,7 @@ final class EngineFactory
     {
         $toolClasses = (array) config('phpclaw.tools', []);
         $allowPhpWrite = $forceAllowPhpWrite ?? LaravelConsole::isInteractive($app);
+        $workspaceRoot = (string) config('phpclaw.workspace_root', storage_path('phpclaw'));
         $tools = [];
         $seen = [];
 
@@ -213,22 +229,15 @@ final class EngineFactory
                 ShellTool::class => new ShellTool(
                     allowlist: (array) config('phpclaw.shell_allowlist', []),
                 ),
-                FileReadTool::class => new FileReadTool(
-                    workspaceRoot: (string) config('phpclaw.workspace_root', storage_path('phpclaw')),
-                ),
-                FileWriteTool::class => new FileWriteTool(
-                    workspaceRoot: (string) config('phpclaw.workspace_root', storage_path('phpclaw')),
-                    allowPhpWrite: $allowPhpWrite,
-                ),
-                FileEditTool::class => new FileEditTool(
-                    workspaceRoot: (string) config('phpclaw.workspace_root', storage_path('phpclaw')),
-                ),
+                FileReadTool::class => new FileReadTool(workspaceRoot: $workspaceRoot),
+                FileWriteTool::class => new FileWriteTool(workspaceRoot: $workspaceRoot, allowPhpWrite: $allowPhpWrite),
+                FileEditTool::class => new FileEditTool(workspaceRoot: $workspaceRoot),
                 default => $app->make($class),
             };
         }
 
         $discoveredConfig = [
-            'workspaceRoot' => (string) config('phpclaw.workspace_root', storage_path('phpclaw')),
+            'workspaceRoot' => $workspaceRoot,
             'projectRoot' => base_path(),
             'allowlist' => (array) config('phpclaw.shell_allowlist', []),
             'allowPhpWrite' => $allowPhpWrite,
@@ -272,7 +281,7 @@ final class EngineFactory
      */
     private static function buildCustomProviderOverride(): ?ProviderInterface
     {
-        if ((string) config('phpclaw.provider', '') !== 'custom') {
+        if ((string) config('phpclaw.provider', '') !== self::CUSTOM_PROVIDER) {
             return null;
         }
 
@@ -285,9 +294,9 @@ final class EngineFactory
         return new OpenAIProvider(
             apiKey: (string) config('phpclaw.api_key', ''),
             model: (string) config('phpclaw.model', ''),
-            systemPrompt: mb_substr((string) config('phpclaw.system_prompt', ''), 0, 8000),
+            systemPrompt: self::systemPrompt(),
             endpoint: $baseUrl,
-            name: 'custom',
+            name: self::CUSTOM_PROVIDER,
             authStyle: OpenAIPresets::AUTH_BEARER,
         );
     }
@@ -315,13 +324,13 @@ final class EngineFactory
     }
 
     /**
-     * Resolve skills from config/phpclaw.php `skills` array via the canonical SkillResolver.
+     * The configured system prompt, cut to MAX_SYSTEM_PROMPT_LENGTH characters.
      *
-     * @return SkillInterface[]
+     * @return string
      */
-    private static function resolveSkills(): array
+    private static function systemPrompt(): string
     {
-        return SkillResolver::resolve((array) config('phpclaw.skills', []));
+        return mb_substr((string) config('phpclaw.system_prompt', ''), 0, self::MAX_SYSTEM_PROMPT_LENGTH);
     }
 
     /**

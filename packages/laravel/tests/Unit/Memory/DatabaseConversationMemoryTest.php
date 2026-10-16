@@ -437,4 +437,31 @@ final class DatabaseConversationMemoryTest extends TestCase
         $this->assertSame('AAAAAAAAAAAAAAAAAAAAAAAAAA', $keys[0]);
         $this->assertSame('ZZZZZZZZZZZZZZZZZZZZZZZZZA', $keys[1]);
     }
+
+    public function test_set_stores_an_offset_created_at_as_utc_without_the_offset(): void
+    {
+        $this->memory->set('conv_utc', ['history' => [], 'created_at' => '2026-10-16T01:48:36+00:00']);
+        $this->memory->set('conv_plus2', ['history' => [], 'created_at' => '2026-10-16T03:48:36+02:00']);
+
+        $this->assertSame('2026-10-16 01:48:36', DB::table('phpclaw_conversations')->where('id', 'conv_utc')->value('created_at'));
+        $this->assertSame('2026-10-16 01:48:36', DB::table('phpclaw_conversations')->where('id', 'conv_plus2')->value('created_at'));
+    }
+
+    public function test_set_reloads_the_same_instant_it_was_given(): void
+    {
+        $this->memory->set('conv_round', ['history' => [], 'created_at' => '2026-10-16T03:48:36+02:00']);
+
+        $reloaded = new \DateTimeImmutable((string) $this->memory->get('conv_round')['created_at'], new \DateTimeZone('UTC'));
+
+        $this->assertSame('2026-10-16T01:48:36+00:00', $reloaded->format(DATE_ATOM));
+    }
+
+    public function test_set_without_created_at_stamps_now_in_utc(): void
+    {
+        $this->travelTo(new \DateTimeImmutable('2026-10-16 01:00:00', new \DateTimeZone('UTC')));
+
+        $this->memory->set('conv_now', ['history' => []]);
+
+        $this->assertSame('2026-10-16 01:00:00', DB::table('phpclaw_conversations')->where('id', 'conv_now')->value('created_at'));
+    }
 }

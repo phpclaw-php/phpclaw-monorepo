@@ -19,6 +19,7 @@ use PhpClaw\Cloud\CloudManager;
 use PhpClaw\Contracts\ClawInterface as PhpClawInterface;
 use PhpClaw\Guards\Contracts\GuardInterface;
 use PhpClaw\Guards\GuardRegistry;
+use PhpClaw\Hooks\Contracts\HookInterface;
 use PhpClaw\Hooks\HookRegistry;
 use PhpClaw\Hooks\LifecycleEvent;
 use PhpClaw\Laravel\Console\AboutCommand;
@@ -201,13 +202,13 @@ final class PhpClawServiceProvider extends ServiceProvider
             'Provider' => (string) config('phpclaw.provider', '') ?: 'auto-detect',
             'Model' => (string) config('phpclaw.model', '') ?: 'provider default',
             'Memory Driver' => (string) config('phpclaw.memory_driver', 'database'),
-            'API Key' => (string) config('phpclaw.api_key', '') !== '' ? 'configured' : 'not configured',
+            'API Key' => (string) config('phpclaw.api_key', '') === '' ? 'not configured' : 'configured',
             'Guards' => (string) GuardRegistry::count(),
             'Skills' => (string) SkillRegistry::count(),
             'REST API' => (bool) config('phpclaw.api.enabled', true)
                 ? 'enabled at /'.trim((string) config('phpclaw.api.prefix', 'phpclaw'), '/')
                 : 'disabled',
-            'Cloud' => (string) config('phpclaw.cloud_key', '') !== '' ? 'enabled' : 'disabled',
+            'Cloud' => (string) config('phpclaw.cloud_key', '') === '' ? 'disabled' : 'enabled',
         ]);
     }
 
@@ -222,6 +223,7 @@ final class PhpClawServiceProvider extends ServiceProvider
         MemoryRegistry::reset();
         SkillRegistry::reset();
         ProviderRegistry::reset();
+        CloudManager::reset();
 
         self::$eventBridgeRegistered = false;
     }
@@ -436,46 +438,37 @@ final class PhpClawServiceProvider extends ServiceProvider
                 continue;
             }
 
-            $priority = (int) ($entry['priority'] ?? 10);
             $instance = $app->make($entry['class']);
 
             if (! ($instance instanceof GuardInterface)) {
                 continue;
             }
 
-            GuardRegistry::register($instance, $priority);
+            GuardRegistry::register($instance, (int) ($entry['priority'] ?? GuardRegistry::DEFAULT_PRIORITY));
         }
     }
 
     /**
-     * Register custom lifecycle hooks from config and the extensions bucket.
+     * Register custom lifecycle hooks from the extensions bucket and config, skipping any entry without an event name
+     * or with a handler that cannot be called.
      *
      * @param  PhpClawExtensions  $extensions  Extensions collected from the phpclaw.booting event.
      * @return void
      */
     private function registerHooks(PhpClawExtensions $extensions): void
     {
-        foreach ($extensions->hooks as $hook) {
-            if (! isset($hook['event'], $hook['handler'])) {
-                continue;
-            }
-            HookRegistry::on($hook['event'], $hook['handler'], $hook['priority'] ?? 10);
-        }
-
-        $hooks = (array) config('phpclaw.hooks', []);
-
-        foreach ($hooks as $entry) {
-            if (! is_array($entry) || ! isset($entry['event'], $entry['handler'])) {
+        foreach ([...$extensions->hooks, ...(array) config('phpclaw.hooks', [])] as $entry) {
+            if (! is_array($entry) || ! is_string($entry['event'] ?? null) || $entry['event'] === '') {
                 continue;
             }
 
-            if (! is_string($entry['event']) || $entry['event'] === '') {
+            $handler = $entry['handler'] ?? null;
+
+            if (! is_callable($handler) && ! $handler instanceof HookInterface) {
                 continue;
             }
 
-            $priority = (int) ($entry['priority'] ?? 10);
-
-            HookRegistry::on($entry['event'], $entry['handler'], $priority);
+            HookRegistry::on($entry['event'], $handler, (int) ($entry['priority'] ?? HookRegistry::DEFAULT_PRIORITY));
         }
     }
 
