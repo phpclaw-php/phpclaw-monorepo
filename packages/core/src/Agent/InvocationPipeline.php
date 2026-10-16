@@ -124,7 +124,7 @@ final class InvocationPipeline
             HookDispatcher::agentBefore($message, conversationId: $conversation->id, streaming: $streaming, runId: $runId);
 
             try {
-                $response = $invoke($augmented, $conversation->history, $runId, $message);
+                $response = $invoke($augmented, self::historyForAgent($conversation->history), $runId, $message);
             } catch (\Throwable $e) {
                 $this->reportErrorAndRethrow($e, $message, $streaming, $runId, $conversation->id);
             }
@@ -139,6 +139,20 @@ final class InvocationPipeline
                 conversation: $updated,
             );
         }, parentRunId: HookDispatcher::currentRunId());
+    }
+
+    /**
+     * Drop saved tool rows that have no tool-call id, so the provider never gets a tool result without its call.
+     *
+     * @param  Message[]  $history  Stored conversation history.
+     * @return Message[] History sent to the agent.
+     */
+    private static function historyForAgent(array $history): array
+    {
+        return array_values(array_filter(
+            $history,
+            static fn (Message $message): bool => ! $message->isToolResult() || $message->toolUseId !== null,
+        ));
     }
 
     /**
