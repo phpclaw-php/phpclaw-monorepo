@@ -327,4 +327,32 @@ final class ChatCommandTest extends TestCase
         self::assertSame('wp_query', $toolRows[0]['tool_name']);
         self::assertSame('{"posts":[]}', $toolRows[0]['content']);
     }
+
+    public function test_a_second_turn_keeps_the_tool_rows_of_the_first(): void
+    {
+        $memory = new ArrayMemory;
+        $this->provider = new ScriptedProvider(static function (): void {
+            HookRegistry::fire(LifecycleEvent::ToolAfter->value, [
+                'tool_name' => 'wp_query',
+                'tool_input' => ['post_type' => 'post'],
+                'tool_result' => '{"posts":[]}',
+            ]);
+        });
+        $this->useEngine($this->provider, memory: $memory);
+
+        $out = $this->chat(['how many posts?', 'and pages?', '/exit'], buildEngine: false);
+        $history = $memory->get($this->conversationId($out), 'conversations')['history'] ?? [];
+
+        self::assertSame(['user', 'tool', 'assistant', 'user', 'tool', 'assistant'], array_column($history, 'role'));
+    }
+
+    public function test_with_storage_off_the_session_stays_in_one_conversation(): void
+    {
+        $this->useEngine($this->provider, saved: ['store_messages' => '0']);
+
+        $out = $this->chat(['first question', 'second question', '/exit'], buildEngine: false);
+
+        self::assertSame(['first question', 'second question'], $this->provider->received);
+        self::assertSame(3, substr_count($out, 'Conversation: '.$this->conversationId($out)));
+    }
 }
