@@ -5,6 +5,20 @@ media, menus, taxonomies, options, plugins, cron events and the debug log, and, 
 installed, about products, orders, customers, coupons, reviews, shipping, tax and stock. It answers
 from your own site data. Works on WordPress 6.2 and later.
 
+## 0.1.5 (2026-10-16)
+
+### Added
+- Configurable per-turn tool cap and always-include tools (#158)
+- Interactive WP-CLI chat and session flags on send (#170)
+- Max tools per turn and always-include tools settings (#182)
+
+### Fixed
+- Apply code standard, return null on non-object JSON responses (#190)
+- Apply code standard, reject non-object JSON-RPC messages with -32600 (#192)
+- Apply code standard, fix HPOS compatibility, analytics cache, log parse count and paging totals (#194)
+- Load a skill by name regardless of case and _ versus - (#196)
+- Do not send saved tool rows without a tool-call id to the provider (#200)
+
 ## 0.1.4 (2026-10-09)
 
 ### Added

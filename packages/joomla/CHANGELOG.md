@@ -3,6 +3,20 @@
 An AI agent inside your Joomla administrator. Ask it in plain English about articles, categories,
 users and installed extensions, and it answers from your own site data. Works on Joomla 4, 5 and 6.
 
+## 0.1.5 (2026-10-16)
+
+### Added
+- Configurable per-turn tool cap and always-include tools (#158)
+- Interactive console chat and session flags on phpclaw (#172)
+- Max tools per turn and always-include tools settings (#184)
+
+### Fixed
+- Apply code standard, return null on non-object JSON responses (#190)
+- Apply code standard, reject non-object JSON-RPC messages with -32600 (#192)
+- Load a skill by name regardless of case and _ versus - (#196)
+- Apply code standard, mask settings secrets, store CLI tool calls, fix user group filter (#198)
+- Do not send saved tool rows without a tool-call id to the provider (#200)
+
 ## 0.1.4 (2026-10-09)
 
 ### Added
