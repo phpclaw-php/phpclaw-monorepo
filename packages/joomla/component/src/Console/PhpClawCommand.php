@@ -10,6 +10,9 @@ use PhpClaw\Agent\Conversation;
 use PhpClaw\Agent\ConversationTurn;
 use PhpClaw\Contracts\ClawInterface;
 use PhpClaw\Exceptions\PhpClawException;
+use PhpClaw\Hooks\HookRegistry;
+use PhpClaw\Hooks\LifecycleEvent;
+use PhpClaw\Joomla\Component\Administrator\Admin\DebugPanel;
 use PhpClaw\Joomla\Component\Administrator\Console\Concerns\RendersToolTrace;
 use PhpClaw\Joomla\Component\Administrator\Console\Concerns\ReportsAgentTurns;
 use PhpClaw\Joomla\Component\Administrator\Console\Concerns\TracksLastConversation;
@@ -106,7 +109,8 @@ final class PhpClawCommand extends AbstractCommand
     }
 
     /**
-     * Send one message and print the reply: all at once, or chunk by chunk when streaming.
+     * Send one message, store its tool calls with the conversation, and print the reply: all at once, or chunk by
+     * chunk when streaming.
      *
      * @param  Conversation  $conversation  Conversation the turn belongs to.
      * @param  string  $message  The prompt to send.
@@ -116,21 +120,25 @@ final class PhpClawCommand extends AbstractCommand
      */
     private function sendTurn(Conversation $conversation, string $message, OutputInterface $output, bool $stream): ConversationTurn
     {
-        if (! $stream) {
-            $turn = $this->agent()->sendInConversation($conversation, $message);
-            $output->writeln($turn->response->text);
+        $toolCalls = [];
+        $collector = DebugPanel::collectToolCalls($toolCalls);
 
-            return $turn;
+        try {
+            $turn = $this->agent()->streamInConversation(
+                $conversation,
+                $message,
+                static function (string $chunk) use ($output, $stream): void {
+                    if ($stream) {
+                        $output->write($chunk);
+                    }
+                },
+                DebugPanel::toolCallPersister($toolCalls),
+            );
+        } finally {
+            HookRegistry::off(LifecycleEvent::ToolAfter->value, $collector);
         }
 
-        $turn = $this->agent()->streamInConversation(
-            $conversation,
-            $message,
-            static function (string $chunk) use ($output): void {
-                $output->write($chunk);
-            },
-        );
-        $output->writeln('');
+        $output->writeln($stream ? '' : $turn->response->text);
 
         return $turn;
     }

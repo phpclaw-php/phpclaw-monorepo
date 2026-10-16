@@ -9,18 +9,24 @@ use Joomla\CMS\Form\Form;
 use Joomla\CMS\Plugin\CMSPlugin;
 use Joomla\Event\Event;
 use Joomla\Event\SubscriberInterface;
+use Joomla\Registry\Registry;
 use PhpClaw\Cloud\CloudManager;
 use PhpClaw\Contracts\ClawInterface;
 use PhpClaw\Joomla\Component\Administrator\Console\ChatCommand;
 use PhpClaw\Joomla\Component\Administrator\Console\McpServerCommand;
 use PhpClaw\Joomla\Component\Administrator\Console\PhpClawCommand;
 use PhpClaw\Joomla\Component\Administrator\Engine\EngineFactory;
+use PhpClaw\Joomla\Component\Administrator\Engine\PhpClawConfig;
 
 /**
  * phpClaw System Plugin for Joomla 4/5/6.
  */
 final class PhpClawPlugin extends CMSPlugin implements SubscriberInterface
 {
+    private const SECRET_FIELDS = ['api_key', 'fallback_api_key', 'cloud_key', 'cloud_signing_secret'];
+
+    private const SECRET_MASK = '**********';
+
     protected $autoloadLanguage = true;
 
     /**
@@ -32,8 +38,91 @@ final class PhpClawPlugin extends CMSPlugin implements SubscriberInterface
     {
         return [
             'application.before_execute' => 'registerConsoleCommand',
-            'onContentPrepareForm' => 'hideCloudFieldsIfUnavailable',
+            'onContentPrepareForm' => 'prepareSettingsForm',
+            'onExtensionBeforeSave' => 'keepStoredSecrets',
         ];
+    }
+
+    /**
+     * Prepare the phpClaw settings form: show a mask instead of each stored secret, then drop the cloud fields when cloud is absent.
+     *
+     * @param  Event  $event  The onContentPrepareForm event.
+     * @return void
+     */
+    public function prepareSettingsForm(Event $event): void
+    {
+        $form = self::eventArgument($event, 'subject', 0);
+        $data = self::eventArgument($event, 'data', 1);
+
+        if ($form instanceof Form && $form->getName() === 'com_plugins.plugin' && self::isPhpClawPlugin($data) && is_object($data) && is_array($data->params ?? null)) {
+            foreach (self::SECRET_FIELDS as $field) {
+                if ((string) ($data->params[$field] ?? '') !== '') {
+                    $data->params[$field] = self::SECRET_MASK;
+                }
+            }
+        }
+
+        $this->hideCloudFieldsIfUnavailable($event);
+    }
+
+    /**
+     * Before the phpClaw settings are saved, put back each stored secret the form sent as the mask or left empty.
+     *
+     * @param  Event  $event  The onExtensionBeforeSave event.
+     * @return void
+     */
+    public function keepStoredSecrets(Event $event): void
+    {
+        $table = self::eventArgument($event, 'subject', 1);
+
+        if (self::eventArgument($event, 'context', 0) !== 'com_plugins.plugin' || ! self::isPhpClawPlugin($table)) {
+            return;
+        }
+
+        $posted = json_decode((string) ($table->params ?? ''), true);
+
+        if (! is_array($posted)) {
+            return;
+        }
+
+        $stored = EngineFactory::getPluginParams();
+
+        foreach (self::SECRET_FIELDS as $field) {
+            $value = trim((string) ($posted[$field] ?? ''));
+
+            if ($value === '' || PhpClawConfig::isMaskedSecret($value)) {
+                $posted[$field] = (string) $stored->get($field, '');
+            }
+        }
+
+        $table->params = (new Registry($posted))->toString();
+    }
+
+    /**
+     * Read an event argument by its Joomla 5/6 name, falling back to the Joomla 4 position.
+     *
+     * @param  Event  $event  Event to read.
+     * @param  string  $name  Named argument.
+     * @param  int  $position  Positional argument.
+     * @return mixed The argument, or null when absent.
+     */
+    private static function eventArgument(Event $event, string $name, int $position): mixed
+    {
+        return $event->getArgument($name) ?? $event->getArgument((string) $position);
+    }
+
+    /**
+     * Whether a plugin row or form data object belongs to this system plugin.
+     *
+     * @param  mixed  $item  Plugin table row or form data.
+     * @return bool True for the phpClaw system plugin.
+     */
+    private static function isPhpClawPlugin(mixed $item): bool
+    {
+        $folder = is_object($item) ? ($item->folder ?? null) : (is_array($item) ? ($item['folder'] ?? null) : null);
+        $element = is_object($item) ? ($item->element ?? null) : (is_array($item) ? ($item['element'] ?? null) : null);
+
+        return $folder === 'system' && $element === 'phpclaw';
     }
 
     /**

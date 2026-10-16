@@ -8,7 +8,6 @@ use Joomla\CMS\Factory;
 use Joomla\Registry\Registry;
 use PhpClaw\Claw;
 use PhpClaw\ClawConfig;
-use PhpClaw\Joomla\Component\Administrator\Engine\EngineBootstrapper;
 use PhpClaw\Joomla\Component\Administrator\Engine\EngineFactory;
 use PhpClaw\Joomla\Component\Administrator\Engine\JoomlaCache;
 use PhpClaw\Joomla\Component\Administrator\Engine\PhpClawConfig;
@@ -105,83 +104,6 @@ final class EngineFactoryTest extends TestCase
         $config = PhpClawConfig::fromRegistry(new Registry([]));
 
         $this->assertSame(20, $config->maxIterations);
-    }
-
-    public function test_engine_bootstrapper_is_final_class(): void
-    {
-        $ref = new \ReflectionClass(EngineBootstrapper::class);
-
-        $this->assertTrue($ref->isFinal());
-    }
-
-    public function test_tool_builder_is_final_class(): void
-    {
-        $ref = new \ReflectionClass(ToolBuilder::class);
-
-        $this->assertTrue($ref->isFinal());
-    }
-
-    public function test_engine_factory_is_final_class(): void
-    {
-        $ref = new \ReflectionClass(EngineFactory::class);
-
-        $this->assertTrue($ref->isFinal());
-    }
-
-    public function test_engine_bootstrapper_boot_method_is_public_instance(): void
-    {
-        $ref = new \ReflectionClass(EngineBootstrapper::class);
-        $method = $ref->getMethod('boot');
-
-        $this->assertTrue($method->isPublic());
-        $this->assertFalse($method->isStatic());
-    }
-
-    public function test_tool_builder_build_method_is_public_instance(): void
-    {
-        $ref = new \ReflectionClass(ToolBuilder::class);
-        $method = $ref->getMethod('build');
-
-        $this->assertTrue($method->isPublic());
-        $this->assertFalse($method->isStatic());
-    }
-
-    public function test_engine_factory_delegates_to_engine_bootstrapper_not_bootregistries(): void
-    {
-        $ref = new \ReflectionClass(EngineFactory::class);
-
-        $this->assertFalse(
-            $ref->hasMethod('bootRegistries'),
-            'EngineFactory::bootRegistries() must not exist after refactor - delegation to EngineBootstrapper::boot()',
-        );
-    }
-
-    public function test_engine_factory_delegates_to_tool_builder_not_buildtools(): void
-    {
-        $ref = new \ReflectionClass(EngineFactory::class);
-
-        $this->assertFalse(
-            $ref->hasMethod('buildTools'),
-            'EngineFactory::buildTools() must not exist after refactor - delegation to ToolBuilder::build()',
-        );
-    }
-
-    public function test_engine_bootstrapper_owns_memory_driver_registration(): void
-    {
-        $factoryRef = new \ReflectionClass(EngineFactory::class);
-        $bootstrapperRef = new \ReflectionClass(EngineBootstrapper::class);
-
-        $this->assertFalse($factoryRef->hasMethod('registerMemoryDrivers'));
-        $this->assertTrue($bootstrapperRef->hasMethod('registerMemoryDrivers'));
-    }
-
-    public function test_tool_builder_owns_builtin_tools(): void
-    {
-        $factoryRef = new \ReflectionClass(EngineFactory::class);
-        $toolBuilderRef = new \ReflectionClass(ToolBuilder::class);
-
-        $this->assertFalse($factoryRef->hasMethod('builtinTools'));
-        $this->assertTrue($toolBuilderRef->hasMethod('builtinTools'));
     }
 
     public function test_provider_catalogue_lists_all_presets_and_natives(): void

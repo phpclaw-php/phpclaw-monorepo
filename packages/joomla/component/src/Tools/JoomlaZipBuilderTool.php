@@ -35,7 +35,7 @@ final class JoomlaZipBuilderTool implements MutatingToolInterface, ToolInterface
         ],
     ];
 
-    private const FORBIDDEN_CALLS = ['eval(', 'system(', 'exec(', 'passthru(', 'shell_exec('];
+    private const FORBIDDEN_CALLS = ['eval', 'system', 'exec', 'passthru', 'shell_exec'];
 
     private const MANIFEST_HEAD_BYTES = 8192;
 
@@ -341,18 +341,18 @@ final class JoomlaZipBuilderTool implements MutatingToolInterface, ToolInterface
         $problems = [];
 
         foreach ($xml->xpath('//filename') ?: [] as $node) {
-            $rel = trim((string) $node);
+            $relativePath = trim((string) $node);
 
-            if ($rel !== '' && ! is_file($dir.'/'.$rel)) {
-                $problems[] = "{$rel}: declared in the manifest but not present in the extension folder";
+            if ($relativePath !== '' && ! is_file($dir.'/'.$relativePath)) {
+                $problems[] = "{$relativePath}: declared in the manifest but not present in the extension folder";
             }
         }
 
         foreach ($xml->xpath('//folder') ?: [] as $node) {
-            $rel = trim((string) $node);
+            $relativePath = trim((string) $node);
 
-            if ($rel !== '' && ! is_dir($dir.'/'.$rel)) {
-                $problems[] = "{$rel}: folder declared in the manifest but not present in the extension folder";
+            if ($relativePath !== '' && ! is_dir($dir.'/'.$relativePath)) {
+                $problems[] = "{$relativePath}: folder declared in the manifest but not present in the extension folder";
             }
         }
 
@@ -405,33 +405,32 @@ final class JoomlaZipBuilderTool implements MutatingToolInterface, ToolInterface
     private function collectProblems(string $dir): array
     {
         $problems = [];
-        $iter = new \RecursiveIteratorIterator(
+        $files = new \RecursiveIteratorIterator(
             new \RecursiveDirectoryIterator($dir, \FilesystemIterator::SKIP_DOTS),
         );
 
-        foreach ($iter as $file) {
+        foreach ($files as $file) {
             if (! $file->isFile() || strtolower($file->getExtension()) !== 'php') {
                 continue;
             }
 
-            $rel = substr($file->getPathname(), strlen($dir) + 1);
+            $relativePath = substr($file->getPathname(), strlen($dir) + 1);
             $code = (string) file_get_contents($file->getPathname());
 
             $isNamespaced = preg_match('~^\s*namespace\s+~m', $code) === 1;
             if (! $isNamespaced && ! str_contains($code, '_JEXEC')) {
-                $problems[] = "{$rel}: missing _JEXEC guard";
+                $problems[] = "{$relativePath}: missing _JEXEC guard";
             }
 
-            $probe = (string) preg_replace('/\s+\(/', '(', $code);
-            foreach (self::FORBIDDEN_CALLS as $bad) {
-                if (str_contains($probe, $bad)) {
-                    $problems[] = "{$rel}: forbidden call {$bad})";
+            foreach (self::FORBIDDEN_CALLS as $function) {
+                if (preg_match('/(?<![\w$>:])'.$function.'\s*\(/i', $code) === 1) {
+                    $problems[] = "{$relativePath}: forbidden call {$function}()";
                 }
             }
 
             $syntaxError = $this->lintSyntax($file->getPathname());
             if ($syntaxError !== null) {
-                $problems[] = "{$rel}: syntax error: {$syntaxError}";
+                $problems[] = "{$relativePath}: syntax error: {$syntaxError}";
             }
         }
 
@@ -456,12 +455,12 @@ final class JoomlaZipBuilderTool implements MutatingToolInterface, ToolInterface
             return 'could not run php -l (proc_open failed); syntax not verified';
         }
 
-        $out = (string) stream_get_contents($pipes[1]).(string) stream_get_contents($pipes[2]);
+        $lintOutput = (string) stream_get_contents($pipes[1]).(string) stream_get_contents($pipes[2]);
         fclose($pipes[1]);
         fclose($pipes[2]);
 
         if (proc_close($process) !== 0) {
-            return trim(strtok($out, "\n") ?: 'parse failure');
+            return trim(strtok($lintOutput, "\n") ?: 'parse failure');
         }
 
         return null;

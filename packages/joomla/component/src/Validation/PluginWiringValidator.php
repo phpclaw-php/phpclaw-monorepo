@@ -43,7 +43,7 @@ final class PluginWiringValidator
             ? $dir.'/'.$slug.'.xml'
             : ((glob($dir.'/*.xml') ?: [''])[0]);
 
-        return $manifestFile !== '' ? (string) file_get_contents($manifestFile) : '';
+        return $manifestFile === '' ? '' : (string) file_get_contents($manifestFile);
     }
 
     /**
@@ -58,16 +58,16 @@ final class PluginWiringValidator
     {
         $problems = [];
 
-        if (preg_match('~<filename\s+plugin="([^"]+)"~i', $manifest, $m) === 1) {
-            if ($m[1] !== $slug) {
-                $problems[] = "manifest <filename plugin=\"{$m[1]}\"> must equal the folder slug \"{$slug}\" (short name, never plg_ prefixed).";
+        if (preg_match('~<filename\s+plugin="([^"]+)"~i', $manifest, $match) === 1) {
+            if ($match[1] !== $slug) {
+                $problems[] = "manifest <filename plugin=\"{$match[1]}\"> must equal the folder slug \"{$slug}\" (short name, never plg_ prefixed).";
             }
         } else {
             $problems[] = "manifest <files> must contain <filename plugin=\"{$slug}\">{$slug}.php</filename>.";
         }
 
-        if (preg_match('~<namespace\b[^>]*\bpath="src"[^>]*>\s*([^<\s]+)\s*</namespace>~i', $manifest, $m) === 1) {
-            $manifestNs = trim($m[1]);
+        if (preg_match('~<namespace\b[^>]*\bpath="src"[^>]*>\s*([^<\s]+)\s*</namespace>~i', $manifest, $match) === 1) {
+            $manifestNs = trim($match[1]);
         } else {
             $problems[] = 'manifest missing <namespace path="src">{Vendor}\\Plugin\\{Group}\\{Name}</namespace>. Without it the class cannot autoload and the first front-end request fatals (HTTP 500).';
         }
@@ -93,25 +93,25 @@ final class PluginWiringValidator
         }
 
         $problems = [];
-        $p = (string) file_get_contents($providerFile);
+        $provider = (string) file_get_contents($providerFile);
 
-        if (str_contains($p, 'Joomla\\CMS\\Plugin\\PluginInterface')) {
+        if (str_contains($provider, 'Joomla\\CMS\\Plugin\\PluginInterface')) {
             $problems[] = 'services/provider.php uses Joomla\\CMS\\Plugin\\PluginInterface, which does not exist. Register under Joomla\\CMS\\Extension\\PluginInterface.';
-        } elseif (! str_contains($p, 'Joomla\\CMS\\Extension\\PluginInterface')) {
+        } elseif (! str_contains($provider, 'Joomla\\CMS\\Extension\\PluginInterface')) {
             $problems[] = 'services/provider.php must register the plugin under Joomla\\CMS\\Extension\\PluginInterface.';
         }
 
-        if (! str_contains($p, 'setApplication')) {
+        if (! str_contains($provider, 'setApplication')) {
             $problems[] = 'services/provider.php must call $plugin->setApplication(Factory::getApplication()). Without it getApplication() is null and the plugin\'s events do nothing.';
         }
 
-        if (preg_match('~function\s*\(\s*Container~', $p) !== 1) {
+        if (preg_match('~function\s*\(\s*Container~', $provider) !== 1) {
             $problems[] = 'services/provider.php must register a factory closure (function (Container $container) { ... }), not a bare instance.';
         }
 
-        if (preg_match('~new\s+\w+\s*\(\s*(\(array\)|PluginHelper::getPlugin)~', $p) === 1) {
+        if (preg_match('~new\s+\w+\s*\(\s*(\(array\)|PluginHelper::getPlugin)~', $provider) === 1) {
             $problems[] = 'services/provider.php constructs the plugin with the config array as the first argument (the Joomla 3 signature). The Joomla 4/5/6 CMSPlugin constructor takes the dispatcher first: obtain it via $container->get(DispatcherInterface::class) and call new {Name}($dispatcher, []).';
-        } elseif (preg_match('~new\s+\w+\s*\(~', $p) === 1 && ! str_contains($p, 'DispatcherInterface')) {
+        } elseif (preg_match('~new\s+\w+\s*\(~', $provider) === 1 && ! str_contains($provider, 'DispatcherInterface')) {
             $problems[] = 'services/provider.php builds the plugin but never obtains the event dispatcher. The factory closure must get Joomla\\Event\\DispatcherInterface from the container and pass it as the first constructor argument: new {Name}($dispatcher, []).';
         }
 
@@ -133,11 +133,11 @@ final class PluginWiringValidator
         }
 
         $problems = [];
-        $iter = new \RecursiveIteratorIterator(
+        $files = new \RecursiveIteratorIterator(
             new \RecursiveDirectoryIterator($srcDir, \FilesystemIterator::SKIP_DOTS),
         );
 
-        foreach ($iter as $file) {
+        foreach ($files as $file) {
             if (! $file->isFile() || strtolower($file->getExtension()) !== 'php') {
                 continue;
             }
@@ -149,12 +149,12 @@ final class PluginWiringValidator
 
             $relFromSrc = substr($file->getPathname(), strlen($srcDir) + 1);
             $subDir = trim((string) dirname($relFromSrc), './');
-            $expectedNs = $manifestNs !== ''
-                ? rtrim($manifestNs.($subDir !== '' ? '\\'.str_replace('/', '\\', $subDir) : ''), '\\')
-                : '';
+            $expectedNs = $manifestNs === ''
+                ? ''
+                : rtrim($manifestNs.($subDir === '' ? '' : '\\'.str_replace('/', '\\', $subDir)), '\\');
 
-            if (preg_match('~^\s*namespace\s+([^;]+);~m', $code, $m) === 1) {
-                $declared = trim($m[1]);
+            if (preg_match('~^\s*namespace\s+([^;]+);~m', $code, $match) === 1) {
+                $declared = trim($match[1]);
                 if ($manifestNs !== '' && $declared !== $expectedNs) {
                     $problems[] = "src/{$relFromSrc}: namespace {$declared} does not match its location. Expected {$expectedNs} (PSR-4 root {$manifestNs} maps to src/, so src/Extension/ is {$manifestNs}\\Extension).";
                 }

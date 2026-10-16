@@ -58,7 +58,6 @@ final class PhpClawCommandSessionTest extends TestCase
 
             return new ConversationTurn(new AgentResponse(text: 'reply to '.$message, provider: 'ollama', model: 'qwen2.5:7b', iterations: 1, inputTokens: 12, outputTokens: 3, toolsCalled: ['joomla_articles', 'joomla_articles']), $c);
         };
-        $mock->method('sendInConversation')->willReturnCallback($turn);
         $mock->method('streamInConversation')->willReturnCallback(static function (Conversation $c, string $message, callable $onToken) use ($turn): ConversationTurn {
             $onToken('streamed ');
 
@@ -146,7 +145,7 @@ final class PhpClawCommandSessionTest extends TestCase
 
             return new Conversation(self::CONVERSATION_ID, [], new \DateTimeImmutable);
         });
-        $guarded->method('sendInConversation')->willReturnCallback(static fn (Conversation $c, string $m): ConversationTurn => $mock->sendInConversation($c, $m));
+        $guarded->method('streamInConversation')->willReturnCallback(static fn (Conversation $c, string $m, callable $onToken, ?callable $beforePersist = null): ConversationTurn => $mock->streamInConversation($c, $m, $onToken, $beforePersist));
 
         $out = $this->runCommand($guarded, ['--conv-id' => '01JMSOMEONEELSE0000000000A']);
 

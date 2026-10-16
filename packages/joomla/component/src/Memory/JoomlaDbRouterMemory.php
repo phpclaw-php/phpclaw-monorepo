@@ -103,17 +103,6 @@ final class JoomlaDbRouterMemory implements MemoryInterface
     }
 
     /**
-     * Whether `$namespace` is routed to the dedicated conversation driver.
-     *
-     * @param  string  $namespace
-     * @return bool
-     */
-    public function routesToConversations(string $namespace): bool
-    {
-        return $namespace === self::CONVERSATIONS_NAMESPACE;
-    }
-
-    /**
      * Select the correct driver based on namespace.
      *
      * @param  string  $namespace

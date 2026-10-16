@@ -7,6 +7,7 @@ namespace PhpClaw\Joomla\Component\Administrator\Model;
 use Joomla\CMS\Language\Text;
 use Joomla\CMS\MVC\Model\BaseDatabaseModel;
 use PhpClaw\AutoDiscovery\DiscoveryCache;
+use PhpClaw\Hooks\HookRegistry;
 use PhpClaw\Joomla\Component\Administrator\Engine\EngineFactory;
 use PhpClaw\Joomla\Component\Administrator\Engine\JoomlaEventDispatcher;
 use PhpClaw\Joomla\Component\Administrator\Engine\PhpClawConfig;
@@ -25,6 +26,12 @@ final class GuideModel extends BaseDatabaseModel
 
     private const CORE_TOOL_NAMESPACE = 'PhpClaw\\Tools\\';
 
+    private const JOOMLA_NAMESPACE = 'PhpClaw\\Joomla';
+
+    private const SOURCE_JOOMLA = 'joomla';
+
+    private const SOURCE_CORE = 'core';
+
     private const TOOL_LANG_KEYS = [
         'joomla_articles' => 'COM_PHPCLAW_TOOL_ARTICLE',
         'joomla_categories' => 'COM_PHPCLAW_TOOL_CATEGORY',
@@ -33,6 +40,10 @@ final class GuideModel extends BaseDatabaseModel
         'joomla_database_query' => 'COM_PHPCLAW_TOOL_DATABASE',
         'joomla_zip_extension' => 'COM_PHPCLAW_TOOL_ZIP',
     ];
+
+    private ?ToolRegistry $registry = null;
+
+    private bool $registryBuilt = false;
 
     /**
      * Build one Joomla-native tool row from its translated label, description and example prompts.
@@ -89,15 +100,14 @@ final class GuideModel extends BaseDatabaseModel
             }
 
             $name = $tool->name();
-            $row = isset(self::TOOL_LANG_KEYS[$name])
-                ? self::translatedToolRow($name)
-                : ['name' => $name, 'description' => $tool->description(), 'prompts' => ''];
 
             if (isset(self::TOOL_LANG_KEYS[$name])) {
-                $known[$name] = $row;
-            } else {
-                $extra[] = $row;
+                $known[$name] = self::translatedToolRow($name);
+
+                continue;
             }
+
+            $extra[] = ['name' => $name, 'description' => $tool->description(), 'prompts' => ''];
         }
 
         $ordered = [];
@@ -140,11 +150,11 @@ final class GuideModel extends BaseDatabaseModel
 
         foreach ($catalogue as $slug => $info) {
             $slug = (string) $slug;
-            $m = $meta[$slug] ?? [];
+            $providerMeta = $meta[$slug] ?? [];
             $rows[] = [
-                'name' => (string) ($m['name'] ?? $info['label'] ?: ucfirst($slug)),
+                'name' => (string) ($providerMeta['name'] ?? $info['label'] ?: ucfirst($slug)),
                 'key' => $slug,
-                'models' => (string) ($m['models'] ?? ''),
+                'models' => (string) ($providerMeta['models'] ?? ''),
             ];
         }
 
@@ -174,9 +184,8 @@ final class GuideModel extends BaseDatabaseModel
             }
 
             $attr = $cache['tools'][$class] ?? [];
-            $base = strrchr($class, '\\');
             $rows[] = [
-                'tool' => $base === false ? $class : substr($base, 1),
+                'tool' => self::shortName($class),
                 'description' => (string) ($attr['description'] ?? $tool->description()),
                 'deprecated' => ! empty($attr['deprecated']),
             ];
@@ -188,13 +197,19 @@ final class GuideModel extends BaseDatabaseModel
     }
 
     /**
-     * Build the same ToolRegistry the engine builds, or null when the container is unavailable,
-     * so both Guide tool tables list exactly the tools the agent can call.
+     * Build, once per model, the same ToolRegistry the engine builds, or null when the container is
+     * unavailable, so both Guide tool tables list exactly the tools the agent can call.
      *
      * @return ToolRegistry|null
      */
     private function buildRegistry(): ?ToolRegistry
     {
+        if ($this->registryBuilt) {
+            return $this->registry;
+        }
+
+        $this->registryBuilt = true;
+
         try {
             $config = PhpClawConfig::fromRegistry(EngineFactory::getPluginParams());
             $registry = new ToolRegistry;
@@ -204,7 +219,7 @@ final class GuideModel extends BaseDatabaseModel
                 ToolBuilder::TOOL_GROUPS,
             );
 
-            return $registry;
+            return $this->registry = $registry;
         } catch (\Throwable) {
             return null;
         }
@@ -230,7 +245,7 @@ final class GuideModel extends BaseDatabaseModel
             $records[] = [
                 'driver' => (string) ($attr['driver'] ?? ''),
                 'label' => (string) ($attr['label'] ?? $class),
-                'source' => str_starts_with($class, 'PhpClaw\\Joomla') ? 'joomla' : 'core',
+                'source' => self::sourceOf($class),
                 'class' => $class,
             ];
         }
@@ -242,7 +257,7 @@ final class GuideModel extends BaseDatabaseModel
             $records[] = [
                 'driver' => $slug,
                 'label' => $slug,
-                'source' => 'joomla',
+                'source' => self::SOURCE_JOOMLA,
                 'class' => '',
             ];
         }
@@ -272,7 +287,7 @@ final class GuideModel extends BaseDatabaseModel
                 'label' => (string) ($attr['label'] ?? $class),
                 'priority' => (int) ($attr['priority'] ?? 0),
                 'enabled_by_default' => (bool) ($attr['enabledByDefault'] ?? false),
-                'source' => str_starts_with($class, 'PhpClaw\\Joomla') ? 'joomla' : 'core',
+                'source' => self::sourceOf($class),
                 'class' => $class,
             ];
         }
@@ -287,7 +302,7 @@ final class GuideModel extends BaseDatabaseModel
                 'label' => self::shortName($class),
                 'priority' => (int) ($guard['priority'] ?? 0),
                 'enabled_by_default' => true,
-                'source' => 'joomla',
+                'source' => self::SOURCE_JOOMLA,
                 'class' => $class,
             ];
         }
@@ -312,7 +327,7 @@ final class GuideModel extends BaseDatabaseModel
 
         foreach ($cache['hooks'] ?? [] as $class => $listeners) {
             $class = (string) $class;
-            $source = str_starts_with($class, 'PhpClaw\\Joomla') ? 'joomla' : 'core';
+            $source = self::sourceOf($class);
 
             foreach ((array) $listeners as $listener) {
                 $records[] = [
@@ -331,16 +346,16 @@ final class GuideModel extends BaseDatabaseModel
                 continue;
             }
             $handler = $listener['handler'] ?? null;
-            $hClass = is_array($handler) ? ($handler[0] ?? '') : $handler;
-            $hClass = is_object($hClass) ? $hClass::class : (string) $hClass;
-            $hMethod = is_array($handler) ? (string) ($handler[1] ?? '') : '';
+            $handlerClass = is_array($handler) ? ($handler[0] ?? '') : $handler;
+            $handlerClass = is_object($handlerClass) ? $handlerClass::class : (string) $handlerClass;
+            $handlerMethod = is_array($handler) ? (string) ($handler[1] ?? '') : '';
             $records[] = [
                 'event' => (string) $listener['event'],
-                'name' => $hMethod !== '' ? $hMethod : self::shortName($hClass),
-                'priority' => (int) ($listener['priority'] ?? 10),
+                'name' => $handlerMethod === '' ? self::shortName($handlerClass) : $handlerMethod,
+                'priority' => (int) ($listener['priority'] ?? HookRegistry::DEFAULT_PRIORITY),
                 'enabled_by_default' => true,
-                'source' => 'joomla',
-                'class' => $hClass,
+                'source' => self::SOURCE_JOOMLA,
+                'class' => $handlerClass,
             ];
         }
 
@@ -368,7 +383,7 @@ final class GuideModel extends BaseDatabaseModel
                 'name' => (string) ($attr['name'] ?? ''),
                 'label' => (string) ($attr['label'] ?? $class),
                 'keywords' => array_values(array_map('strval', (array) ($attr['keywords'] ?? []))),
-                'source' => str_starts_with($class, 'PhpClaw\\Joomla') ? 'joomla' : 'core',
+                'source' => self::sourceOf($class),
                 'class' => $class,
             ];
         }
@@ -384,7 +399,7 @@ final class GuideModel extends BaseDatabaseModel
                 'name' => $name,
                 'label' => $name,
                 'keywords' => array_values($keywords),
-                'source' => 'joomla',
+                'source' => self::SOURCE_JOOMLA,
                 'class' => $class,
             ];
         }
@@ -432,8 +447,8 @@ final class GuideModel extends BaseDatabaseModel
         }
 
         $known = [];
-        foreach ($this->getDiscoveredSkills() as $s) {
-            $known[$s['name']] = true;
+        foreach ($this->getDiscoveredSkills() as $discovered) {
+            $known[$discovered['name']] = true;
         }
 
         $records = [];
@@ -490,8 +505,19 @@ final class GuideModel extends BaseDatabaseModel
      */
     private static function shortName(string $class): string
     {
-        $pos = strrchr($class, '\\');
+        $basename = strrchr($class, '\\');
 
-        return $pos === false ? $class : substr($pos, 1);
+        return $basename === false ? $class : substr($basename, 1);
+    }
+
+    /**
+     * Whether a discovered class ships with this adapter or with core.
+     *
+     * @param  string  $class  Fully qualified class name.
+     * @return string 'joomla' or 'core'.
+     */
+    private static function sourceOf(string $class): string
+    {
+        return str_starts_with($class, self::JOOMLA_NAMESPACE) ? self::SOURCE_JOOMLA : self::SOURCE_CORE;
     }
 }

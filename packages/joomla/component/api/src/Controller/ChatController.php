@@ -39,6 +39,8 @@ final class ChatController extends BaseController
 
     private const STATUS_SERVER_ERROR = 500;
 
+    private const STREAM_FAILURE_STATUSES = [self::STATUS_FORBIDDEN, self::STATUS_UNPROCESSABLE, self::STATUS_TOO_MANY_REQUESTS];
+
     /**
      * Run one agent turn and answer with the complete result as JSON.
      *
@@ -121,8 +123,8 @@ final class ChatController extends BaseController
     }
 
     /**
-     * Message and HTTP status for a failed stream: a spent token budget sends 422 and a provider rate limit 429, other
-     * failures keep the stream's 200 and only emit the error event.
+     * Message and HTTP status for a failed stream: another user's conversation sends 403, a spent token budget 422 and
+     * a provider rate limit 429; other failures keep the stream's 200 and only emit the error event.
      *
      * @param  \Throwable  $e  The failure raised while streaming.
      * @return array{0: string, 1: int|null}
@@ -131,7 +133,7 @@ final class ChatController extends BaseController
     {
         [$message, $status] = $this->chatError($e);
 
-        return [$message, in_array($status, [self::STATUS_UNPROCESSABLE, self::STATUS_TOO_MANY_REQUESTS], true) ? $status : null];
+        return [$message, in_array($status, self::STREAM_FAILURE_STATUSES, true) ? $status : null];
     }
 
     /**
@@ -207,7 +209,7 @@ final class ChatController extends BaseController
         $input = Factory::getApplication()->getInput();
         $value = trim((string) $input->json->getString($key, ''));
 
-        return $value !== '' ? $value : trim((string) $input->post->getString($key, ''));
+        return $value === '' ? trim((string) $input->post->getString($key, '')) : $value;
     }
 
     /**

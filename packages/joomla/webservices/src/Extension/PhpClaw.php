@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace PhpClaw\Joomla\WebServices\Extension;
 
+use Joomla\CMS\Application\ApiApplication;
 use Joomla\CMS\Plugin\CMSPlugin;
 use Joomla\CMS\Router\ApiRouter;
 use Joomla\Event\EventInterface;
@@ -23,6 +24,8 @@ final class PhpClaw extends CMSPlugin implements SubscriberInterface
 
     private const STREAM_FORMAT = 'text/event-stream';
 
+    private const ERROR_FORMAT = 'jsonapi';
+
     /**
      * Events this subscriber listens to.
      *
@@ -34,8 +37,7 @@ final class PhpClaw extends CMSPlugin implements SubscriberInterface
     }
 
     /**
-     * Register the two chat routes. These are POST actions rather than a CRUD resource, so the
-     * routes are declared one by one instead of through createCRUDRoutes.
+     * Register the two chat routes, and render Joomla's own errors on the stream route as JSON:API, like the send route.
      *
      * @param  EventInterface  $event  Routing event carrying the api router.
      * @return void
@@ -66,6 +68,12 @@ final class PhpClaw extends CMSPlugin implements SubscriberInterface
                 $defaults,
             ),
         ]);
+
+        $application = $this->getApplication();
+
+        if ($application instanceof ApiApplication) {
+            $application->addFormatMap(self::STREAM_FORMAT, self::ERROR_FORMAT);
+        }
     }
 
     /**

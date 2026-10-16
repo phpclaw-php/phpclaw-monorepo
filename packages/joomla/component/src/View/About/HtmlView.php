@@ -26,7 +26,7 @@ final class HtmlView extends BaseHtmlView
     public function display($tpl = null): void
     {
         $this->addToolbar();
-        $this->enqueueAssets();
+        $this->enqueueAdminStyle();
 
         parent::display($tpl);
     }
@@ -43,15 +43,5 @@ final class HtmlView extends BaseHtmlView
         if (Factory::getApplication()->getIdentity()->authorise('core.admin', 'com_phpclaw')) {
             ToolbarHelper::preferences('com_phpclaw');
         }
-    }
-
-    /**
-     * Register and load the admin stylesheet for the About view.
-     *
-     * @return void
-     */
-    private function enqueueAssets(): void
-    {
-        $this->enqueueAdminStyle();
     }
 }

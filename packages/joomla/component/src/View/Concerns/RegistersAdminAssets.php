@@ -7,8 +7,7 @@ namespace PhpClaw\Joomla\Component\Administrator\View\Concerns;
 use Joomla\CMS\Factory;
 
 /**
- * Shared Web Asset Manager registration for the four phpClaw admin views, replacing the
- * four per-view copies of the stylesheet handle and path with one declaration.
+ * Shared Web Asset Manager registration of the admin stylesheet for the four phpClaw admin views.
  */
 trait RegistersAdminAssets
 {

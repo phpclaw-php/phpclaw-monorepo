@@ -154,6 +154,7 @@
         fetch(loadUrl, { method: 'POST', body: formData, credentials: 'same-origin' })
         .then(readJson)
         .then(function (json) {
+            if (convId !== currentConvId) { return; }
             removeTyping();
             clearMessages('');
             if (json.success) {
@@ -176,6 +177,7 @@
             }
         })
         .catch(function () {
+            if (convId !== currentConvId) { return; }
             removeTyping();
             clearMessages(t('loadError', 'Request failed.'));
         });

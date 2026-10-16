@@ -226,6 +226,6 @@ final class JoomlaCache implements CacheInterface
     {
         $handler = (string) Factory::getApplication()->get('cache_handler', '');
 
-        return $handler !== '' ? $handler : self::DEFAULT_STORAGE;
+        return $handler === '' ? self::DEFAULT_STORAGE : $handler;
     }
 }

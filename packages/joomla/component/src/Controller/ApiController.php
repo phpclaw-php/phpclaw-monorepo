@@ -33,8 +33,6 @@ final class ApiController extends BaseController
 
     private const MESSAGE_MAX_LENGTH = 40000;
 
-    private const MASKED_SECRET_REGEX = '/^\*+[A-Za-z0-9]{0,4}$/';
-
     private const SECRET_FIELDS = ['api_key', 'cloud_key', 'cloud_signing_secret'];
 
     private const PLAIN_FIELDS = [
@@ -64,6 +62,12 @@ final class ApiController extends BaseController
 
     private const CONNECTION_TEST_PROMPT = 'Reply with exactly: OK';
 
+    private const CHAT_ACTION = 'phpclaw.chat.use';
+
+    private const COMPONENT = 'com_phpclaw';
+
+    private const KEYLESS_PROVIDER = 'ollama';
+
     /**
      * Send a chat message via the AI engine.
      *
@@ -75,15 +79,10 @@ final class ApiController extends BaseController
 
         $this->runAction(function (): void {
             $message = $this->postString('message');
+            $invalid = self::messageRejection($message);
 
-            if ($message === '') {
-                $this->sendJsonError(Text::_('COM_PHPCLAW_ERROR_EMPTY_MESSAGE'), self::STATUS_BAD_REQUEST);
-
-                return;
-            }
-
-            if (mb_strlen($message) > self::MESSAGE_MAX_LENGTH) {
-                $this->sendJsonError(Text::_('COM_PHPCLAW_ERROR_MESSAGE_TOO_LONG'), self::STATUS_BAD_REQUEST);
+            if ($invalid !== '') {
+                $this->sendJsonError($invalid, self::STATUS_BAD_REQUEST);
 
                 return;
             }
@@ -128,15 +127,10 @@ final class ApiController extends BaseController
 
         $message = $this->postString('message');
         $conversationId = $this->postString('conversation_id');
+        $invalid = self::messageRejection($message);
 
-        if ($message === '') {
-            $this->emitSseError(Text::_('COM_PHPCLAW_ERROR_EMPTY_MESSAGE'), self::STATUS_BAD_REQUEST);
-
-            return;
-        }
-
-        if (mb_strlen($message) > self::MESSAGE_MAX_LENGTH) {
-            $this->emitSseError(Text::_('COM_PHPCLAW_ERROR_MESSAGE_TOO_LONG'), self::STATUS_BAD_REQUEST);
+        if ($invalid !== '') {
+            $this->emitSseError($invalid, self::STATUS_BAD_REQUEST);
 
             return;
         }
@@ -168,6 +162,25 @@ final class ApiController extends BaseController
         }
 
         Factory::getApplication()->close();
+    }
+
+    /**
+     * Translated reason the message cannot be accepted, or an empty string when it is usable.
+     *
+     * @param  string  $message  Submitted prompt.
+     * @return string Rejection text, empty when the message passes.
+     */
+    private static function messageRejection(string $message): string
+    {
+        if ($message === '') {
+            return Text::_('COM_PHPCLAW_ERROR_EMPTY_MESSAGE');
+        }
+
+        if (mb_strlen($message) > self::MESSAGE_MAX_LENGTH) {
+            return Text::_('COM_PHPCLAW_ERROR_MESSAGE_TOO_LONG');
+        }
+
+        return '';
     }
 
     /**
@@ -255,7 +268,7 @@ final class ApiController extends BaseController
 
                 $value = self::normaliseSecret($this->postString($field));
 
-                if ($value === '' || self::isMaskedSecret($value)) {
+                if ($value === '' || PhpClawConfig::isMaskedSecret($value)) {
                     $skippedSecrets[] = $field;
 
                     continue;
@@ -323,7 +336,7 @@ final class ApiController extends BaseController
         }
 
         if ($field === 'remote_skill_urls') {
-            return implode("\n", PhpClawConfig::filterRemoteSkillUrls($value));
+            return PhpClawConfig::remoteSkillUrlsText($value);
         }
 
         if ($field === 'cloud_disable') {
@@ -341,7 +354,7 @@ final class ApiController extends BaseController
      */
     private function validatedCloudDisable(string $value): string
     {
-        $features = array_values(array_filter(array_map('trim', explode(',', $value)), static fn (string $f): bool => $f !== ''));
+        $features = array_values(array_filter(array_map('trim', explode(',', $value)), static fn (string $feature): bool => $feature !== ''));
 
         foreach ($features as $feature) {
             if (! in_array($feature, self::CLOUD_FEATURES, true)) {
@@ -392,7 +405,7 @@ final class ApiController extends BaseController
                 return;
             }
 
-            if ($provider !== 'ollama' && $apiKey === '') {
+            if ($provider !== self::KEYLESS_PROVIDER && $apiKey === '') {
                 $this->sendJsonError(Text::_('COM_PHPCLAW_ERROR_NO_API_KEY'), self::STATUS_BAD_REQUEST);
 
                 return;
@@ -484,7 +497,7 @@ final class ApiController extends BaseController
     {
         $identity = Factory::getApplication()->getIdentity();
 
-        return $identity !== null && $identity->authorise('phpclaw.chat.use', 'com_phpclaw');
+        return $identity !== null && $identity->authorise(self::CHAT_ACTION, self::COMPONENT);
     }
 
     /**
@@ -527,7 +540,7 @@ final class ApiController extends BaseController
     }
 
     /**
-     * Disable PHP error output and flush all output buffers for clean SSE frames.
+     * Disable PHP error output and replace every output buffer with a fresh one, so only the JSON answer is sent.
      *
      * @return void
      */
@@ -621,17 +634,6 @@ final class ApiController extends BaseController
             ->where($db->quoteName('element').' = '.$db->quote(self::PLUGIN_ELEMENT))
             ->where($db->quoteName('folder').' = '.$db->quote(self::PLUGIN_FOLDER))
             ->where($db->quoteName('type').' = '.$db->quote(self::PLUGIN_TYPE));
-    }
-
-    /**
-     * True when the given string is the export-rendered masked form (e.g. `***1234`).
-     *
-     * @param  string  $value
-     * @return bool
-     */
-    private static function isMaskedSecret(string $value): bool
-    {
-        return preg_match(self::MASKED_SECRET_REGEX, $value) === 1;
     }
 
     /**

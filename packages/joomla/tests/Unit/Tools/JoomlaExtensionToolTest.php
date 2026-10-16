@@ -265,6 +265,19 @@ final class JoomlaExtensionToolTest extends TestCase
         $this->assertArrayNotHasKey('version', $ext);
     }
 
+    public function test_a_long_manifest_description_is_cut_on_a_character_boundary(): void
+    {
+        $manifest = json_encode(['description' => str_repeat('a', 199).'é and more'], JSON_THROW_ON_ERROR);
+
+        $db = MockDatabase::raw($this);
+        MockDatabase::enqueueAssocList($db, [['total' => '1']]);
+        MockDatabase::enqueueAssocList($db, [['extension_id' => 1, 'manifest_cache' => $manifest]]);
+
+        $result = json_decode((new JoomlaExtensionTool($db))->execute([]), true, 512, JSON_THROW_ON_ERROR);
+
+        $this->assertSame(str_repeat('a', 199).'é', $result['data']['extensions'][0]['description']);
+    }
+
     public function test_manifest_cache_without_description_sets_null(): void
     {
         $manifest = json_encode(['version' => '1.0.0', 'author' => 'Anon'], JSON_THROW_ON_ERROR);

@@ -217,12 +217,12 @@ final class JoomlaDbConversationMemory implements MemoryInterface
 
             $this->deleteMessagesByConversation($key);
 
-            $del = $this->db->getQuery(true)
+            $delete = $this->db->getQuery(true)
                 ->delete($this->db->quoteName(PhpClawTables::CONVERSATIONS_TABLE))
                 ->where($this->db->quoteName('id').' = '.$this->db->quote($key))
                 ->where($this->db->quoteName('namespace').' = '.$this->db->quote($namespace));
 
-            $this->db->setQuery($del)->execute();
+            $this->db->setQuery($delete)->execute();
         });
 
         HookDispatcher::memoryForget($key, $namespace, self::DRIVER_NAME);
@@ -249,25 +249,25 @@ final class JoomlaDbConversationMemory implements MemoryInterface
                 $idsQuery->where($this->db->quoteName('user_id').' = '.(int) $this->actingUserId);
             }
 
-            $convIds = $this->db->setQuery($idsQuery)->loadColumn() ?? [];
+            $conversationIds = $this->db->setQuery($idsQuery)->loadColumn() ?? [];
 
-            if ($convIds !== []) {
-                $quoted = implode(',', array_map(fn (mixed $id): string => $this->db->quote((string) $id), $convIds));
-                $delMsg = $this->db->getQuery(true)
+            if ($conversationIds !== []) {
+                $quoted = implode(',', array_map(fn (mixed $id): string => $this->db->quote((string) $id), $conversationIds));
+                $deleteMessages = $this->db->getQuery(true)
                     ->delete($this->db->quoteName(PhpClawTables::MESSAGES_TABLE))
                     ->where($this->db->quoteName('conversation_id').' IN ('.$quoted.')');
-                $this->db->setQuery($delMsg)->execute();
+                $this->db->setQuery($deleteMessages)->execute();
             }
 
-            $delConv = $this->db->getQuery(true)
+            $deleteConversations = $this->db->getQuery(true)
                 ->delete($this->db->quoteName(PhpClawTables::CONVERSATIONS_TABLE))
                 ->where($this->db->quoteName('namespace').' = '.$this->db->quote($namespace));
 
             if (! $this->manageAll) {
-                $delConv->where($this->db->quoteName('user_id').' = '.(int) $this->actingUserId);
+                $deleteConversations->where($this->db->quoteName('user_id').' = '.(int) $this->actingUserId);
             }
 
-            $this->db->setQuery($delConv)->execute();
+            $this->db->setQuery($deleteConversations)->execute();
         });
     }
 
@@ -352,19 +352,19 @@ final class JoomlaDbConversationMemory implements MemoryInterface
     /**
      * Map a raw `#__phpclaw_messages` row into a history entry.
      *
-     * @param  array<string, mixed>  $msg
+     * @param  array<string, mixed>  $row
      * @return array<string, mixed>
      */
-    private static function messageRowToEntry(array $msg): array
+    private static function messageRowToEntry(array $row): array
     {
         $entry = [
-            'role' => $msg['role'],
-            'content' => $msg['content'],
-            'tool_name' => $msg['tool_name'] ?? null,
+            'role' => $row['role'],
+            'content' => $row['content'],
+            'tool_name' => $row['tool_name'] ?? null,
         ];
 
-        if (isset($msg['tool_input'])) {
-            $decoded = json_decode((string) $msg['tool_input'], associative: true);
+        if (isset($row['tool_input'])) {
+            $decoded = json_decode((string) $row['tool_input'], associative: true);
             $entry['tool_input'] = is_array($decoded) ? $decoded : null;
         }
 
@@ -602,11 +602,11 @@ final class JoomlaDbConversationMemory implements MemoryInterface
      */
     private function deleteMessagesByConversation(string $key): void
     {
-        $del = $this->db->getQuery(true)
+        $delete = $this->db->getQuery(true)
             ->delete($this->db->quoteName(PhpClawTables::MESSAGES_TABLE))
             ->where($this->db->quoteName('conversation_id').' = '.$this->db->quote($key));
 
-        $this->db->setQuery($del)->execute();
+        $this->db->setQuery($delete)->execute();
     }
 
     /**
@@ -633,12 +633,12 @@ final class JoomlaDbConversationMemory implements MemoryInterface
      */
     private static function extractTitleFromHistory(array $history): ?string
     {
-        foreach ($history as $msg) {
-            if (! is_array($msg) || ($msg['role'] ?? '') !== self::ROLE_USER || empty($msg['content'])) {
+        foreach ($history as $message) {
+            if (! is_array($message) || ($message['role'] ?? '') !== self::ROLE_USER || empty($message['content'])) {
                 continue;
             }
 
-            $content = (string) $msg['content'];
+            $content = (string) $message['content'];
 
             return mb_strlen($content) > self::TITLE_MAX_LENGTH
                 ? mb_substr($content, 0, self::TITLE_MAX_LENGTH).self::TITLE_ELLIPSIS
@@ -677,14 +677,14 @@ final class JoomlaDbConversationMemory implements MemoryInterface
      *
      * @template T
      *
-     * @param  string  $op  Operation name used in the wrapped error message.
+     * @param  string  $operation  Operation name used in the wrapped error message.
      * @param  callable(): T  $work
      * @return T
      *
      * @throws ConversationAccessDeniedException
      * @throws MemoryException
      */
-    private function guard(string $op, callable $work): mixed
+    private function guard(string $operation, callable $work): mixed
     {
         try {
             return $work();
@@ -692,7 +692,7 @@ final class JoomlaDbConversationMemory implements MemoryInterface
             throw $e;
         } catch (\Throwable $e) {
             throw new MemoryException(
-                "JoomlaDbConversationMemory::{$op} failed: {$e->getMessage()}",
+                "JoomlaDbConversationMemory::{$operation} failed: {$e->getMessage()}",
                 previous: $e,
             );
         }

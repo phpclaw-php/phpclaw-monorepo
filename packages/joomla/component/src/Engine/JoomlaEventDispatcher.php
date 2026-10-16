@@ -24,9 +24,9 @@ final class JoomlaEventDispatcher
     public static function fire(string $event, string $key, mixed &$value): void
     {
         try {
-            $e = new Event($event, [$key => $value]);
-            Factory::getApplication()->getDispatcher()->dispatch($event, $e);
-            $value = $e->getArgument($key, $value);
+            $dispatched = new Event($event, [$key => $value]);
+            Factory::getApplication()->getDispatcher()->dispatch($event, $dispatched);
+            $value = $dispatched->getArgument($key, $value);
         } catch (\Throwable) {
         }
     }
@@ -38,8 +38,6 @@ final class JoomlaEventDispatcher
      */
     public static function db(): DatabaseInterface
     {
-        $db = Factory::getContainer()->get(DatabaseInterface::class);
-
-        return $db;
+        return Factory::getContainer()->get(DatabaseInterface::class);
     }
 }

@@ -25,6 +25,10 @@ abstract class AbstractJoomlaTool implements ToolInterface, ToolRoutingInterface
 
     protected const BLOCKED_COLUMNS = [];
 
+    protected const MODE_FLAGS = ['schema', 'aggregate'];
+
+    protected const ROW_ARGUMENTS = ['columns', 'limit', 'offset', 'order_by', 'order_dir'];
+
     /**
      * Create a new AbstractJoomlaTool instance.
      *
@@ -60,6 +64,101 @@ abstract class AbstractJoomlaTool implements ToolInterface, ToolRoutingInterface
             },
             $sql,
         );
+    }
+
+    /**
+     * Build the JSON error envelope; each tool's execution contract supplies it.
+     *
+     * @param  string  $code  Machine-readable error code.
+     * @param  string  $message  Human-readable explanation.
+     * @param  array<string, mixed>  $context  Additional correction hints.
+     * @return string JSON-encoded error envelope.
+     */
+    abstract protected function error(string $code, string $message, array $context = []): string;
+
+    /**
+     * Refuse a mode flag that is not a boolean, and a request that sets both schema and aggregate.
+     *
+     * @param  array<string, mixed>  $input  Runtime input.
+     * @param  list<string>  $flags  Arguments that must be booleans when present.
+     * @return string|null JSON-encoded error envelope, or null when valid.
+     */
+    protected function validateModeFlags(array $input, array $flags = self::MODE_FLAGS): ?string
+    {
+        foreach ($flags as $flag) {
+            if (array_key_exists($flag, $input) && ! is_bool($input[$flag])) {
+                return $this->error('INVALID_ARGUMENT', sprintf('"%s" must be a boolean.', $flag));
+            }
+        }
+
+        if (($input['schema'] ?? false) === true && ($input['aggregate'] ?? false) === true) {
+            return $this->error('CONFLICTING_MODES', 'Set only one of "schema" or "aggregate".');
+        }
+
+        return null;
+    }
+
+    /**
+     * Validate the columns argument against the tool's available and blocked lists.
+     *
+     * @param  array<string, mixed>  $input  Runtime input.
+     * @return string|null JSON-encoded error envelope, or null when valid.
+     */
+    protected function validateColumns(array $input): ?string
+    {
+        if (! array_key_exists('columns', $input)) {
+            return null;
+        }
+
+        if (! is_array($input['columns']) && ! is_string($input['columns'])) {
+            return $this->error('INVALID_COLUMNS', '"columns" must be an array or a string of field names.');
+        }
+
+        foreach (self::normaliseRequestedColumns($input['columns']) as $column) {
+            if ($column === self::ALL_COLUMNS_MARKER) {
+                continue;
+            }
+
+            if (in_array($column, static::BLOCKED_COLUMNS, true)) {
+                return $this->error(
+                    'BLOCKED_COLUMN',
+                    sprintf('Field "%s" is blocked and cannot be read by this tool.', $column),
+                    ['blocked_columns' => static::BLOCKED_COLUMNS],
+                );
+            }
+
+            if (! in_array($column, static::AVAILABLE_COLUMNS, true)) {
+                return $this->error(
+                    'UNKNOWN_COLUMN',
+                    sprintf('Field "%s" is not available from this tool.', $column),
+                    ['available_columns' => static::AVAILABLE_COLUMNS],
+                );
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * One IGNORED_ARGUMENT warning per row-shaping argument sent with aggregate mode.
+     *
+     * @param  array<string, mixed>  $input  Validated input.
+     * @return list<array{code: string, message: string}>
+     */
+    protected static function ignoredArgumentWarnings(array $input): array
+    {
+        $warnings = [];
+
+        foreach (self::ROW_ARGUMENTS as $argument) {
+            if (array_key_exists($argument, $input)) {
+                $warnings[] = [
+                    'code' => 'IGNORED_ARGUMENT',
+                    'message' => sprintf('"%s" was ignored because aggregate mode returns totals only.', $argument),
+                ];
+            }
+        }
+
+        return $warnings;
     }
 
     /**
@@ -119,14 +218,14 @@ abstract class AbstractJoomlaTool implements ToolInterface, ToolRoutingInterface
                 if (is_array($decoded)) {
                     return array_values(array_filter(
                         array_map('strval', $decoded),
-                        static fn (string $s): bool => $s !== '',
+                        static fn (string $name): bool => $name !== '',
                     ));
                 }
             }
 
             return array_values(array_filter(
                 array_map('trim', explode(',', $trimmed)),
-                static fn (string $s): bool => $s !== '',
+                static fn (string $name): bool => $name !== '',
             ));
         }
 
@@ -136,7 +235,7 @@ abstract class AbstractJoomlaTool implements ToolInterface, ToolRoutingInterface
 
         return array_values(array_filter(
             array_map('strval', $requested),
-            static fn (string $s): bool => $s !== '',
+            static fn (string $name): bool => $name !== '',
         ));
     }
 
@@ -162,7 +261,7 @@ abstract class AbstractJoomlaTool implements ToolInterface, ToolRoutingInterface
 
         $valid = array_values(array_filter(
             $requested,
-            static fn (string $c): bool => in_array($c, $available, strict: true),
+            static fn (string $column): bool => in_array($column, $available, strict: true),
         ));
 
         if ($valid === []) {
@@ -177,51 +276,51 @@ abstract class AbstractJoomlaTool implements ToolInterface, ToolRoutingInterface
     }
 
     /**
-     * Clamp $n into [1, $max].
+     * Clamp $limit into [1, $max].
      *
-     * @param  int  $n
+     * @param  int  $limit
      * @param  int  $max
      * @return int
      */
-    protected static function clampLimit(int $n, int $max): int
+    protected static function clampLimit(int $limit, int $max): int
     {
-        return min(max(1, $n), $max);
+        return min(max(1, $limit), $max);
     }
 
     /**
-     * Clamp $n to a non-negative integer.
+     * Clamp $offset to a non-negative integer.
      *
-     * @param  int  $n
+     * @param  int  $offset
      * @return int
      */
-    protected static function clampOffset(int $n): int
+    protected static function clampOffset(int $offset): int
     {
-        return max(0, $n);
+        return max(0, $offset);
     }
 
     /**
-     * Return $col when it exists in $allowed, otherwise $default.
+     * Return $column when it exists in $allowed, otherwise $default.
      *
-     * @param  string  $col
+     * @param  string  $column
      * @param  string[]  $allowed
      * @param  string  $default
      * @return string
      */
-    protected static function safeColumn(string $col, array $allowed, string $default): string
+    protected static function safeColumn(string $column, array $allowed, string $default): string
     {
-        return in_array($col, $allowed, strict: true) ? $col : $default;
+        return in_array($column, $allowed, strict: true) ? $column : $default;
     }
 
     /**
-     * Normalise $dir to 'ASC' or 'DESC', defaulting to $default.
+     * Normalise $direction to 'ASC' or 'DESC', defaulting to $default.
      *
-     * @param  string  $dir
+     * @param  string  $direction
      * @param  string  $default  'ASC' or 'DESC'
      * @return string
      */
-    protected static function safeDirection(string $dir, string $default = 'DESC'): string
+    protected static function safeDirection(string $direction, string $default = 'DESC'): string
     {
-        $upper = strtoupper($dir);
+        $upper = strtoupper($direction);
 
         return ($upper === 'ASC' || $upper === 'DESC') ? $upper : $default;
     }

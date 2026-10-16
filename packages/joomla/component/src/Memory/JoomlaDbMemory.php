@@ -60,7 +60,7 @@ final class JoomlaDbMemory implements MemoryInterface
         $result = $this->db->setQuery($query)->loadResult();
         $hit = $result !== null;
 
-        HookDispatcher::memoryRead($key, $namespace, self::DRIVER_NAME, $hit);
+        HookDispatcher::memoryRead($key, $namespace, self::DRIVER_NAME, hit: $hit);
 
         return $hit ? self::unserialize((string) $result) : null;
     }
@@ -81,7 +81,7 @@ final class JoomlaDbMemory implements MemoryInterface
 
         $rows = $this->db->setQuery($query)->loadAssocList('lookup_key', 'value') ?: [];
 
-        return array_map(fn (string $v): mixed => self::unserialize($v), $rows);
+        return array_map(fn (string $stored): mixed => self::unserialize($stored), $rows);
     }
 
     /**
@@ -108,7 +108,7 @@ final class JoomlaDbMemory implements MemoryInterface
     public function set(string $key, mixed $value, string $namespace = self::DEFAULT_NAMESPACE, ?int $ttl = null): void
     {
         $now = self::now();
-        $expiresAt = $ttl !== null ? date(self::DATETIME_FORMAT, time() + $ttl) : null;
+        $expiresAt = $ttl === null ? null : date(self::DATETIME_FORMAT, time() + $ttl);
         $stored = self::serialize($value);
 
         $this->rowExists($key, $namespace)
@@ -229,7 +229,7 @@ final class JoomlaDbMemory implements MemoryInterface
      */
     private function expiresLiteral(?string $expiresAt): string
     {
-        return $expiresAt !== null ? $this->db->quote($expiresAt) : self::NULL_LITERAL;
+        return $expiresAt === null ? self::NULL_LITERAL : $this->db->quote($expiresAt);
     }
 
     /**

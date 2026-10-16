@@ -11,6 +11,16 @@ use Joomla\Database\DatabaseInterface;
 
 return new class implements InstallerScriptInterface
 {
+    private const COMPONENT_ASSET = 'com_phpclaw';
+
+    private const GROUP_TITLES = ['Manager', 'Administrator', 'Super Users'];
+
+    private const DEFAULT_RULES = [
+        'core.manage' => ['Manager'],
+        'phpclaw.chat.use' => ['Manager', 'Administrator', 'Super Users'],
+        'phpclaw.chat.manageall' => ['Administrator', 'Super Users'],
+    ];
+
     /**
      * Run before the install, update or uninstall routine.
      *
@@ -80,32 +90,53 @@ return new class implements InstallerScriptInterface
     private function seedAclRules(): void
     {
         $db = Factory::getContainer()->get(DatabaseInterface::class);
+        $groupIds = $this->resolveGroupIds($db);
+        [$rules, $changed] = self::withDefaultRules($this->loadRules($db), $groupIds);
 
-        $wanted = ['Manager', 'Administrator', 'Super Users'];
+        if (! $changed) {
+            return;
+        }
 
+        $query = $db->getQuery(true)
+            ->update($db->quoteName('#__assets'))
+            ->set($db->quoteName('rules').' = '.$db->quote(json_encode($rules)))
+            ->where($db->quoteName('name').' = '.$db->quote(self::COMPONENT_ASSET));
+        $db->setQuery($query);
+        $db->execute();
+    }
+
+    /**
+     * Map each wanted group title to its id, matching titles case-insensitively, and log the titles no group carries.
+     *
+     * @param  DatabaseInterface  $db  Joomla database connection.
+     * @return array<string, int> Group id keyed by wanted title.
+     */
+    private function resolveGroupIds(DatabaseInterface $db): array
+    {
         $query = $db->getQuery(true)
             ->select($db->quoteName(['id', 'title']))
             ->from($db->quoteName('#__usergroups'))
             ->where('LOWER('.$db->quoteName('title').') IN ('.implode(',', array_map(
-                fn (string $g) => $db->quote(strtolower($g)),
-                $wanted
+                fn (string $title) => $db->quote(strtolower($title)),
+                self::GROUP_TITLES
             )).')');
         $db->setQuery($query);
-        $rows = $db->loadObjectList();
 
         $byLowerTitle = [];
-        foreach ($rows as $row) {
+        foreach ($db->loadObjectList() as $row) {
             $byLowerTitle[strtolower((string) $row->title)] = (int) $row->id;
         }
 
         $groupIds = [];
         $unresolved = [];
-        foreach ($wanted as $name) {
-            if (isset($byLowerTitle[strtolower($name)])) {
-                $groupIds[$name] = $byLowerTitle[strtolower($name)];
-            } else {
-                $unresolved[] = $name;
+        foreach (self::GROUP_TITLES as $title) {
+            if (isset($byLowerTitle[strtolower($title)])) {
+                $groupIds[$title] = $byLowerTitle[strtolower($title)];
+
+                continue;
             }
+
+            $unresolved[] = $title;
         }
 
         if ($unresolved !== []) {
@@ -115,59 +146,61 @@ return new class implements InstallerScriptInterface
             );
         }
 
+        return $groupIds;
+    }
+
+    /**
+     * Read the component asset's stored rules, or an empty set when none are stored or they cannot be decoded.
+     *
+     * @param  DatabaseInterface  $db  Joomla database connection.
+     * @return array<string, mixed>
+     */
+    private function loadRules(DatabaseInterface $db): array
+    {
         $query = $db->getQuery(true)
             ->select($db->quoteName('rules'))
             ->from($db->quoteName('#__assets'))
-            ->where($db->quoteName('name').' = '.$db->quote('com_phpclaw'));
+            ->where($db->quoteName('name').' = '.$db->quote(self::COMPONENT_ASSET));
         $db->setQuery($query);
         $rulesJson = $db->loadResult();
 
-        $rules = [];
-
-        if ($rulesJson !== null && $rulesJson !== '') {
-            $decoded = json_decode($rulesJson, true);
-
-            if (is_array($decoded)) {
-                $rules = $decoded;
-            }
+        if ($rulesJson === null || $rulesJson === '') {
+            return [];
         }
 
-        $defaults = [
-            'core.manage' => ['Manager'],
-            'phpclaw.chat.use' => ['Manager', 'Administrator', 'Super Users'],
-            'phpclaw.chat.manageall' => ['Administrator', 'Super Users'],
-        ];
+        $decoded = json_decode($rulesJson, true);
 
+        return is_array($decoded) ? $decoded : [];
+    }
+
+    /**
+     * Add every default grant a resolved group lacks, keeping any rule a group already has.
+     *
+     * @param  array<string, mixed>  $rules  Stored rules.
+     * @param  array<string, int>  $groupIds  Group id keyed by title.
+     * @return array{0: array<string, mixed>, 1: bool} The rules, and whether a grant was added.
+     */
+    private static function withDefaultRules(array $rules, array $groupIds): array
+    {
         $changed = false;
 
-        foreach ($defaults as $action => $targetGroups) {
+        foreach (self::DEFAULT_RULES as $action => $targetGroups) {
             if (! isset($rules[$action]) || ! is_array($rules[$action])) {
                 $rules[$action] = [];
             }
 
             foreach ($targetGroups as $groupName) {
-                if (! isset($groupIds[$groupName])) {
+                $groupId = $groupIds[$groupName] ?? null;
+
+                if ($groupId === null || array_key_exists($groupId, $rules[$action])) {
                     continue;
                 }
 
-                $gid = $groupIds[$groupName];
-
-                if (! array_key_exists($gid, $rules[$action])) {
-                    $rules[$action][$gid] = 1;
-                    $changed = true;
-                }
+                $rules[$action][$groupId] = 1;
+                $changed = true;
             }
         }
 
-        if (! $changed) {
-            return;
-        }
-
-        $query = $db->getQuery(true)
-            ->update($db->quoteName('#__assets'))
-            ->set($db->quoteName('rules').' = '.$db->quote(json_encode($rules)))
-            ->where($db->quoteName('name').' = '.$db->quote('com_phpclaw'));
-        $db->setQuery($query);
-        $db->execute();
+        return [$rules, $changed];
     }
 };

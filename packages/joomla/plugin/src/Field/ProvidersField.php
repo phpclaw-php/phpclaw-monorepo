@@ -140,7 +140,7 @@ final class ProvidersField extends ListField
     {
         $primary = (string) $this->form->getValue($follow, $this->group, '');
 
-        return ToolRegistry::toolFormat($primary !== '' ? $primary : (new ClawConfig)->providerName);
+        return ToolRegistry::toolFormat($primary === '' ? (new ClawConfig)->providerName : $primary);
     }
 
     /**

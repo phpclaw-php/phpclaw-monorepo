@@ -43,8 +43,6 @@
             <file>component/src/View/Analytics/HtmlView.php</file>
             <file>component/src/View/Chat/HtmlView.php</file>
             <file>component/src/View/Guide/HtmlView.php</file>
-            <!-- Framework-bound: Joomla CMSApplication toolbar helper. -->
-            <file>component/src/Admin/AboutPage.php</file>
             <!-- Framework-bound: Joomla JFormField subclasses require Joomla bootstrap to instantiate. -->
             <file>plugin/src/Field/ProvidersField.php</file>
         </exclude>

@@ -89,5 +89,24 @@ namespace Joomla\CMS\Plugin {
         {
             $this->application = $application;
         }
+
+        protected function getApplication(): ?object
+        {
+            return $this->application;
+        }
+    }
+}
+
+namespace Joomla\CMS\Application {
+    class ApiApplication
+    {
+        public array $formatMapper = [];
+
+        public function addFormatMap($contentHeader, $format): void
+        {
+            if (! array_key_exists($contentHeader, $this->formatMapper)) {
+                $this->formatMapper[$contentHeader] = $format;
+            }
+        }
     }
 }

@@ -10,7 +10,9 @@ use Joomla\CMS\Plugin\PluginHelper;
 use Joomla\Event\GenericEvent;
 use PhpClaw\AutoDiscovery\Bootstrap;
 use PhpClaw\Cloud\CloudManager;
+use PhpClaw\Guards\Contracts\GuardInterface;
 use PhpClaw\Guards\GuardRegistry;
+use PhpClaw\Hooks\Contracts\HookInterface;
 use PhpClaw\Hooks\HookEventBridge;
 use PhpClaw\Hooks\HookRegistry;
 use PhpClaw\Joomla\Component\Administrator\Database\PhpClawTables;
@@ -44,6 +46,10 @@ final class EngineBootstrapper
 
     private const INSTALL_SQL_PATH = '/components/com_phpclaw/sql/install.mysql.utf8.sql';
 
+    private const MANAGE_ALL_ACTION = 'phpclaw.chat.manageall';
+
+    private const COMPONENT = 'com_phpclaw';
+
     /**
      * Ensure the phpClaw tables exist, then boot all registries from the given config.
      *
@@ -57,11 +63,11 @@ final class EngineBootstrapper
         PluginHelper::importPlugin('system');
 
         (new HookEventBridge(
-            static function (string $event, array $ctx): void {
+            static function (string $event, array $context): void {
                 try {
                     Factory::getApplication()
                         ->getDispatcher()
-                        ->dispatch(self::phpClawEventName($event), new GenericEvent('phpclaw.'.$event, $ctx));
+                        ->dispatch(self::phpClawEventName($event), new GenericEvent('phpclaw.'.$event, $context));
                 } catch (\Throwable) {
                 }
             },
@@ -74,7 +80,7 @@ final class EngineBootstrapper
         $this->registerConfigGuards($config);
         $this->registerConfigHooks($config);
         $this->registerConfigSkills($config);
-        $this->registerCatalogueSkills();
+        SkillCatalogue::activateDefaults();
 
         Bootstrap::activateFromSettings([
             'provider' => $config->provider,
@@ -142,7 +148,7 @@ final class EngineBootstrapper
                 return false;
             }
 
-            return (bool) $app->getIdentity()?->authorise('phpclaw.chat.manageall', 'com_phpclaw');
+            return (bool) $app->getIdentity()?->authorise(self::MANAGE_ALL_ACTION, self::COMPONENT);
         } catch (\Throwable) {
             return false;
         }
@@ -265,19 +271,16 @@ final class EngineBootstrapper
         JoomlaEventDispatcher::fire('onPhpClawExtraGuards', 'guards', $guards);
 
         foreach ($guards as $entry) {
-            if (! is_array($entry) || ! isset($entry['class']) || ! is_string($entry['class'])) {
-                continue;
-            }
-            if (! class_exists($entry['class'])) {
+            if (! is_array($entry) || ! is_string($entry['class'] ?? null) || ! is_subclass_of($entry['class'], GuardInterface::class)) {
                 continue;
             }
 
-            $priority = (int) ($entry['priority'] ?? 10);
-            $ctor = (new \ReflectionClass($entry['class']))->getConstructor();
-            if ($ctor !== null && $ctor->getNumberOfRequiredParameters() > 0) {
+            $constructor = (new \ReflectionClass($entry['class']))->getConstructor();
+            if ($constructor !== null && $constructor->getNumberOfRequiredParameters() > 0) {
                 continue;
             }
-            GuardRegistry::register(new $entry['class'], $priority, replace: true);
+
+            GuardRegistry::register(new $entry['class'], (int) ($entry['priority'] ?? GuardRegistry::DEFAULT_PRIORITY), replace: true);
         }
     }
 
@@ -300,8 +303,11 @@ final class EngineBootstrapper
                 continue;
             }
 
-            $priority = (int) ($entry['priority'] ?? 10);
-            HookRegistry::on($entry['event'], $entry['handler'], $priority);
+            if (! is_callable($entry['handler']) && ! $entry['handler'] instanceof HookInterface) {
+                continue;
+            }
+
+            HookRegistry::on($entry['event'], $entry['handler'], (int) ($entry['priority'] ?? HookRegistry::DEFAULT_PRIORITY));
         }
     }
 
@@ -319,16 +325,6 @@ final class EngineBootstrapper
         foreach ($skills as $skill) {
             SkillRegistry::register($skill);
         }
-    }
-
-    /**
-     * Activate every discovered #[Skill] catalogue entry; skills are always-on and the matcher gates injection per message.
-     *
-     * @return void
-     */
-    private function registerCatalogueSkills(): void
-    {
-        SkillCatalogue::activateDefaults();
     }
 
     /**

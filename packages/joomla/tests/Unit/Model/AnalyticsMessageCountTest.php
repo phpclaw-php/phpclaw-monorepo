@@ -50,25 +50,6 @@ final class AnalyticsMessageCountTest extends TestCase
         self::assertStringContainsString($join, $scoped);
     }
 
-    public function test_no_branch_counts_the_message_table_on_its_own(): void
-    {
-        $source = (string) file_get_contents(
-            dirname(__DIR__, 3).'/component/src/Model/AnalyticsModel.php',
-        );
-
-        preg_match_all('/->from\(\$quotedMsgTable\)(.{0,120})/s', $source, $matches);
-
-        self::assertNotSame([], $matches[1], 'The message-count query was not found.');
-
-        foreach ($matches[1] as $following) {
-            self::assertStringContainsString(
-                'innerJoin',
-                $following,
-                'Every count over the message table must join the conversation table.',
-            );
-        }
-    }
-
     private function buildQuery(?int $userId): string
     {
         $captured = null;

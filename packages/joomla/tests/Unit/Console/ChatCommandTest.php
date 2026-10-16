@@ -8,12 +8,14 @@ use Closure;
 use PhpClaw\Agent\AgentResponse;
 use PhpClaw\Agent\Conversation;
 use PhpClaw\Agent\ConversationTurn;
+use PhpClaw\Agent\Message;
 use PhpClaw\Claw;
 use PhpClaw\Contracts\ClawInterface;
 use PhpClaw\Exceptions\AdapterException;
 use PhpClaw\Exceptions\GuardException;
 use PhpClaw\Exceptions\ToolException;
 use PhpClaw\Hooks\HookRegistry;
+use PhpClaw\Hooks\LifecycleEvent;
 use PhpClaw\Joomla\Component\Administrator\Console\ChatCommand;
 use PhpClaw\Joomla\Component\Administrator\Exceptions\ConversationAccessDeniedException;
 use PhpClaw\Tools\Contracts\ToolInterface;
@@ -89,6 +91,42 @@ final class ChatCommandTest extends TestCase
         self::assertStringContainsString('reply to first question', $out);
         self::assertStringContainsString('reply to second question', $out);
         self::assertSame([[self::CONVERSATION_ID, 'first question'], [self::CONVERSATION_ID, 'second question']], $this->sent);
+    }
+
+    public function test_the_next_turn_carries_the_stored_tool_rows_of_the_previous_turn(): void
+    {
+        $stored = new Conversation(self::CONVERSATION_ID, [Message::user('first question'), Message::tool('t1', 'project_info', '{"ok":true}'), Message::assistant('done')], new \DateTimeImmutable);
+        $histories = [];
+        $mock = $this->createMock(ClawInterface::class);
+        $mock->method('storeMessages')->willReturn(true);
+        $mock->method('conversation')->willReturnOnConsecutiveCalls(new Conversation(self::CONVERSATION_ID, [], new \DateTimeImmutable), $stored, $stored);
+        $mock->method('streamInConversation')->willReturnCallback(function (Conversation $c, string $message, callable $onToken) use (&$histories): ConversationTurn {
+            $histories[] = array_map(static fn (Message $m): string => $m->role, $c->history);
+            $onToken('ok');
+
+            return new ConversationTurn(new AgentResponse(text: 'ok', provider: 'ollama', model: 'qwen2.5:7b', iterations: 1), $c->withMessage(Message::user($message))->withMessage(Message::assistant('ok')));
+        });
+
+        $this->session($mock, ['first question', 'second question', '/exit']);
+
+        self::assertSame([[], ['user', 'tool', 'assistant']], $histories);
+    }
+
+    public function test_without_stored_messages_the_session_keeps_its_own_history(): void
+    {
+        $mock = $this->createMock(ClawInterface::class);
+        $mock->method('storeMessages')->willReturn(false);
+        $mock->expects(self::once())->method('conversation')->willReturn(new Conversation(self::CONVERSATION_ID, [], new \DateTimeImmutable));
+        $mock->method('streamInConversation')->willReturnCallback(function (Conversation $c, string $message, callable $onToken): ConversationTurn {
+            $this->sent[] = [$c->id, $message];
+            $onToken('ok');
+
+            return new ConversationTurn(new AgentResponse(text: 'ok', provider: 'ollama', model: 'qwen2.5:7b', iterations: 1), $c);
+        });
+
+        $this->session($mock, ['first question', 'second question', '/exit']);
+
+        self::assertCount(2, $this->sent);
     }
 
     public function test_chat_prints_a_summary_line_after_each_turn(): void
@@ -431,5 +469,27 @@ final class ChatCommandTest extends TestCase
         $this->session($this->agent(), ['/exit']);
 
         self::assertSame($before, HookRegistry::count());
+    }
+
+    public function test_a_tool_call_made_during_a_chat_turn_is_stored_before_the_reply(): void
+    {
+        $stored = null;
+        $conversation = new Conversation(self::CONVERSATION_ID, [], new \DateTimeImmutable);
+        $mock = $this->createMock(ClawInterface::class);
+        $mock->method('conversation')->willReturn($conversation);
+        $mock->method('streamInConversation')->willReturnCallback(
+            static function (Conversation $c, string $message, callable $onToken, ?callable $beforePersist) use (&$stored): ConversationTurn {
+                HookRegistry::fire(LifecycleEvent::ToolAfter->value, ['tool_name' => 'joomla_articles', 'tool_input' => [], 'tool_result' => '{"total":3}']);
+                $stored = $beforePersist === null ? null : $beforePersist(['history' => [['role' => 'user', 'content' => $message], ['role' => 'assistant', 'content' => 'Three.']]]);
+
+                return new ConversationTurn(new AgentResponse(text: 'Three.', provider: 'ollama', model: 'qwen2.5:7b', iterations: 1), $c);
+            },
+        );
+
+        $this->session($mock, ['how many articles', '/exit']);
+
+        self::assertSame(['user', 'tool', 'assistant'], array_column($stored['history'] ?? [], 'role'));
+        self::assertSame('joomla_articles', $stored['history'][1]['tool_name']);
+        self::assertSame(0, HookRegistry::count(LifecycleEvent::ToolAfter->value));
     }
 }

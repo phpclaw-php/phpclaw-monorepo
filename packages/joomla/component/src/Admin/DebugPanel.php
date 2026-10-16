@@ -45,13 +45,7 @@ final class DebugPanel
         $conversation = $this->engine->conversation($conversationId ?: '');
 
         $collectedToolCalls = [];
-        HookRegistry::on(LifecycleEvent::ToolAfter->value, function (array $ctx) use (&$collectedToolCalls): void {
-            $collectedToolCalls[] = [
-                'tool_name' => (string) ($ctx['tool_name'] ?? ''),
-                'tool_input' => (array) ($ctx['tool_input'] ?? []),
-                'tool_result' => (string) ($ctx['tool_result'] ?? ''),
-            ];
-        });
+        self::collectToolCalls($collectedToolCalls);
 
         $title = '';
         $result = $this->engine->streamInConversation(
@@ -61,11 +55,7 @@ final class DebugPanel
             $this->buildMemoryCallback($collectedToolCalls, $isNew, $message, $title),
         );
         $response = $result->response;
-
-        $toolCalls = array_values(array_filter(
-            $collectedToolCalls,
-            static fn (array $c): bool => $c['tool_name'] !== '',
-        ));
+        $toolCalls = self::namedToolCalls($collectedToolCalls);
 
         return [
             'text' => $response->text,
@@ -133,19 +123,19 @@ final class DebugPanel
 
         $raw = array_values(array_filter(
             (array) ($stored['history'] ?? $stored['messages'] ?? []),
-            fn (mixed $m) => is_array($m) && in_array($m['role'] ?? '', ['user', 'assistant', 'tool'], true),
+            fn (mixed $entry) => is_array($entry) && in_array($entry['role'] ?? '', ['user', 'assistant', 'tool'], true),
         ));
 
-        $messages = array_map(static function (array $m): array {
-            if ($m['role'] !== 'tool') {
-                return $m;
+        $messages = array_map(static function (array $entry): array {
+            if ($entry['role'] !== 'tool') {
+                return $entry;
             }
 
             return [
                 'role' => 'tool',
-                'tool_name' => (string) ($m['tool_name'] ?? ''),
-                'tool_input' => is_array($m['tool_input'] ?? null) ? $m['tool_input'] : [],
-                'tool_result' => (string) ($m['content'] ?? ''),
+                'tool_name' => (string) ($entry['tool_name'] ?? ''),
+                'tool_input' => is_array($entry['tool_input'] ?? null) ? $entry['tool_input'] : [],
+                'tool_result' => (string) ($entry['content'] ?? ''),
             ];
         }, $raw);
 
@@ -157,16 +147,63 @@ final class DebugPanel
     }
 
     /**
-     * Find the index of the last assistant message - tool rows are spliced before it.
+     * Collect every tool call of the current turn into $toolCalls; remove the returned listener when the turn ends.
+     *
+     * @param  list<array{tool_name: string, tool_input: array<array-key, mixed>, tool_result: string}>  $toolCalls  Filled as each tool finishes.
+     * @return \Closure The registered tool-after listener.
+     */
+    public static function collectToolCalls(array &$toolCalls): \Closure
+    {
+        $listener = static function (array $context) use (&$toolCalls): void {
+            $toolCalls[] = [
+                'tool_name' => (string) ($context['tool_name'] ?? ''),
+                'tool_input' => (array) ($context['tool_input'] ?? []),
+                'tool_result' => (string) ($context['tool_result'] ?? ''),
+            ];
+        };
+        HookRegistry::on(LifecycleEvent::ToolAfter->value, $listener);
+
+        return $listener;
+    }
+
+    /**
+     * Build the beforePersist callback that stores the collected tool calls as tool rows before the last assistant message.
+     *
+     * @param  list<array{tool_name: string, tool_input: array<array-key, mixed>, tool_result: string}>  $toolCalls  Tool calls of the turn, read when the payload is saved.
+     * @return callable(array<string, mixed>): array<string, mixed>
+     */
+    public static function toolCallPersister(array &$toolCalls): callable
+    {
+        return static function (array $payload) use (&$toolCalls): array {
+            return self::spliceToolCallsIntoHistory($payload, self::namedToolCalls($toolCalls));
+        };
+    }
+
+    /**
+     * Drop collected entries that carry no tool name.
+     *
+     * @param  list<array{tool_name: string, tool_input: array<array-key, mixed>, tool_result: string}>  $toolCalls  Collected entries.
+     * @return list<array{tool_name: string, tool_input: array<array-key, mixed>, tool_result: string}>
+     */
+    private static function namedToolCalls(array $toolCalls): array
+    {
+        return array_values(array_filter(
+            $toolCalls,
+            static fn (array $call): bool => $call['tool_name'] !== '',
+        ));
+    }
+
+    /**
+     * Find the index of the last assistant message, or the history length when there is none.
      *
      * @param  array<int, mixed>  $messages
      * @return int
      */
-    private function findLastAssistantIndex(array $messages): int
+    private static function findLastAssistantIndex(array $messages): int
     {
-        for ($i = count($messages) - 1; $i >= 0; $i--) {
-            if (is_array($messages[$i]) && ($messages[$i]['role'] ?? '') === 'assistant') {
-                return $i;
+        for ($index = count($messages) - 1; $index >= 0; $index--) {
+            if (is_array($messages[$index]) && ($messages[$index]['role'] ?? '') === 'assistant') {
+                return $index;
             }
         }
 
@@ -176,23 +213,23 @@ final class DebugPanel
     /**
      * Splice tool-call rows before the last assistant message in the history array.
      *
-     * @param  array<string, mixed>  $payload  Conversation payload (mutated in place).
+     * @param  array<string, mixed>  $payload  Conversation payload.
      * @param  list<array<string, mixed>>  $toolCalls  Collected tool call entries.
-     * @return array<string, mixed> The mutated payload.
+     * @return array<string, mixed> The payload with the tool rows in its history.
      */
-    private function spliceToolCallsIntoHistory(array $payload, array $toolCalls): array
+    private static function spliceToolCallsIntoHistory(array $payload, array $toolCalls): array
     {
         if ($toolCalls === []) {
             return $payload;
         }
 
         $history = (array) ($payload['history'] ?? $payload['messages'] ?? []);
-        $insertAt = $this->findLastAssistantIndex($history);
-        $toolEntries = array_map(static fn (array $c): array => [
+        $insertAt = self::findLastAssistantIndex($history);
+        $toolEntries = array_map(static fn (array $call): array => [
             'role' => 'tool',
-            'content' => $c['tool_result'],
-            'tool_name' => $c['tool_name'],
-            'tool_input' => $c['tool_input'],
+            'content' => $call['tool_result'],
+            'tool_name' => $call['tool_name'],
+            'tool_input' => $call['tool_input'],
         ], $toolCalls);
 
         array_splice($history, $insertAt, 0, $toolEntries);
@@ -210,18 +247,18 @@ final class DebugPanel
      */
     private function registerStreamHooks(callable $emit, array &$collector): void
     {
-        HookRegistry::on(LifecycleEvent::ToolBefore->value, static function (array $ctx) use ($emit): void {
+        HookRegistry::on(LifecycleEvent::ToolBefore->value, static function (array $context) use ($emit): void {
             $emit('tool_before', [
-                'tool_name' => (string) ($ctx['tool_name'] ?? ''),
-                'tool_input' => (array) ($ctx['tool_input'] ?? []),
+                'tool_name' => (string) ($context['tool_name'] ?? ''),
+                'tool_input' => (array) ($context['tool_input'] ?? []),
             ]);
         });
 
-        HookRegistry::on(LifecycleEvent::ToolAfter->value, function (array $ctx) use ($emit, &$collector): void {
+        HookRegistry::on(LifecycleEvent::ToolAfter->value, function (array $context) use ($emit, &$collector): void {
             $entry = [
-                'tool_name' => (string) ($ctx['tool_name'] ?? ''),
-                'tool_input' => (array) ($ctx['tool_input'] ?? []),
-                'tool_result' => (string) ($ctx['tool_result'] ?? ''),
+                'tool_name' => (string) ($context['tool_name'] ?? ''),
+                'tool_input' => (array) ($context['tool_input'] ?? []),
+                'tool_result' => (string) ($context['tool_result'] ?? ''),
             ];
             if ($entry['tool_name'] !== '') {
                 $collector[] = $entry;
@@ -229,8 +266,8 @@ final class DebugPanel
             }
         });
 
-        HookRegistry::on(LifecycleEvent::ProviderToken->value, static function (array $ctx) use ($emit): void {
-            $token = (string) ($ctx['token'] ?? '');
+        HookRegistry::on(LifecycleEvent::ProviderToken->value, static function (array $context) use ($emit): void {
+            $token = (string) ($context['token'] ?? '');
             if ($token !== '') {
                 $emit('chunk', ['text' => $token]);
             }
@@ -249,12 +286,7 @@ final class DebugPanel
     private function buildMemoryCallback(array &$collector, bool $isNew, string $message, string &$titleRef): callable
     {
         return function (array $payload) use (&$collector, $isNew, $message, &$titleRef): array {
-            $toolCalls = array_values(array_filter(
-                $collector,
-                static fn (array $c): bool => $c['tool_name'] !== '',
-            ));
-
-            $payload = $this->spliceToolCallsIntoHistory($payload, $toolCalls);
+            $payload = self::spliceToolCallsIntoHistory($payload, self::namedToolCalls($collector));
 
             if ($isNew) {
                 $payload['title'] = mb_strlen($message) > self::TITLE_MAX_LENGTH

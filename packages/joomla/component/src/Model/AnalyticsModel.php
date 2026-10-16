@@ -4,23 +4,27 @@ declare(strict_types=1);
 
 namespace PhpClaw\Joomla\Component\Administrator\Model;
 
-use Joomla\CMS\Cache\Exception\CacheExceptionInterface;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Language\Text;
 use Joomla\CMS\MVC\Model\BaseDatabaseModel;
 use Joomla\Database\DatabaseInterface;
 use PhpClaw\Joomla\Component\Administrator\Database\PhpClawTables;
+use PhpClaw\Joomla\Component\Administrator\Model\Concerns\ReadsPhpClawParams;
 
 /**
  * Analytics model - usage stats from the phpClaw memory/conversation/message tables.
  */
 final class AnalyticsModel extends BaseDatabaseModel
 {
+    use ReadsPhpClawParams;
+
     private const CACHE_GROUP = 'phpclaw';
 
     private const CACHE_TTL = 300;
 
     private const SECONDS_PER_DAY = 86400;
+
+    private const DATETIME_FORMAT = 'Y-m-d H:i:s';
 
     private const EMPTY_STATS = [
         'conversations' => 0,
@@ -41,51 +45,21 @@ final class AnalyticsModel extends BaseDatabaseModel
     {
         try {
             $db = $this->getDatabase();
-            $convTable = $db->quoteName(PhpClawTables::CONVERSATIONS_TABLE);
-            $msgTable = $db->quoteName(PhpClawTables::MESSAGES_TABLE);
+            $conversationTable = $db->quoteName(PhpClawTables::CONVERSATIONS_TABLE);
+            $messageTable = $db->quoteName(PhpClawTables::MESSAGES_TABLE);
             $userId = $this->canManageAll() ? null : $this->resolveActingUserId();
             $cacheSuffix = $userId === null ? 'all' : "user_{$userId}";
 
             return [
-                'conversations' => self::cached("analytics_total_conversations_{$cacheSuffix}", static fn (): int => self::countConversations($db, $convTable, $userId)),
-                'messages' => self::cached("analytics_total_messages_{$cacheSuffix}", static fn (): int => self::countMessages($db, $convTable, $msgTable, $userId)),
-                'active_24h' => self::cached("analytics_active_24h_{$cacheSuffix}", static fn (): int => self::countActive24h($db, $convTable, $userId)),
+                'conversations' => self::cached("analytics_total_conversations_{$cacheSuffix}", static fn (): int => self::countConversations($db, $conversationTable, $userId)),
+                'messages' => self::cached("analytics_total_messages_{$cacheSuffix}", static fn (): int => self::countMessages($db, $conversationTable, $messageTable, $userId)),
+                'active_24h' => self::cached("analytics_active_24h_{$cacheSuffix}", static fn (): int => self::countActive24h($db, $conversationTable, $userId)),
             ];
         } catch (\Throwable $e) {
             error_log('phpClaw AnalyticsModel: '.$e->getMessage());
             $this->engineError = Text::_('COM_PHPCLAW_ERROR_ANALYTICS_LOAD');
 
             return self::EMPTY_STATS;
-        }
-    }
-
-    /**
-     * Return true if the acting user holds phpclaw.chat.manageall on com_phpclaw.
-     *
-     * @return bool
-     */
-    private function canManageAll(): bool
-    {
-        try {
-            return (bool) Factory::getApplication()
-                ->getIdentity()
-                ->authorise('phpclaw.chat.manageall', 'com_phpclaw');
-        } catch (\Throwable) {
-            return false;
-        }
-    }
-
-    /**
-     * Resolve the acting user's id, 0 if unavailable.
-     *
-     * @return int
-     */
-    private function resolveActingUserId(): int
-    {
-        try {
-            return (int) Factory::getApplication()->getIdentity()->id;
-        } catch (\Throwable) {
-            return 0;
         }
     }
 
@@ -111,7 +85,7 @@ final class AnalyticsModel extends BaseDatabaseModel
     {
         try {
             $updatedAt = $db->quoteName('updated_at');
-            $since = date('Y-m-d H:i:s', time() - self::SECONDS_PER_DAY);
+            $since = date(self::DATETIME_FORMAT, time() - self::SECONDS_PER_DAY);
             $query = "SELECT COUNT(*) FROM {$quotedConvTable} WHERE {$updatedAt} >= ".$db->quote($since);
 
             if ($userId !== null) {
@@ -190,7 +164,7 @@ final class AnalyticsModel extends BaseDatabaseModel
             $cache->store($value, $id);
 
             return $value;
-        } catch (CacheExceptionInterface|\Throwable) {
+        } catch (\Throwable) {
             return $producer();
         }
     }

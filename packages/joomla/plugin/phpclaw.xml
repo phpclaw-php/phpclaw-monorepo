@@ -98,6 +98,7 @@
             <fieldset name="skills" label="PLG_SYSTEM_PHPCLAW_FIELDSET_SKILLS">
                 <field name="remote_skill_urls"
                        type="textarea"
+                       filter="PhpClaw\Joomla\Component\Administrator\Engine\PhpClawConfig::remoteSkillUrlsText"
                        label="PLG_SYSTEM_PHPCLAW_FIELD_REMOTE_SKILL_URLS_LABEL"
                        description="PLG_SYSTEM_PHPCLAW_FIELD_REMOTE_SKILL_URLS_DESC"
                        rows="3"
