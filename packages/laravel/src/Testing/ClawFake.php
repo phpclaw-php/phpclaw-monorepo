@@ -23,6 +23,10 @@ final class ClawFake implements ClawInterface
 
     private const MODEL = 'fake-model';
 
+    private readonly ?MemoryInterface $memory;
+
+    private readonly bool $storeMessages;
+
     private array $sent = [];
 
     private array $queue;
@@ -37,10 +41,12 @@ final class ClawFake implements ClawInterface
      */
     public function __construct(
         array $responses = [],
-        private readonly ?MemoryInterface $memory = null,
-        private readonly bool $storeMessages = true,
+        ?MemoryInterface $memory = null,
+        bool $storeMessages = true,
     ) {
         $this->queue = array_values($responses);
+        $this->memory = $memory;
+        $this->storeMessages = $storeMessages;
     }
 
     /**

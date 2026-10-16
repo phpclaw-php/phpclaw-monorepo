@@ -19,6 +19,7 @@ use PhpClaw\Laravel\Console\Concerns\RendersToolTrace;
 use PhpClaw\Laravel\Console\Concerns\ReportsAgentTurns;
 use PhpClaw\Laravel\Console\Concerns\TracksLastConversation;
 use PhpClaw\Laravel\Engine\EngineFactory;
+use PhpClaw\Laravel\Http\StreamEventBridge;
 use Symfony\Component\Console\Exception\MissingInputException;
 use Symfony\Component\Console\Input\ArgvInput;
 
@@ -54,6 +55,8 @@ final class ChatCommand extends Command
     private const SPINNER_FRAME_MICROSECONDS = 100000;
 
     private const CLEAR_LINE = "\r\e[2K";
+
+    private const CLEAR_SCREEN = "\033[2J\033[H";
 
     private const END_OF_INPUT_KEY = "\x04";
 
@@ -239,7 +242,8 @@ final class ChatCommand extends Command
     }
 
     /**
-     * Stream one turn in the session's conversation; a failure is printed and the session goes on.
+     * Stream one turn in the session's conversation, then reload it from memory so the next turn keeps this turn's
+     * tool rows; a failure is printed and the session goes on.
      *
      * @param  string  $message  What the user typed.
      * @return void
@@ -256,13 +260,15 @@ final class ChatCommand extends Command
         }
 
         $this->line('');
-        $this->conversation = $turn->conversation;
+        $this->conversation = $this->claw->storeMessages()
+            ? $this->claw->conversation($turn->conversation->id)
+            : $turn->conversation;
         $this->rememberConversation($turn->conversation->id);
         $this->comment($this->turnSummary($turn));
     }
 
     /**
-     * Send one message with the spinner shown until the first word of the reply.
+     * Send one message with the spinner shown until the first word of the reply, storing its tool calls with the conversation.
      *
      * @param  string  $message  What the user typed.
      * @return ConversationTurn
@@ -273,6 +279,7 @@ final class ChatCommand extends Command
     {
         $this->turnRunning = true;
         $this->startSpinner();
+        StreamEventBridge::begin(static function (string $event, array $payload): void {});
 
         try {
             return $this->claw->streamInConversation(
@@ -282,8 +289,10 @@ final class ChatCommand extends Command
                     $this->stopSpinner();
                     $this->output->write($token);
                 },
+                StreamEventBridge::toolCallPersister(),
             );
         } finally {
+            StreamEventBridge::end();
             $this->turnRunning = false;
             $this->stopSpinner();
         }
@@ -415,7 +424,7 @@ final class ChatCommand extends Command
             '/new' => $this->startNewConversation(),
             '/conv' => $this->line("Conversation: {$this->conversation->id}"),
             '/quiet' => $this->toggleTrace(),
-            '/clear' => $this->output->write("\033[2J\033[H"),
+            '/clear' => $this->output->write(self::CLEAR_SCREEN),
             default => $this->warn("Unknown command {$command}. Type /help for the list."),
         };
 

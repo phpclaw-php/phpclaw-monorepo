@@ -6,8 +6,21 @@ namespace PhpClaw\Laravel\Tests\Unit\Tools;
 
 use Orchestra\Testbench\TestCase;
 use PhpClaw\Exceptions\ToolException;
+use PhpClaw\Laravel\Engine\EngineFactory;
 use PhpClaw\Laravel\PhpClawServiceProvider;
+use PhpClaw\Laravel\Tools\CacheInspectTool;
+use PhpClaw\Laravel\Tools\ConfigGetTool;
+use PhpClaw\Laravel\Tools\DatabaseTool;
 use PhpClaw\Laravel\Tools\LogTool;
+use PhpClaw\Laravel\Tools\QueueStatusTool;
+use PhpClaw\Laravel\Tools\RouteListTool;
+use PhpClaw\Laravel\Tools\TestRunTool;
+use PhpClaw\Tools\FileReadTool;
+use PhpClaw\Tools\FileWriteTool;
+use PhpClaw\Tools\HttpTool;
+use PhpClaw\Tools\ShellTool;
+use PhpClaw\Tools\ToolRegistry;
+use PhpClaw\Tools\ToolRouter;
 
 final class LogToolTest extends TestCase
 {
@@ -186,6 +199,21 @@ final class LogToolTest extends TestCase
         $this->assertStringNotContainsString('Info message', $entriesText);
         $this->assertStringNotContainsString('Debug message', $entriesText);
         $this->assertStringNotContainsString('Warning message', $entriesText);
+    }
+
+    public function test_level_matches_the_logged_level_not_a_mention_of_the_word(): void
+    {
+        file_put_contents($this->logPath, implode("\n", [
+            '[2024-01-01 00:00:01] local.ERROR: payment failed while saving user info',
+            '#0 /app/Http/Controllers/InfoController.php(12): App\\Error\\Handler->report()',
+            '[2024-01-01 00:00:02] local.INFO: nightly export done',
+        ])."\n");
+
+        $info = json_decode($this->tool->execute(['level' => 'info']), associative: true);
+        $error = json_decode($this->tool->execute(['level' => 'error']), associative: true);
+
+        $this->assertSame(['[2024-01-01 00:00:02] local.INFO: nightly export done'], $info['data']['entries']);
+        $this->assertSame(['[2024-01-01 00:00:01] local.ERROR: payment failed while saving user info'], $error['data']['entries']);
     }
 
     public function test_explicit_log_path_is_used_when_provided(): void
@@ -445,5 +473,43 @@ final class LogToolTest extends TestCase
         $entriesText = implode("\n", $envelope['data']['entries']);
         $this->assertStringNotContainsString('eyJhbGciOiJSUzI1NiJ9', $entriesText);
         $this->assertStringContainsString('[redacted]', $entriesText);
+    }
+
+    public function test_router_offers_read_log_for_crash_and_logged_wording_on_the_full_roster(): void
+    {
+        config()->set('phpclaw.tools', [
+            ShellTool::class, HttpTool::class, FileReadTool::class, FileWriteTool::class,
+            DatabaseTool::class, LogTool::class, RouteListTool::class, ConfigGetTool::class,
+            CacheInspectTool::class, QueueStatusTool::class, TestRunTool::class,
+        ]);
+        $registry = new ToolRegistry;
+        $registry->register(EngineFactory::resolveTools($this->app));
+        $router = new ToolRouter(maxToolsPerTurn: 5);
+
+        foreach (['Why did the app crash last night? Check what was logged.', 'Something broke in production, what got logged?', 'The checkout crashed for a customer, find out why.'] as $message) {
+            $offered = array_map(
+                static fn (array $schema): string => (string) ($schema['name'] ?? $schema['function']['name'] ?? ''),
+                $router->filter($registry->schemas('ollama'), $message, 'qwen2.5:7b', $registry->routingMetadata()),
+            );
+
+            $this->assertContains('read_log', $offered, $message);
+            $this->assertLessThanOrEqual(5, count($offered));
+        }
+    }
+
+    public function test_router_leaves_read_log_out_of_an_unrelated_message(): void
+    {
+        config()->set('phpclaw.tools', [LogTool::class, RouteListTool::class, ConfigGetTool::class, CacheInspectTool::class, QueueStatusTool::class, DatabaseTool::class, TestRunTool::class]);
+        $registry = new ToolRegistry;
+        $registry->register(EngineFactory::resolveTools($this->app));
+        $router = new ToolRouter(maxToolsPerTurn: 3);
+
+        $offered = array_map(
+            static fn (array $schema): string => (string) ($schema['name'] ?? $schema['function']['name'] ?? ''),
+            $router->filter($registry->schemas('ollama'), 'Which URLs does this app answer on?', 'qwen2.5:7b', $registry->routingMetadata()),
+        );
+
+        $this->assertNotContains('read_log', $offered);
+        $this->assertContains('route_list', $offered);
     }
 }

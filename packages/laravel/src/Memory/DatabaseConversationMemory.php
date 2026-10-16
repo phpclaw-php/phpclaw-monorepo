@@ -22,6 +22,8 @@ final class DatabaseConversationMemory extends AbstractDatabaseMemory
 
     public const MESSAGES_TABLE = 'phpclaw_messages';
 
+    private const TITLE_MAX_LENGTH = 80;
+
     /**
      * Retrieve a conversation record by ID, including message history when store_messages is enabled.
      *
@@ -49,7 +51,7 @@ final class DatabaseConversationMemory extends AbstractDatabaseMemory
                 'id' => $row->id,
                 'namespace' => $row->namespace,
                 'title' => $row->title,
-                'metadata' => $row->metadata !== null ? json_decode($row->metadata, associative: true) : [],
+                'metadata' => $row->metadata === null ? [] : json_decode($row->metadata, associative: true),
                 'created_at' => $row->created_at,
                 'history' => [],
             ];
@@ -62,12 +64,12 @@ final class DatabaseConversationMemory extends AbstractDatabaseMemory
                     ->get();
 
                 $history = [];
-                foreach ($messages as $msg) {
+                foreach ($messages as $message) {
                     $history[] = [
-                        'role' => $msg->role,
-                        'content' => $msg->content,
-                        'tool_name' => $msg->tool_name,
-                        'tool_input' => $msg->tool_input !== null ? json_decode($msg->tool_input, associative: true) : null,
+                        'role' => $message->role,
+                        'content' => $message->content,
+                        'tool_name' => $message->tool_name,
+                        'tool_input' => $message->tool_input === null ? null : json_decode($message->tool_input, associative: true),
                     ];
                 }
 
@@ -104,7 +106,7 @@ final class DatabaseConversationMemory extends AbstractDatabaseMemory
 
             $now = Carbon::now('UTC')->toDateTimeString();
 
-            self::assertWritable($key, $namespace);
+            self::assertAccess($key, $namespace);
 
             DB::table(self::CONVERSATIONS_TABLE)->upsert(
                 values: [
@@ -114,7 +116,9 @@ final class DatabaseConversationMemory extends AbstractDatabaseMemory
                         'user_id' => LaravelIdentityResolver::actingUserId(),
                         'title' => $title,
                         'metadata' => $metadata,
-                        'created_at' => $value['created_at'] ?? $now,
+                        'created_at' => isset($value['created_at'])
+                            ? Carbon::parse((string) $value['created_at'])->utc()->toDateTimeString()
+                            : $now,
                         'updated_at' => $now,
                     ],
                 ],
@@ -161,7 +165,7 @@ final class DatabaseConversationMemory extends AbstractDatabaseMemory
     public function forget(string $key, string $namespace = 'default'): void
     {
         $this->guard('DatabaseConversationMemory::forget', function () use ($key, $namespace): void {
-            self::assertWritable($key, $namespace);
+            self::assertAccess($key, $namespace);
 
             self::scope(
                 DB::table(self::CONVERSATIONS_TABLE)
@@ -216,7 +220,7 @@ final class DatabaseConversationMemory extends AbstractDatabaseMemory
                 $result[$row->id] = [
                     'id' => $row->id,
                     'title' => $row->title,
-                    'metadata' => $row->metadata !== null ? json_decode($row->metadata, associative: true) : [],
+                    'metadata' => $row->metadata === null ? [] : json_decode($row->metadata, associative: true),
                     'created_at' => $row->created_at,
                 ];
             }
@@ -274,18 +278,6 @@ final class DatabaseConversationMemory extends AbstractDatabaseMemory
     }
 
     /**
-     * Throw when the conversation exists and belongs to another user, before any response is committed.
-     *
-     * @param  string  $key  Conversation ULID.
-     * @param  string  $namespace  Scoping namespace.
-     * @return void
-     */
-    public static function assertAccess(string $key, string $namespace = 'conversations'): void
-    {
-        self::assertWritable($key, $namespace);
-    }
-
-    /**
      * The user id a conversation belongs to (empty for one started from the console), or null when it is not stored.
      *
      * @param  string  $key  Conversation id.
@@ -302,13 +294,16 @@ final class DatabaseConversationMemory extends AbstractDatabaseMemory
     }
 
     /**
-     * Throw when the acting user owns neither the conversation nor the manage-all ability.
+     * Throw when the conversation exists and belongs to another user unless the acting user may reach every
+     * conversation, before any response is committed.
      *
      * @param  string  $key  Conversation ULID.
      * @param  string  $namespace  Scoping namespace.
      * @return void
+     *
+     * @throws ConversationAccessDeniedException When another user owns the conversation.
      */
-    private static function assertWritable(string $key, string $namespace): void
+    public static function assertAccess(string $key, string $namespace = Conversation::MEMORY_NAMESPACE): void
     {
         if (LaravelIdentityResolver::manageAll()) {
             return;
@@ -331,7 +326,7 @@ final class DatabaseConversationMemory extends AbstractDatabaseMemory
      * @param  string  $namespace  Scoping namespace.
      * @return int Number of conversations deleted.
      */
-    public static function purgeUser(string $userId, string $namespace = 'conversations'): int
+    public static function purgeUser(string $userId, string $namespace = Conversation::MEMORY_NAMESPACE): int
     {
         $ids = DB::table(self::CONVERSATIONS_TABLE)
             ->where('user_id', $userId)
@@ -353,7 +348,7 @@ final class DatabaseConversationMemory extends AbstractDatabaseMemory
     }
 
     /**
-     * Auto-generate an 80-char title from the first user message, or null if none exists.
+     * Auto-generate a title of up to TITLE_MAX_LENGTH characters from the first user message, or null if none exists.
      *
      * @param  array<int, array<string, mixed>>  $history
      * @return ?string
@@ -364,7 +359,7 @@ final class DatabaseConversationMemory extends AbstractDatabaseMemory
             if (($message['role'] ?? '') === 'user' && is_string($message['content'] ?? null)) {
                 $text = trim((string) $message['content']);
                 if ($text !== '') {
-                    return mb_substr($text, 0, 80);
+                    return mb_substr($text, 0, self::TITLE_MAX_LENGTH);
                 }
             }
         }

@@ -8,9 +8,15 @@ use Illuminate\Console\Command;
 use PhpClaw\Agent\AgentResponse;
 use PhpClaw\Agent\RunState;
 use PhpClaw\Claw;
+use PhpClaw\Exceptions\GuardException;
+use PhpClaw\Exceptions\MaxIterationsException;
+use PhpClaw\Exceptions\ProviderException;
 use PhpClaw\Exceptions\RunConflictException;
 use PhpClaw\Exceptions\RunStateException;
 use PhpClaw\Exceptions\RunSuspendedException;
+use PhpClaw\Exceptions\TokenBudgetExceededException;
+use PhpClaw\Exceptions\ToolException;
+use PhpClaw\Laravel\Console\Concerns\ReportsAgentTurns;
 use PhpClaw\Laravel\PhpClawServiceProvider;
 use PhpClaw\Laravel\RunApprovals;
 
@@ -19,6 +25,8 @@ use PhpClaw\Laravel\RunApprovals;
  */
 final class RunsCommand extends Command
 {
+    use ReportsAgentTurns;
+
     private const ACTION_LIST = 'list';
 
     private const ACTION_APPROVE = 'approve';
@@ -135,6 +143,10 @@ final class RunsCommand extends Command
             return $this->reportFailure('No saved run with that id, or no paused call with that id waiting for a decision.');
         } catch (RunConflictException) {
             return $this->reportFailure('Another process changed this run first. Try again.');
+        } catch (GuardException|ToolException|ProviderException|TokenBudgetExceededException|MaxIterationsException $e) {
+            $this->reportAgentError($e);
+
+            return self::FAILURE;
         }
 
         $this->info($response->text);

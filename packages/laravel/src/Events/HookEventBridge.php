@@ -38,7 +38,7 @@ final class HookEventBridge
         }
 
         (new CoreHookEventBridge(
-            dispatcher: fn (string $event, array $ctx): mixed => $this->events->dispatch(self::EVENT_PREFIX.$event, [$ctx]),
+            dispatcher: fn (string $event, array $context): mixed => $this->events->dispatch(self::EVENT_PREFIX.$event, [$context]),
         ))->register();
 
         $this->registered = true;

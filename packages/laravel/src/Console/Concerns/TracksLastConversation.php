@@ -7,6 +7,7 @@ namespace PhpClaw\Laravel\Console\Concerns;
 use Illuminate\Console\Command;
 use PhpClaw\Agent\Conversation;
 use PhpClaw\Contracts\ClawInterface as PhpClawInterface;
+use PhpClaw\Laravel\Exceptions\ConversationAccessDeniedException;
 
 /**
  * Opens the conversation a console command asked for (`--conv-id`, `--continue`, or a new one) and remembers the last id.
@@ -16,7 +17,7 @@ use PhpClaw\Contracts\ClawInterface as PhpClawInterface;
 trait TracksLastConversation
 {
     /**
-     * Open the named conversation, the last one, or a new one, and say so whenever the command cannot resume.
+     * Open the named conversation, the last one, or a new one, and say so whenever the command cannot resume, including another user's id.
      *
      * @param  PhpClawInterface  $claw  Agent that owns the conversations.
      * @param  string  $conversationId  Id given with `--conv-id`, or ''.
@@ -40,7 +41,14 @@ trait TracksLastConversation
             $wanted = '';
         }
 
-        $conversation = $claw->conversation($wanted);
+        try {
+            $conversation = $claw->conversation($wanted);
+        } catch (ConversationAccessDeniedException) {
+            $conversation = $claw->conversation();
+            $this->warn("Conversation {$wanted} is not available to this command; started {$conversation->id}.");
+
+            return $conversation;
+        }
 
         if ($wanted !== '' && $conversation->id !== $wanted) {
             $this->warn("No stored conversation {$wanted}; started {$conversation->id}.");

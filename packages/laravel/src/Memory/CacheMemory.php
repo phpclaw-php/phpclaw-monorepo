@@ -8,8 +8,7 @@ use Illuminate\Contracts\Cache\LockProvider;
 use Illuminate\Contracts\Cache\Repository;
 use Illuminate\Support\Facades\Cache;
 use PhpClaw\Exceptions\MemoryException;
-use PhpClaw\Hooks\HookRegistry;
-use PhpClaw\Hooks\LifecycleEvent;
+use PhpClaw\Hooks\HookDispatcher;
 use PhpClaw\Memory\Contracts\MemoryInterface;
 
 /**
@@ -18,6 +17,16 @@ use PhpClaw\Memory\Contracts\MemoryInterface;
 final class CacheMemory implements MemoryInterface
 {
     private const DRIVER_NAME = 'cache';
+
+    private const DEFAULT_PREFIX = 'phpclaw:';
+
+    private const DEFAULT_TTL_SECONDS = 86400;
+
+    private const TRACKER_LOCK_PREFIX = 'phpclaw_tracker_lock:';
+
+    private const TRACKER_LOCK_SECONDS = 5;
+
+    private const TRACKER_LOCK_WAIT_SECONDS = 3;
 
     /**
      * Bind the cache repository and key prefix this driver stores entries under.
@@ -29,8 +38,8 @@ final class CacheMemory implements MemoryInterface
      */
     public function __construct(
         private readonly ?Repository $store = null,
-        private readonly string $prefix = 'phpclaw:',
-        private readonly int $defaultTtl = 86400,
+        private readonly string $prefix = self::DEFAULT_PREFIX,
+        private readonly int $defaultTtl = self::DEFAULT_TTL_SECONDS,
     ) {}
 
     /**
@@ -46,7 +55,7 @@ final class CacheMemory implements MemoryInterface
             $value = $this->repo()->get($this->key($namespace, $key));
             $hit = $value !== null;
 
-            $this->fireRead($key, $namespace, hit: $hit);
+            HookDispatcher::memoryRead($key, $namespace, self::DRIVER_NAME, hit: $hit);
 
             return $value;
         } catch (\Throwable $e) {
@@ -67,22 +76,17 @@ final class CacheMemory implements MemoryInterface
     {
         try {
             $expiry = $ttl ?? $this->defaultTtl;
-            $fqn = $this->key($namespace, $key);
+            $fullKey = $this->key($namespace, $key);
 
             if ($expiry > 0) {
-                $this->repo()->put($fqn, $value, $expiry);
+                $this->repo()->put($fullKey, $value, $expiry);
             } else {
-                $this->repo()->forever($fqn, $value);
+                $this->repo()->forever($fullKey, $value);
             }
 
             $this->trackerAdd($namespace, $key);
 
-            HookRegistry::fire(LifecycleEvent::MemoryWrite->value, [
-                'key' => $key,
-                'namespace' => $namespace,
-                'driver' => self::DRIVER_NAME,
-                'ttl' => $ttl,
-            ]);
+            HookDispatcher::memoryWrite($key, $namespace, self::DRIVER_NAME, $ttl);
         } catch (\Throwable $e) {
             throw new MemoryException('CacheMemory::set failed.', previous: $e);
         }
@@ -101,11 +105,7 @@ final class CacheMemory implements MemoryInterface
             $this->repo()->forget($this->key($namespace, $key));
             $this->trackerRemove($namespace, $key);
 
-            HookRegistry::fire(LifecycleEvent::MemoryForget->value, [
-                'key' => $key,
-                'namespace' => $namespace,
-                'driver' => self::DRIVER_NAME,
-            ]);
+            HookDispatcher::memoryForget($key, $namespace, self::DRIVER_NAME);
         } catch (\Throwable $e) {
             throw new MemoryException('CacheMemory::forget failed.', previous: $e);
         }
@@ -150,9 +150,9 @@ final class CacheMemory implements MemoryInterface
 
             $result = [];
             foreach ($known as $shortKey) {
-                $val = $repo->get($this->key($namespace, $shortKey));
-                if ($val !== null) {
-                    $result[$shortKey] = $val;
+                $value = $repo->get($this->key($namespace, $shortKey));
+                if ($value !== null) {
+                    $result[$shortKey] = $value;
                 }
             }
 
@@ -230,24 +230,9 @@ final class CacheMemory implements MemoryInterface
      */
     private function trackerAdd(string $namespace, string $shortKey): void
     {
-        $repo = $this->repo();
-        $trackerKey = $this->trackerKey($namespace);
-        $lockKey = 'phpclaw_tracker_lock:'.$namespace;
-
-        $update = function () use ($repo, $trackerKey, $shortKey): void {
-            $known = (array) $repo->get($trackerKey, []);
-            if (! in_array($shortKey, $known, true)) {
-                $known[] = $shortKey;
-                $repo->forever($trackerKey, $known);
-            }
-        };
-
-        $store = $repo->getStore();
-        if ($store instanceof LockProvider) {
-            $store->lock($lockKey, 5)->block(3, $update);
-        } else {
-            $update();
-        }
+        $this->updateTracker($namespace, static function (array $known) use ($shortKey): ?array {
+            return in_array($shortKey, $known, true) ? null : [...$known, $shortKey];
+        });
     }
 
     /**
@@ -259,44 +244,50 @@ final class CacheMemory implements MemoryInterface
      */
     private function trackerRemove(string $namespace, string $shortKey): void
     {
-        $repo = $this->repo();
-        $trackerKey = $this->trackerKey($namespace);
-        $lockKey = 'phpclaw_tracker_lock:'.$namespace;
+        $this->updateTracker($namespace, static function (array $known) use ($shortKey): ?array {
+            $filtered = array_values(array_filter($known, static fn ($key) => $key !== $shortKey));
 
-        $update = function () use ($repo, $trackerKey, $shortKey): void {
-            $known = (array) $repo->get($trackerKey, []);
-            $filtered = array_values(array_filter($known, fn ($k) => $k !== $shortKey));
-
-            if ($filtered === []) {
-                $repo->forget($trackerKey);
-            } elseif (count($filtered) !== count($known)) {
-                $repo->forever($trackerKey, $filtered);
-            }
-        };
-
-        $store = $repo->getStore();
-        if ($store instanceof LockProvider) {
-            $store->lock($lockKey, 5)->block(3, $update);
-        } else {
-            $update();
-        }
+            return count($filtered) === count($known) ? null : $filtered;
+        });
     }
 
     /**
-     * Fire the memory.read hook with metadata only (never the stored value).
+     * Rewrite the namespace tracker under its lock when the store supports locks; the change returns the new key
+     * list, null to leave it alone, and an empty list removes the tracker.
      *
-     * @param  string  $key  The memory key.
      * @param  string  $namespace  The memory namespace.
-     * @param  bool  $hit  Whether the lookup found a value.
+     * @param  \Closure(array<int, mixed>): (array<int, mixed>|null)  $change  Builds the new key list from the current one.
      * @return void
      */
-    private function fireRead(string $key, string $namespace, bool $hit): void
+    private function updateTracker(string $namespace, \Closure $change): void
     {
-        HookRegistry::fire(LifecycleEvent::MemoryRead->value, [
-            'key' => $key,
-            'namespace' => $namespace,
-            'driver' => self::DRIVER_NAME,
-            'hit' => $hit,
-        ]);
+        $repo = $this->repo();
+        $trackerKey = $this->trackerKey($namespace);
+
+        $update = static function () use ($repo, $trackerKey, $change): void {
+            $known = $change((array) $repo->get($trackerKey, []));
+
+            if ($known === null) {
+                return;
+            }
+
+            if ($known === []) {
+                $repo->forget($trackerKey);
+
+                return;
+            }
+
+            $repo->forever($trackerKey, $known);
+        };
+
+        $store = $repo->getStore();
+
+        if (! $store instanceof LockProvider) {
+            $update();
+
+            return;
+        }
+
+        $store->lock(self::TRACKER_LOCK_PREFIX.$namespace, self::TRACKER_LOCK_SECONDS)->block(self::TRACKER_LOCK_WAIT_SECONDS, $update);
     }
 }

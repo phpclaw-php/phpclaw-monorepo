@@ -16,6 +16,12 @@ final class CacheInspectTool extends AbstractLaravelTool
 {
     private const MAX_PREVIEW_BYTES = 256;
 
+    private const SECRET_KEY_PATTERNS = [
+        'password', 'passwd', 'secret', 'token', 'api_key', 'apikey', 'auth', 'session',
+        'credential', 'private', 'encryption', 'cipher', 'signing', 'hmac', 'salt', 'passphrase',
+        'app_key', 'secret_key', 'private_key',
+    ];
+
     private const ALLOWED_KEYS = ['key'];
 
     /**
@@ -136,7 +142,7 @@ final class CacheInspectTool extends AbstractLaravelTool
                         : (string) json_encode($raw, JSON_UNESCAPED_UNICODE);
 
                     if (strlen($encoded) > self::MAX_PREVIEW_BYTES) {
-                        $encoded = substr($encoded, 0, self::MAX_PREVIEW_BYTES);
+                        $encoded = mb_strcut($encoded, 0, self::MAX_PREVIEW_BYTES);
                         $truncated = true;
                     }
 
@@ -233,11 +239,7 @@ final class CacheInspectTool extends AbstractLaravelTool
     {
         $keyLower = strtolower($key);
 
-        foreach ([
-            'password', 'passwd', 'secret', 'token', 'api_key', 'apikey', 'auth', 'session',
-            'credential', 'private', 'encryption', 'cipher', 'signing', 'hmac', 'salt', 'passphrase',
-            'app_key', 'secret_key', 'private_key',
-        ] as $pattern) {
+        foreach (self::SECRET_KEY_PATTERNS as $pattern) {
             if (str_contains($keyLower, $pattern)) {
                 return self::REDACTED;
             }

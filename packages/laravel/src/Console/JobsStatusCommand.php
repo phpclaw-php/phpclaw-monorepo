@@ -13,6 +13,12 @@ use PhpClaw\Laravel\QueueManager;
  */
 final class JobsStatusCommand extends Command
 {
+    private const EXIT_PENDING = 1;
+
+    private const EXIT_FAILED = 2;
+
+    private const EXIT_UNKNOWN_STATUS = 3;
+
     private const EXIT_SUSPENDED = 4;
 
     protected $signature = 'phpclaw:jobs:status
@@ -24,7 +30,7 @@ final class JobsStatusCommand extends Command
      * Print and exit-code the status of a single queued job.
      *
      * @param  QueueManager  $queue  The resolved queue manager.
-     * @return int Artisan exit code (0 done, 2 failed, 1/3 pending/unknown).
+     * @return int Artisan exit code: 0 done, 1 pending or unknown job, 2 failed, 3 unknown status, 4 suspended.
      */
     public function handle(QueueManager $queue): int
     {
@@ -35,7 +41,7 @@ final class JobsStatusCommand extends Command
         if ($result === null) {
             $this->warn("Job '{$jobId}' is pending or unknown, no result stored yet.");
 
-            return 1;
+            return self::EXIT_PENDING;
         }
 
         $status = (string) ($result['status'] ?? 'unknown');
@@ -49,9 +55,9 @@ final class JobsStatusCommand extends Command
 
         return match ($status) {
             JobStatus::Done->value => self::SUCCESS,
-            JobStatus::Failed->value => 2,
+            JobStatus::Failed->value => self::EXIT_FAILED,
             JobStatus::Suspended->value => self::EXIT_SUSPENDED,
-            default => 3,
+            default => self::EXIT_UNKNOWN_STATUS,
         };
     }
 

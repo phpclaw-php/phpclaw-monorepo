@@ -17,7 +17,12 @@ use PhpClaw\Exceptions\ProviderException;
 use PhpClaw\Exceptions\RunSuspendedException;
 use PhpClaw\Exceptions\TokenBudgetExceededException;
 use PhpClaw\Hooks\HookRegistry;
+use PhpClaw\Hooks\LifecycleEvent;
+use PhpClaw\Laravel\Exceptions\ConversationAccessDeniedException;
+use PhpClaw\Laravel\Http\StreamEventBridge;
 use PhpClaw\Laravel\PhpClawServiceProvider;
+use PhpClaw\Laravel\Tests\Feature\ToolCallingClawFake;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\MockObject\MockObject;
 
 final class PhpClawCommandTest extends TestCase
@@ -94,7 +99,7 @@ final class PhpClawCommandTest extends TestCase
 
         $mock = $this->mockAgent();
         $mock->expects($this->once())
-            ->method('sendInConversation')
+            ->method('streamInConversation')
             ->willReturn($turn);
 
         $this->app->instance(PhpClawInterface::class, $mock);
@@ -109,7 +114,7 @@ final class PhpClawCommandTest extends TestCase
         $turn = $this->makeTurn($this->makeAgentResponse('Done.', 'anthropic', 'claude-haiku-4-5-20251001'));
 
         $mock = $this->mockAgent();
-        $mock->method('sendInConversation')->willReturn($turn);
+        $mock->method('streamInConversation')->willReturn($turn);
 
         $this->app->instance(PhpClawInterface::class, $mock);
 
@@ -123,7 +128,7 @@ final class PhpClawCommandTest extends TestCase
         $turn = $this->makeTurn($this->makeAgentResponse('OK'));
 
         $mock = $this->mockAgent();
-        $mock->method('sendInConversation')->willReturn($turn);
+        $mock->method('streamInConversation')->willReturn($turn);
 
         $this->app->instance(PhpClawInterface::class, $mock);
 
@@ -134,7 +139,7 @@ final class PhpClawCommandTest extends TestCase
     public function test_command_exits_1_on_guard_exception(): void
     {
         $mock = $this->mockAgent();
-        $mock->method('sendInConversation')
+        $mock->method('streamInConversation')
             ->willThrowException(new GuardException('Prompt injection detected'));
 
         $this->app->instance(PhpClawInterface::class, $mock);
@@ -146,7 +151,7 @@ final class PhpClawCommandTest extends TestCase
     public function test_command_exits_1_on_provider_exception(): void
     {
         $mock = $this->mockAgent();
-        $mock->method('sendInConversation')
+        $mock->method('streamInConversation')
             ->willThrowException(new ProviderException('API rate limit exceeded'));
 
         $this->app->instance(PhpClawInterface::class, $mock);
@@ -158,7 +163,7 @@ final class PhpClawCommandTest extends TestCase
     public function test_command_shows_rate_limit_message_on_429_provider_exception(): void
     {
         $mock = $this->mockAgent();
-        $mock->method('sendInConversation')
+        $mock->method('streamInConversation')
             ->willThrowException(new ProviderException('Too many requests', 429));
 
         $this->app->instance(PhpClawInterface::class, $mock);
@@ -171,7 +176,7 @@ final class PhpClawCommandTest extends TestCase
     public function test_command_shows_generic_message_on_non_429_provider_exception(): void
     {
         $mock = $this->mockAgent();
-        $mock->method('sendInConversation')
+        $mock->method('streamInConversation')
             ->willThrowException(new ProviderException('Server error', 500));
 
         $this->app->instance(PhpClawInterface::class, $mock);
@@ -184,7 +189,7 @@ final class PhpClawCommandTest extends TestCase
     public function test_command_shows_budget_message_on_token_budget_exceeded(): void
     {
         $mock = $this->mockAgent();
-        $mock->method('sendInConversation')
+        $mock->method('streamInConversation')
             ->willThrowException(new TokenBudgetExceededException(100, 50));
 
         $this->app->instance(PhpClawInterface::class, $mock);
@@ -197,7 +202,7 @@ final class PhpClawCommandTest extends TestCase
     public function test_command_exits_1_on_max_iterations_exception(): void
     {
         $mock = $this->mockAgent();
-        $mock->method('sendInConversation')
+        $mock->method('streamInConversation')
             ->willThrowException(new MaxIterationsException('Max iterations reached'));
 
         $this->app->instance(PhpClawInterface::class, $mock);
@@ -209,7 +214,7 @@ final class PhpClawCommandTest extends TestCase
     public function test_command_displays_error_message_on_guard_exception(): void
     {
         $mock = $this->mockAgent();
-        $mock->method('sendInConversation')
+        $mock->method('streamInConversation')
             ->willThrowException(new GuardException('Prompt injection detected'));
 
         $this->app->instance(PhpClawInterface::class, $mock);
@@ -219,20 +224,21 @@ final class PhpClawCommandTest extends TestCase
             ->expectsOutputToContain('Blocked');
     }
 
-    public function test_command_stream_flag_calls_stream_method(): void
+    public function test_without_the_stream_flag_the_reply_is_printed_once_not_token_by_token(): void
     {
-        $turn = $this->makeTurn($this->makeAgentResponse('Streamed response.'));
+        $turn = $this->makeTurn($this->makeAgentResponse('Full reply.'));
 
         $mock = $this->mockAgent();
-        $mock->expects($this->once())
-            ->method('streamInConversation')
-            ->willReturn($turn);
-        $mock->expects($this->never())
-            ->method('sendInConversation');
+        $mock->method('streamInConversation')->willReturnCallback(static function ($conversation, $message, callable $onToken) use ($turn): ConversationTurn {
+            $onToken('partial-token ');
 
+            return $turn;
+        });
         $this->app->instance(PhpClawInterface::class, $mock);
 
-        $this->artisan('phpclaw', ['message' => 'hello', '--stream' => true])
+        $this->artisan('phpclaw', ['message' => 'hello'])
+            ->expectsOutputToContain('Full reply.')
+            ->doesntExpectOutputToContain('partial-token')
             ->assertExitCode(0);
     }
 
@@ -267,7 +273,7 @@ final class PhpClawCommandTest extends TestCase
         $turn = $this->makeTurn($this->makeAgentResponse('OK', 'openai', 'gpt-4o-mini'));
 
         $mock = $this->mockAgent();
-        $mock->method('sendInConversation')->willReturn($turn);
+        $mock->method('streamInConversation')->willReturn($turn);
 
         $this->app->instance(PhpClawInterface::class, $mock);
 
@@ -286,7 +292,7 @@ final class PhpClawCommandTest extends TestCase
         $turn = $this->makeTurn($this->makeAgentResponse('OK'));
 
         $mock = $this->mockAgent();
-        $mock->method('sendInConversation')->willReturn($turn);
+        $mock->method('streamInConversation')->willReturn($turn);
 
         $this->app->instance(PhpClawInterface::class, $mock);
 
@@ -303,7 +309,7 @@ final class PhpClawCommandTest extends TestCase
     public function test_a_run_that_spends_its_budget_names_the_run_and_the_command_that_finishes_it(): void
     {
         $mock = $this->mockAgent();
-        $mock->method('sendInConversation')
+        $mock->method('streamInConversation')
             ->willThrowException(new RunSuspendedException('01M48WD2K5DFAFF6S81VFX0V2E', RunStatus::Suspended));
 
         $this->app->instance(PhpClawInterface::class, $mock);
@@ -316,7 +322,7 @@ final class PhpClawCommandTest extends TestCase
     public function test_a_run_paused_for_approval_points_to_the_runs_list(): void
     {
         $mock = $this->mockAgent();
-        $mock->method('sendInConversation')
+        $mock->method('streamInConversation')
             ->willThrowException(new RunSuspendedException('01M48WD2K5DFAFF6S81VFX0V2E', RunStatus::AwaitingApproval));
 
         $this->app->instance(PhpClawInterface::class, $mock);
@@ -346,7 +352,7 @@ final class PhpClawCommandTest extends TestCase
     public function test_it_lists_tools_called_in_the_summary(): void
     {
         $mock = $this->mockAgent();
-        $mock->method('sendInConversation')->willReturn($this->turnWithTools(['file_read', 'code_search', 'file_read']));
+        $mock->method('streamInConversation')->willReturn($this->turnWithTools(['file_read', 'code_search', 'file_read']));
         $this->app->instance(PhpClawInterface::class, $mock);
 
         $this->artisan('phpclaw', ['message' => 'look around'])
@@ -357,7 +363,7 @@ final class PhpClawCommandTest extends TestCase
     public function test_it_omits_the_tools_segment_when_no_tool_ran(): void
     {
         $mock = $this->mockAgent();
-        $mock->method('sendInConversation')->willReturn($this->turnWithTools([]));
+        $mock->method('streamInConversation')->willReturn($this->turnWithTools([]));
         $this->app->instance(PhpClawInterface::class, $mock);
 
         $this->artisan('phpclaw', ['message' => 'hello'])
@@ -368,7 +374,7 @@ final class PhpClawCommandTest extends TestCase
     public function test_the_summary_prints_the_conversation_id(): void
     {
         $mock = $this->mockAgent();
-        $mock->method('sendInConversation')->willReturn($this->turnWithTools([], $this->conversationWithId('01CONVERSATIONID000000000A')));
+        $mock->method('streamInConversation')->willReturn($this->turnWithTools([], $this->conversationWithId('01CONVERSATIONID000000000A')));
         $this->app->instance(PhpClawInterface::class, $mock);
 
         $this->artisan('phpclaw', ['message' => 'hello'])
@@ -382,7 +388,7 @@ final class PhpClawCommandTest extends TestCase
         $stored = $this->conversationWithId('01STOREDCONVERSATION00000A');
         $mock = $this->createMock(PhpClawInterface::class);
         $mock->expects($this->once())->method('conversation')->with('01STOREDCONVERSATION00000A')->willReturn($stored);
-        $mock->expects($this->once())->method('sendInConversation')->with($stored, 'and then?')->willReturn($this->turnWithTools([], $stored));
+        $mock->expects($this->once())->method('streamInConversation')->with($stored, 'and then?')->willReturn($this->turnWithTools([], $stored));
         $this->app->instance(PhpClawInterface::class, $mock);
 
         $this->artisan('phpclaw', ['message' => 'and then?', '--conv-id' => '01STOREDCONVERSATION00000A'])
@@ -396,7 +402,7 @@ final class PhpClawCommandTest extends TestCase
         $fresh = $this->conversationWithId('01FRESHCONVERSATION000000A');
         $mock = $this->createMock(PhpClawInterface::class);
         $mock->method('conversation')->with('01MISSING')->willReturn($fresh);
-        $mock->method('sendInConversation')->willReturn($this->turnWithTools([], $fresh));
+        $mock->method('streamInConversation')->willReturn($this->turnWithTools([], $fresh));
         $this->app->instance(PhpClawInterface::class, $mock);
 
         $this->artisan('phpclaw', ['message' => 'hi', '--conv-id' => '01MISSING'])
@@ -404,11 +410,50 @@ final class PhpClawCommandTest extends TestCase
             ->expectsOutputToContain('No stored conversation 01MISSING; started 01FRESHCONVERSATION000000A.');
     }
 
+    public static function sendModes(): iterable
+    {
+        yield 'send' => [[]];
+        yield 'stream' => [['--stream' => true]];
+    }
+
+    #[DataProvider('sendModes')]
+    public function test_a_turn_stores_its_tool_calls_with_the_conversation(array $options): void
+    {
+        $agent = new ToolCallingClawFake;
+        $this->app->instance(PhpClawInterface::class, $agent);
+        HookRegistry::on(LifecycleEvent::ToolAfter->value, new StreamEventBridge);
+
+        $this->artisan('phpclaw', ['message' => 'how many rows?'] + $options)->assertSuccessful();
+
+        $this->assertSame(['user', 'tool', 'assistant'], $agent->storedRoles());
+        $this->assertSame([], StreamEventBridge::toolCalls());
+    }
+
+    public function test_another_users_conv_id_starts_a_new_conversation_instead_of_crashing(): void
+    {
+        config(['phpclaw.memory_driver' => 'database']);
+        $fresh = $this->conversationWithId('01FRESHCONVERSATION000000A');
+        $mock = $this->createMock(PhpClawInterface::class);
+        $mock->method('conversation')->willReturnCallback(static function (string $id = '') use ($fresh): Conversation {
+            if ($id !== '') {
+                throw new ConversationAccessDeniedException;
+            }
+
+            return $fresh;
+        });
+        $mock->method('streamInConversation')->willReturn($this->turnWithTools([], $fresh));
+        $this->app->instance(PhpClawInterface::class, $mock);
+
+        $this->artisan('phpclaw', ['message' => 'hi', '--conv-id' => '01OTHERUSERCONVERSATION0A'])
+            ->assertSuccessful()
+            ->expectsOutputToContain('Conversation 01OTHERUSERCONVERSATION0A is not available to this command; started 01FRESHCONVERSATION000000A.');
+    }
+
     public function test_it_warns_and_starts_fresh_when_the_memory_driver_is_array(): void
     {
         $mock = $this->createMock(PhpClawInterface::class);
         $mock->expects($this->once())->method('conversation')->with('')->willReturn(Conversation::start());
-        $mock->method('sendInConversation')->willReturn($this->turnWithTools([]));
+        $mock->method('streamInConversation')->willReturn($this->turnWithTools([]));
         $this->app->instance(PhpClawInterface::class, $mock);
 
         $this->artisan('phpclaw', ['message' => 'hi', '--conv-id' => '01ANYTHING'])
@@ -419,7 +464,7 @@ final class PhpClawCommandTest extends TestCase
     public function test_it_writes_the_conversation_id_to_the_state_file(): void
     {
         $mock = $this->mockAgent();
-        $mock->method('sendInConversation')->willReturn($this->turnWithTools([], $this->conversationWithId('01WRITTENCONVERSATION0000A')));
+        $mock->method('streamInConversation')->willReturn($this->turnWithTools([], $this->conversationWithId('01WRITTENCONVERSATION0000A')));
         $this->app->instance(PhpClawInterface::class, $mock);
 
         $this->artisan('phpclaw', ['message' => 'hi'])->assertSuccessful();
@@ -435,7 +480,7 @@ final class PhpClawCommandTest extends TestCase
         $last = $this->conversationWithId('01LASTCONVERSATION0000000A');
         $mock = $this->createMock(PhpClawInterface::class);
         $mock->expects($this->once())->method('conversation')->with('01LASTCONVERSATION0000000A')->willReturn($last);
-        $mock->method('sendInConversation')->willReturn($this->turnWithTools([], $last));
+        $mock->method('streamInConversation')->willReturn($this->turnWithTools([], $last));
         $this->app->instance(PhpClawInterface::class, $mock);
 
         $this->artisan('phpclaw', ['message' => 'continue please', '--continue' => true])->assertSuccessful();
@@ -449,7 +494,7 @@ final class PhpClawCommandTest extends TestCase
         $named = $this->conversationWithId('01NAMEDCONVERSATION000000A');
         $mock = $this->createMock(PhpClawInterface::class);
         $mock->expects($this->once())->method('conversation')->with('01NAMEDCONVERSATION000000A')->willReturn($named);
-        $mock->method('sendInConversation')->willReturn($this->turnWithTools([], $named));
+        $mock->method('streamInConversation')->willReturn($this->turnWithTools([], $named));
         $this->app->instance(PhpClawInterface::class, $mock);
 
         $this->artisan('phpclaw', ['message' => 'hi', '--continue' => true, '--conv-id' => '01NAMEDCONVERSATION000000A'])->assertSuccessful();
@@ -460,7 +505,7 @@ final class PhpClawCommandTest extends TestCase
         config(['phpclaw.memory_driver' => 'database']);
         $mock = $this->createMock(PhpClawInterface::class);
         $mock->expects($this->once())->method('conversation')->with('')->willReturn(Conversation::start());
-        $mock->method('sendInConversation')->willReturn($this->turnWithTools([]));
+        $mock->method('streamInConversation')->willReturn($this->turnWithTools([]));
         $this->app->instance(PhpClawInterface::class, $mock);
 
         $this->artisan('phpclaw', ['message' => 'hi', '--continue' => true])
@@ -471,7 +516,7 @@ final class PhpClawCommandTest extends TestCase
     private function agentFiringTools(array $events): PhpClawInterface&MockObject
     {
         $mock = $this->mockAgent();
-        $mock->method('sendInConversation')->willReturnCallback(function () use ($events): ConversationTurn {
+        $mock->method('streamInConversation')->willReturnCallback(function () use ($events): ConversationTurn {
             foreach ($events as [$event, $context]) {
                 HookRegistry::fire($event, $context);
             }
@@ -548,7 +593,7 @@ final class PhpClawCommandTest extends TestCase
         $this->app['env'] = 'production';
         config(['phpclaw.workspace_root' => base_path()]);
         $mock = $this->createMock(PhpClawInterface::class);
-        $mock->expects($this->never())->method('sendInConversation');
+        $mock->expects($this->never())->method('streamInConversation');
         $this->app->instance(PhpClawInterface::class, $mock);
 
         $this->artisan('phpclaw', ['message' => 'go', '--trace' => true])

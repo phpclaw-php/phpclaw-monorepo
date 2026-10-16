@@ -6,8 +6,7 @@ namespace PhpClaw\Laravel\Memory;
 
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
-use PhpClaw\Hooks\HookRegistry;
-use PhpClaw\Hooks\LifecycleEvent;
+use PhpClaw\Hooks\HookDispatcher;
 use PhpClaw\Support\Ulid;
 
 /**
@@ -35,7 +34,7 @@ final class DatabaseMemory extends AbstractDatabaseMemory
                 ->first();
 
             if ($row === null) {
-                $this->fireRead($key, $namespace, hit: false);
+                HookDispatcher::memoryRead($key, $namespace, self::DRIVER, hit: false);
 
                 return null;
             }
@@ -46,12 +45,12 @@ final class DatabaseMemory extends AbstractDatabaseMemory
                     ->where('lookup_key', $key)
                     ->delete();
 
-                $this->fireRead($key, $namespace, hit: false);
+                HookDispatcher::memoryRead($key, $namespace, self::DRIVER, hit: false);
 
                 return null;
             }
 
-            $this->fireRead($key, $namespace, hit: true);
+            HookDispatcher::memoryRead($key, $namespace, self::DRIVER, hit: true);
 
             return json_decode($row->value, associative: true);
         });
@@ -90,12 +89,7 @@ final class DatabaseMemory extends AbstractDatabaseMemory
                 update: ['value', 'expires_at', 'updated_at'],
             );
 
-            HookRegistry::fire(LifecycleEvent::MemoryWrite->value, [
-                'key' => $key,
-                'namespace' => $namespace,
-                'driver' => self::DRIVER,
-                'ttl' => $ttl,
-            ]);
+            HookDispatcher::memoryWrite($key, $namespace, self::DRIVER, $ttl);
         });
     }
 
@@ -114,11 +108,7 @@ final class DatabaseMemory extends AbstractDatabaseMemory
                 ->where('lookup_key', $key)
                 ->delete();
 
-            HookRegistry::fire(LifecycleEvent::MemoryForget->value, [
-                'key' => $key,
-                'namespace' => $namespace,
-                'driver' => self::DRIVER,
-            ]);
+            HookDispatcher::memoryForget($key, $namespace, self::DRIVER);
         });
     }
 
@@ -189,23 +179,5 @@ final class DatabaseMemory extends AbstractDatabaseMemory
             $query->whereNull('expires_at')
                 ->orWhere('expires_at', '>', Carbon::now('UTC')->toDateTimeString());
         };
-    }
-
-    /**
-     * Fire the memory.read lifecycle event with hit/miss metadata.
-     *
-     * @param  string  $key
-     * @param  string  $namespace
-     * @param  bool  $hit
-     * @return void
-     */
-    private function fireRead(string $key, string $namespace, bool $hit): void
-    {
-        HookRegistry::fire(LifecycleEvent::MemoryRead->value, [
-            'key' => $key,
-            'namespace' => $namespace,
-            'driver' => self::DRIVER,
-            'hit' => $hit,
-        ]);
     }
 }

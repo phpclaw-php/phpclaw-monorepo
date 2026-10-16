@@ -39,8 +39,8 @@ final class AboutCommand extends Command
 
         $provider = $config ? $config->providerName : (string) config('phpclaw.provider', 'unknown');
         $model = $config ? $config->model : (string) config('phpclaw.model', '');
-        $maxIter = $config ? $config->maxIterations : (int) config('phpclaw.max_iterations', ClawConfig::DEFAULT_MAX_ITERATIONS);
-        $storeMsgs = (bool) config('phpclaw.store_messages', true);
+        $maxIterations = $config ? $config->maxIterations : (int) config('phpclaw.max_iterations', ClawConfig::DEFAULT_MAX_ITERATIONS);
+        $storeMessages = (bool) config('phpclaw.store_messages', true);
         $memoryDriver = (string) config('phpclaw.memory_driver', 'database');
 
         $toolNames = [];
@@ -60,7 +60,7 @@ final class AboutCommand extends Command
         $cloudKey = (string) config('phpclaw.cloud_key', '');
         $cloudLine = $this->formatCloudKey($cloudKey);
 
-        $displayModel = $model !== '' ? " ($model)" : '';
+        $displayModel = $model === '' ? '' : " ($model)";
 
         $this->line('phpClaw, Laravel adapter');
         $this->line(str_repeat('━', 40));
@@ -70,8 +70,8 @@ final class AboutCommand extends Command
         $this->line("Memory:       {$memoryDriver} driver");
         $this->line("Skills:       {$skillCount} active ({$skillList})");
         $this->line("Cloud:        {$cloudLine}");
-        $this->line('store_msgs:   '.($storeMsgs ? 'ON' : 'OFF'));
-        $this->line("Max iter:     {$maxIter}");
+        $this->line('store_msgs:   '.($storeMessages ? 'ON' : 'OFF'));
+        $this->line("Max iter:     {$maxIterations}");
         $this->line(str_repeat('━', 40));
         $this->line("Run 'phpclaw:guide' for full documentation");
 

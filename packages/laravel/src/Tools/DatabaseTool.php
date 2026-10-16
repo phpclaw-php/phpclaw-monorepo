@@ -145,18 +145,22 @@ final class DatabaseTool extends AbstractLaravelTool
             return ['input' => $input, 'result' => $this->error('BLOCKED_STATEMENT', $e->getMessage())];
         }
 
-        try {
-            $this->assertNoBlockedTable($safe->sql());
-        } catch (ToolException $e) {
+        $blockedTable = $this->blockedTable($safe->sql());
+
+        if ($blockedTable !== null) {
             return [
                 'input' => $input,
-                'result' => $this->error('BLOCKED_IDENTIFIER', $e->getMessage(), ['blocked_tables' => self::BLOCKED_TABLES]),
+                'result' => $this->error(
+                    'BLOCKED_IDENTIFIER',
+                    'db_query: the query references the "'.$blockedTable.'" table, which holds phpClaw '
+                    .'conversations scoped to their owner and cannot be read as raw SQL. Ask for '
+                    .'your own conversation history instead.',
+                    ['blocked_tables' => self::BLOCKED_TABLES],
+                ),
             ];
         }
 
-        try {
-            $this->assertNoRestrictedIdentifier($safe->sql());
-        } catch (ToolException) {
+        if ($this->hasRestrictedIdentifier($safe->sql())) {
             return [
                 'input' => $input,
                 'result' => $this->error(
@@ -238,9 +242,10 @@ final class DatabaseTool extends AbstractLaravelTool
             $warnings[] = [
                 'code' => 'OUTPUT_TRUNCATED',
                 'message' => sprintf(
-                    '%d %s dropped to keep the response within the 8 KB output limit. Narrow the query or add a smaller LIMIT.',
+                    '%d %s dropped to keep the response within the %d KB output limit. Narrow the query or add a smaller LIMIT.',
                     $dropped,
                     $dropped === 1 ? 'row was' : 'rows were',
+                    self::MAX_OUTPUT_BYTES / self::BYTES_PER_KB,
                 ),
             ];
         }
@@ -256,15 +261,13 @@ final class DatabaseTool extends AbstractLaravelTool
     }
 
     /**
-     * Reject queries that reference a phpClaw conversation table, whose rows are owner-scoped
-     * by the conversation memory driver and must never be reachable as raw SQL.
+     * The phpClaw conversation table a query references, or null; those rows are owner-scoped by the conversation
+     * memory driver and must never be reachable as raw SQL.
      *
      * @param  string  $sql  The validated read-only SQL string.
-     * @return void
-     *
-     * @throws ToolException When the SQL references a blocked table.
+     * @return string|null Table name as written in the query.
      */
-    private function assertNoBlockedTable(string $sql): void
+    private function blockedTable(string $sql): ?string
     {
         try {
             $prefix = (string) DB::connection()->getTablePrefix();
@@ -275,31 +278,29 @@ final class DatabaseTool extends AbstractLaravelTool
         foreach (self::BLOCKED_TABLES as $table) {
             foreach (array_unique([$prefix.$table, $table]) as $name) {
                 if (preg_match('/(?<![A-Za-z0-9_])'.preg_quote($name, '/').'(?![A-Za-z0-9_])/i', $sql) === 1) {
-                    throw new ToolException(
-                        'db_query: the query references the "'.$name.'" table, which holds phpClaw '
-                        .'conversations scoped to their owner and cannot be read as raw SQL. Ask for '
-                        .'your own conversation history instead.'
-                    );
+                    return $name;
                 }
             }
         }
+
+        return null;
     }
 
     /**
-     * Reject queries that reference credential identifiers so secrets never reach the model.
+     * Whether a query references a credential identifier, so secrets never reach the model.
      *
      * @param  string  $sql  The validated read-only SQL string.
-     * @return void
-     *
-     * @throws ToolException When the SQL references a restricted table or column name.
+     * @return bool
      */
-    private function assertNoRestrictedIdentifier(string $sql): void
+    private function hasRestrictedIdentifier(string $sql): bool
     {
         foreach (self::RESTRICTED_IDENTIFIERS as $identifier) {
             if (preg_match('/\b'.preg_quote($identifier, '/').'\b/i', $sql) === 1) {
-                throw new ToolException('db_query: query references a restricted table or column and was blocked.');
+                return true;
             }
         }
+
+        return false;
     }
 
     /**

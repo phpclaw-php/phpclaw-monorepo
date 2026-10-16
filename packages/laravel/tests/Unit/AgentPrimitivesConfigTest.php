@@ -17,7 +17,7 @@ final class AgentPrimitivesConfigTest extends TestCase
     private const VARS = [
         'PHPCLAW_FALLBACK_PROVIDER', 'PHPCLAW_FALLBACK_MODEL', 'PHPCLAW_FALLBACK_API_KEY',
         'PHPCLAW_RATE_LIMIT_RPM', 'PHPCLAW_RESPONSE_CACHE', 'PHPCLAW_RESPONSE_CACHE_TTL',
-        'PHPCLAW_MAX_TOKEN_BUDGET',
+        'PHPCLAW_MAX_TOKEN_BUDGET', 'PHPCLAW_MAX_TOOLS_PER_TURN', 'PHPCLAW_REMOTE_SKILL_URLS',
     ];
 
     private array $original = [];
@@ -137,5 +137,38 @@ final class AgentPrimitivesConfigTest extends TestCase
         $_ENV['PHPCLAW_MAX_TOKEN_BUDGET'] = '50000';
 
         self::assertSame(50000, $this->config()['max_token_budget']);
+    }
+
+    public function test_max_tools_per_turn_below_minus_one_sends_every_tool(): void
+    {
+        $_ENV['PHPCLAW_MAX_TOOLS_PER_TURN'] = '-5';
+
+        self::assertSame(-1, $this->config()['max_tools_per_turn']);
+    }
+
+    public function test_max_tools_per_turn_keeps_minus_one(): void
+    {
+        $_ENV['PHPCLAW_MAX_TOOLS_PER_TURN'] = '-1';
+
+        self::assertSame(-1, $this->config()['max_tools_per_turn']);
+    }
+
+    public function test_max_tools_per_turn_keeps_a_positive_cap(): void
+    {
+        $_ENV['PHPCLAW_MAX_TOOLS_PER_TURN'] = '3';
+
+        self::assertSame(3, $this->config()['max_tools_per_turn']);
+    }
+
+    public function test_remote_skill_urls_keep_https_only(): void
+    {
+        $_ENV['PHPCLAW_REMOTE_SKILL_URLS'] = 'https://example.com/a.json, http://insecure.example/b.json,not-a-url, ftp://x/c.json,https://example.com/SKILL.md';
+
+        self::assertSame(['https://example.com/a.json', 'https://example.com/SKILL.md'], $this->config()['remote_skill_urls']);
+    }
+
+    public function test_remote_skill_urls_default_to_empty(): void
+    {
+        self::assertSame([], $this->config()['remote_skill_urls']);
     }
 }

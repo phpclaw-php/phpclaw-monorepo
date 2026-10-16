@@ -194,6 +194,25 @@ final class ConfigGetToolTest extends TestCase
         $this->assertSame('https://api.example.com/v1', $envelope['data']['value']);
     }
 
+    public static function typedValues(): iterable
+    {
+        yield 'false' => [false];
+        yield 'true' => [true];
+        yield 'integer' => [42];
+        yield 'float' => [1.5];
+    }
+
+    #[DataProvider('typedValues')]
+    public function test_a_non_string_scalar_keeps_its_type(bool|int|float $value): void
+    {
+        config(['services.myapi.flag' => $value]);
+
+        $envelope = json_decode($this->tool->execute(['key' => 'services.myapi.flag']), associative: true);
+
+        $this->assertTrue($envelope['success']);
+        $this->assertSame($value, $envelope['data']['value']);
+    }
+
     public function test_an_array_value_is_refused_rather_than_returned(): void
     {
         config(['services.myapi.settings' => ['token' => 'hunter2_LEAK', 'mode' => 'live']]);

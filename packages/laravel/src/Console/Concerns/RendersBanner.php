@@ -33,9 +33,9 @@ ART;
         $tagline = 'AI agents for Laravel';
         $decorated = $this->getOutput()->isDecorated();
 
-        foreach (explode("\n", $logo) as $i => $line) {
+        foreach (explode("\n", $logo) as $index => $line) {
             if ($decorated) {
-                $color = $gradient[$i] ?? 226;
+                $color = $gradient[$index] ?? 226;
                 $this->line("\e[38;5;{$color}m{$line}\e[0m");
             } else {
                 $this->line($line);

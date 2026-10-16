@@ -18,6 +18,8 @@ abstract class AbstractLaravelTool implements ToolInterface, ToolRoutingInterfac
 
     protected const MAX_OUTPUT_BYTES = 8192;
 
+    protected const BYTES_PER_KB = 1024;
+
     protected const REDACTED = '[redacted]';
 
     protected const SECRET_IDENTIFIERS = [
@@ -88,36 +90,6 @@ abstract class AbstractLaravelTool implements ToolInterface, ToolRoutingInterfac
         }
 
         return $capped;
-    }
-
-    /**
-     * Truncate a string to the output cap with a marker when it overflows.
-     *
-     * @param  string  $text  The text to cap.
-     * @return string
-     */
-    protected function truncate(string $text): string
-    {
-        if (strlen($text) > static::MAX_OUTPUT_BYTES) {
-            return substr($text, 0, static::MAX_OUTPUT_BYTES)
-                ."\n[... output truncated at ".(int) (static::MAX_OUTPUT_BYTES / 1024).' KB ...]';
-        }
-
-        return $text;
-    }
-
-    /**
-     * JSON-encode a value and truncate to the output cap; null when encoding fails.
-     *
-     * @param  mixed  $data  The value to encode.
-     * @param  int  $flags  json_encode flags.
-     * @return ?string
-     */
-    protected function encodeTruncated(mixed $data, int $flags = JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE): ?string
-    {
-        $json = json_encode($data, $flags);
-
-        return $json === false ? null : $this->truncate($json);
     }
 
     /**

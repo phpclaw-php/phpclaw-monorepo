@@ -320,6 +320,40 @@ final class PhpClawApiTest extends TestCase
         $response->assertStatus(200);
     }
 
+    public function test_send_does_not_503_for_a_keyless_custom_endpoint(): void
+    {
+        $this->app['config']->set('phpclaw.api_key', '');
+        $this->app['config']->set('phpclaw.provider', 'custom');
+        $this->withFakeAgent();
+
+        $response = $this->asUser()->postJson('/phpclaw/send', ['message' => 'hello']);
+
+        $response->assertStatus(200);
+    }
+
+    public function test_stream_does_not_refuse_a_keyless_custom_endpoint(): void
+    {
+        $this->app['config']->set('phpclaw.api_key', '');
+        $this->app['config']->set('phpclaw.provider', 'custom');
+        $this->withFakeAgent();
+
+        $body = $this->asUser()->postJson('/phpclaw/chat/stream', ['message' => 'hello'])->streamedContent();
+
+        $this->assertStringNotContainsString('phpClaw is not configured', $body);
+        $this->assertStringContainsString('event: done', $body);
+    }
+
+    public function test_stream_still_refuses_a_keyed_provider_without_a_key(): void
+    {
+        $this->app['config']->set('phpclaw.api_key', '');
+        $this->app['config']->set('phpclaw.provider', 'anthropic');
+        $this->withFakeAgent();
+
+        $body = $this->asUser()->postJson('/phpclaw/chat/stream', ['message' => 'hello'])->streamedContent();
+
+        $this->assertStringContainsString('phpClaw is not configured', $body);
+    }
+
     public function test_send_returns_500_on_agent_exception(): void
     {
         $this->withThrowingAgent(new RuntimeException('boom'));

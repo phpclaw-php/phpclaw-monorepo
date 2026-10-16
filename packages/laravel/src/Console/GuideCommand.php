@@ -6,6 +6,7 @@ namespace PhpClaw\Laravel\Console;
 
 use Illuminate\Console\Command;
 use PhpClaw\Laravel\Console\Concerns\RendersBanner;
+use PhpClaw\Laravel\Engine\EngineFactory;
 use PhpClaw\Laravel\Memory\DatabaseConversationMemory;
 use PhpClaw\Providers\ProviderCatalogue;
 use PhpClaw\Skills\RemoteSkillLoader;
@@ -23,6 +24,8 @@ final class GuideCommand extends Command
         'quickstart', 'tools', 'providers', 'memory', 'guards',
         'hooks', 'skills', 'rest', 'cli', 'privacy', 'config',
     ];
+
+    private const RULE_WIDTH = 50;
 
     protected $signature = 'phpclaw:guide '
         .'{--section= : Print only a specific section (quickstart|tools|providers|memory|guards|hooks|skills|rest|cli|privacy|config)} '
@@ -51,8 +54,8 @@ final class GuideCommand extends Command
         } else {
             $this->banner();
 
-            foreach (self::SECTIONS as $s) {
-                $this->printSection($s);
+            foreach (self::SECTIONS as $name) {
+                $this->printSection($name);
                 $this->newLine();
             }
         }
@@ -71,12 +74,9 @@ final class GuideCommand extends Command
      */
     private function printRemoteSkills(): void
     {
-
         $urls = (array) config('phpclaw.remote_skill_urls', []);
 
-        $this->line(str_repeat('━', 50));
-        $this->line('  REMOTE SKILLS (live)');
-        $this->line(str_repeat('━', 50));
+        $this->heading('REMOTE SKILLS (live)');
 
         if ($urls === []) {
             $this->line('No remote skill URLs configured (PHPCLAW_REMOTE_SKILL_URLS is empty).');
@@ -85,7 +85,7 @@ final class GuideCommand extends Command
         }
 
         SkillCatalogue::activateDefaults();
-        $before = array_map(fn ($s) => $s->name(), SkillRegistry::all());
+        $before = array_map(static fn ($skill) => $skill->name(), SkillRegistry::all());
 
         foreach ($urls as $url) {
             try {
@@ -96,7 +96,7 @@ final class GuideCommand extends Command
         }
 
         $loaded = array_values(array_diff(
-            array_map(fn ($s) => $s->name(), SkillRegistry::all()),
+            array_map(static fn ($skill) => $skill->name(), SkillRegistry::all()),
             $before,
         ));
 
@@ -113,6 +113,19 @@ final class GuideCommand extends Command
     }
 
     /**
+     * Print a section heading between two rule lines.
+     *
+     * @param  string  $title  Heading text.
+     * @return void
+     */
+    private function heading(string $title): void
+    {
+        $this->line(str_repeat('━', self::RULE_WIDTH));
+        $this->line('  '.$title);
+        $this->line(str_repeat('━', self::RULE_WIDTH));
+    }
+
+    /**
      * Print a single documentation section by name.
      *
      * @param  string  $section  The section slug to print.
@@ -120,9 +133,7 @@ final class GuideCommand extends Command
      */
     private function printSection(string $section): void
     {
-        $this->line(str_repeat('━', 50));
-        $this->line('  '.strtoupper($section));
-        $this->line(str_repeat('━', 50));
+        $this->heading(strtoupper($section));
 
         match ($section) {
             'quickstart' => $this->sectionQuickstart(),
@@ -154,14 +165,24 @@ final class GuideCommand extends Command
     }
 
     /**
-     * Print the available tools and how to enable them.
+     * Print the active tools and how to enable more.
      *
      * @return void
      */
     private function sectionTools(): void
     {
+        $names = array_map(static fn ($tool): string => $tool->name(), EngineFactory::resolveTools($this->laravel));
+
+        $this->line('Active tools ('.count($names).'):');
+        foreach ($names as $name) {
+            $this->line('  '.$name);
+        }
+        $this->newLine();
+
+        $this->line('code_search, file_read and project_info are on by default.');
         $this->line('Tools are enabled in config/phpclaw.php under the tools array.');
         $this->line('Available tools (add the class name to the tools array to enable):');
+        $this->line('  test_run     : run the application test suite');
         $this->line('  db_query     : read-only SELECT queries on the application database');
         $this->line('  read_log     : tail storage/logs/laravel.log');
         $this->line('  route_list   : list registered routes');
@@ -249,7 +270,7 @@ final class GuideCommand extends Command
     }
 
     /**
-     * Print registered hooks and how to add more.
+     * Print the hooks configured in config/phpclaw.php and how to add more.
      *
      * @return void
      */
@@ -259,9 +280,9 @@ final class GuideCommand extends Command
         $count = count($configHooks);
 
         if ($count === 0) {
-            $this->line('No hooks registered.');
+            $this->line('No hooks configured in config/phpclaw.php.');
         } else {
-            $this->line("Registered listeners ({$count}):");
+            $this->line("Hooks configured in config/phpclaw.php ({$count}):");
             foreach ($configHooks as $hook) {
                 if (is_array($hook) && isset($hook['event'])) {
                     $this->line("  {$hook['event']}");

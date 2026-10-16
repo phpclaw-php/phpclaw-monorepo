@@ -8,13 +8,19 @@ use Orchestra\Testbench\TestCase;
 use PhpClaw\Agent\AgentResponse;
 use PhpClaw\Agent\Conversation;
 use PhpClaw\Agent\ConversationTurn;
+use PhpClaw\Agent\Message;
 use PhpClaw\Agent\RunStatus;
 use PhpClaw\Contracts\ClawInterface as PhpClawInterface;
 use PhpClaw\Exceptions\GuardException;
 use PhpClaw\Exceptions\RunSuspendedException;
 use PhpClaw\Hooks\HookRegistry;
+use PhpClaw\Hooks\LifecycleEvent;
+use PhpClaw\Laravel\Exceptions\ConversationAccessDeniedException;
+use PhpClaw\Laravel\Http\StreamEventBridge;
 use PhpClaw\Laravel\PhpClawServiceProvider;
+use PhpClaw\Laravel\Tests\Feature\ToolCallingClawFake;
 use PhpClaw\Laravel\Tools\RouteListTool;
+use PhpClaw\Memory\Contracts\MemoryInterface;
 use PHPUnit\Framework\MockObject\MockObject;
 
 final class ChatCommandTest extends TestCase
@@ -303,6 +309,95 @@ final class ChatCommandTest extends TestCase
             ->assertFailed();
 
         $this->assertSame([], $this->sent);
+    }
+
+    public function test_another_users_conv_id_opens_a_new_conversation_instead_of_crashing(): void
+    {
+        config(['phpclaw.memory_driver' => 'database']);
+        $fresh = new Conversation('01CHATCONVERSATION000000A', [], new \DateTimeImmutable);
+        $mock = $this->createMock(PhpClawInterface::class);
+        $mock->method('conversation')->willReturnCallback(static function (string $id = '') use ($fresh): Conversation {
+            if ($id !== '') {
+                throw new ConversationAccessDeniedException;
+            }
+
+            return $fresh;
+        });
+        $this->app->instance(PhpClawInterface::class, $mock);
+
+        $this->artisan('phpclaw:chat', ['--conv-id' => '01OTHERUSERCONVERSATION0A'])
+            ->expectsOutputToContain('Conversation 01OTHERUSERCONVERSATION0A is not available to this command; started 01CHATCONVERSATION000000A.')
+            ->expectsQuestion('you', '/exit')
+            ->assertSuccessful();
+    }
+
+    public function test_a_chat_turn_stores_its_tool_calls_with_the_conversation(): void
+    {
+        $agent = new ToolCallingClawFake;
+        $this->app->instance(PhpClawInterface::class, $agent);
+        HookRegistry::on(LifecycleEvent::ToolAfter->value, new StreamEventBridge);
+
+        $this->artisan('phpclaw:chat')->expectsQuestion('you', 'how many rows?')->expectsQuestion('you', '/exit')->assertSuccessful();
+
+        $this->assertSame(['user', 'tool', 'assistant'], $agent->storedRoles());
+    }
+
+    public function test_a_second_chat_turn_keeps_the_tool_rows_of_the_first(): void
+    {
+        $agent = new class implements PhpClawInterface
+        {
+            public array $stored = [];
+
+            public function send(string $message): AgentResponse
+            {
+                return new AgentResponse(text: 'Done.', provider: 'ollama', model: 'qwen2.5:7b', iterations: 1);
+            }
+
+            public function stream(string $message, callable $onToken): AgentResponse
+            {
+                return $this->send($message);
+            }
+
+            public function conversation(string $id = '', array $metadata = []): Conversation
+            {
+                return new Conversation('01CHATCONVERSATION000000A', array_map(Message::fromArray(...), $this->stored), new \DateTimeImmutable);
+            }
+
+            public function sendInConversation(Conversation $conversation, string $message): ConversationTurn
+            {
+                return new ConversationTurn($this->send($message), $conversation);
+            }
+
+            public function streamInConversation(Conversation $conversation, string $message, callable $onToken, ?callable $beforePersist = null): ConversationTurn
+            {
+                HookRegistry::fire(LifecycleEvent::ToolAfter->value, ['tool_name' => 'route_list', 'tool_input' => [], 'tool_result' => '[]']);
+                $onToken('Done.');
+                $payload = ['history' => [...array_map(static fn (Message $entry): array => $entry->toArray(), $conversation->history), ['role' => 'user', 'content' => $message], ['role' => 'assistant', 'content' => 'Done.']]];
+                $this->stored = $beforePersist === null ? $payload['history'] : $beforePersist($payload)['history'];
+
+                return new ConversationTurn($this->send($message), $conversation);
+            }
+
+            public function memory(): ?MemoryInterface
+            {
+                return null;
+            }
+
+            public function storeMessages(): bool
+            {
+                return true;
+            }
+        };
+        $this->app->instance(PhpClawInterface::class, $agent);
+        HookRegistry::on(LifecycleEvent::ToolAfter->value, new StreamEventBridge);
+
+        $this->artisan('phpclaw:chat')
+            ->expectsQuestion('you', 'first')
+            ->expectsQuestion('you', 'second')
+            ->expectsQuestion('you', '/exit')
+            ->assertSuccessful();
+
+        $this->assertSame(['user', 'tool', 'assistant', 'user', 'tool', 'assistant'], array_column($agent->stored, 'role'));
     }
 
     public function test_chat_remembers_the_conversation_for_continue(): void

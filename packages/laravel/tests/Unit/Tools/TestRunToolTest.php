@@ -90,6 +90,14 @@ final class TestRunToolTest extends TestCase
         $this->assertStringEndsWith('FINAL LINE', $result['data']['output']);
     }
 
+    public function test_a_long_output_is_cut_on_a_character_boundary(): void
+    {
+        $result = $this->execute($this->tool(0, str_repeat('x', 100).'✓'.str_repeat('a', 8190)), []);
+
+        $this->assertTrue($result['success']);
+        $this->assertSame(str_repeat('a', 8190), $result['data']['output']);
+    }
+
     public function test_test_run_rejects_a_filter_with_shell_characters(): void
     {
         foreach (['UserTest; rm -rf /', '$(id)', 'User Test', 'a|b', "a\nb", '--group=x'] as $filter) {
