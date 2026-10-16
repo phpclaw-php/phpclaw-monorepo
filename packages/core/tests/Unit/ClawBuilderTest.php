@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace PhpClaw\Tests\Unit;
 
+use PhpClaw\Agent\AgentDefinition;
 use PhpClaw\Claw;
 use PhpClaw\ClawBuilder;
 use PhpClaw\ClawConfig;
@@ -419,5 +420,136 @@ final class ClawBuilderTest extends TestCase
         $config = Claw::builder()->provider('anthropic')->apiKey('x')->alwaysIncludeTools(['file_read', 'file_edit'])->build()->config();
 
         $this->assertSame(['file_read', 'file_edit'], $config->alwaysIncludeTools);
+    }
+
+    public function test_an_agent_sets_the_system_prompt_from_its_instructions(): void
+    {
+        $claw = Claw::builder()->agent($this->makeAgent('Help candidates find jobs.'))->build();
+
+        $this->assertSame(self::IDENTITY."\n\nHelp candidates find jobs.", $claw->config()->systemPrompt);
+    }
+
+    public function test_an_agent_with_tools_replaces_the_tool_list(): void
+    {
+        $siteTool = $this->makeTool('site_tool');
+        $agentTool = $this->makeTool('job_search');
+
+        $claw = Claw::builder()
+            ->tools([$siteTool])
+            ->agent($this->makeAgent('Find jobs.', [$agentTool]))
+            ->build();
+
+        $this->assertSame([$agentTool], $claw->config()->tools);
+    }
+
+    public function test_an_agent_without_tools_keeps_the_existing_tools(): void
+    {
+        $siteTool = $this->makeTool('site_tool');
+
+        $claw = Claw::builder()
+            ->tools([$siteTool])
+            ->agent($this->makeAgent('Find jobs.'))
+            ->build();
+
+        $this->assertSame([$siteTool], $claw->config()->tools);
+    }
+
+    public function test_an_agent_provider_and_model_apply_when_set(): void
+    {
+        $claw = Claw::builder()
+            ->apiKey('sk-x')
+            ->provider('anthropic')
+            ->model('claude-haiku-4-5-20251001')
+            ->agent($this->makeAgent('Find jobs.', [], 'openai', 'gpt-4o-mini'))
+            ->build();
+
+        $this->assertSame('openai', $claw->config()->providerName);
+        $this->assertSame('gpt-4o-mini', $claw->config()->model);
+    }
+
+    public function test_an_agent_without_provider_and_model_keeps_the_configured_ones(): void
+    {
+        $claw = Claw::builder()
+            ->apiKey('sk-x')
+            ->provider('groq')
+            ->model('llama-test')
+            ->agent($this->makeAgent('Find jobs.'))
+            ->build();
+
+        $this->assertSame('groq', $claw->config()->providerName);
+        $this->assertSame('llama-test', $claw->config()->model);
+    }
+
+    public function test_two_named_agents_build_two_engines_with_different_prompts_and_tools(): void
+    {
+        $supportCalls = [];
+        $salesCalls = [];
+        $support = Claw::builder()
+            ->providerOverride($this->makeRecordingProvider($supportCalls))
+            ->agent($this->makeAgent('You handle refunds.', [$this->makeTool('refund_status')]))
+            ->build();
+        $sales = Claw::builder()
+            ->providerOverride($this->makeRecordingProvider($salesCalls))
+            ->agent($this->makeAgent('You sell shoes.', [$this->makeTool('product_search')]))
+            ->build();
+
+        $this->assertSame('ok', $support->send('Where is my refund?')->text);
+        $this->assertSame('ok', $sales->send('Any running shoes?')->text);
+
+        $this->assertSame(self::IDENTITY."\n\n".Claw::AGENTIC_DOCTRINE."\n\nYou handle refunds.", $support->config()->systemPrompt);
+        $this->assertSame(self::IDENTITY."\n\n".Claw::AGENTIC_DOCTRINE."\n\nYou sell shoes.", $sales->config()->systemPrompt);
+        $this->assertCount(1, $supportCalls);
+        $this->assertContains('refund_status', $supportCalls[0]);
+        $this->assertNotContains('product_search', $supportCalls[0]);
+        $this->assertCount(1, $salesCalls);
+        $this->assertContains('product_search', $salesCalls[0]);
+        $this->assertNotContains('refund_status', $salesCalls[0]);
+    }
+
+    private function makeAgent(string $instructions, array $tools = [], string $provider = '', string $model = ''): AgentDefinition
+    {
+        return new class($instructions, $tools, $provider, $model) extends AgentDefinition
+        {
+            public function __construct(
+                private readonly string $agentInstructions,
+                private readonly array $agentTools,
+                private readonly string $agentProvider,
+                private readonly string $agentModel,
+            ) {}
+
+            public function instructions(): string
+            {
+                return $this->agentInstructions;
+            }
+
+            public function tools(): array
+            {
+                return $this->agentTools;
+            }
+
+            public function provider(): string
+            {
+                return $this->agentProvider;
+            }
+
+            public function model(): string
+            {
+                return $this->agentModel;
+            }
+        };
+    }
+
+    private function makeRecordingProvider(array &$calls): ProviderInterface
+    {
+        $provider = $this->createMock(ProviderInterface::class);
+        $provider->method('name')->willReturn('anthropic');
+        $provider->method('model')->willReturn('claude-haiku-4-5-20251001');
+        $provider->method('send')->willReturnCallback(static function (array $_messages, array $tools = []) use (&$calls): array {
+            $calls[] = array_map(static fn (array $tool): string => (string) ($tool['name'] ?? ''), $tools);
+
+            return ['type' => 'text', 'text' => 'ok', 'input_tokens' => 1, 'output_tokens' => 1];
+        });
+
+        return $provider;
     }
 }

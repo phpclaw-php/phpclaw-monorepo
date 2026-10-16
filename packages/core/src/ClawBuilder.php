@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace PhpClaw;
 
+use PhpClaw\Agent\AgentDefinition;
 use PhpClaw\Agent\CliApprovalGate;
 use PhpClaw\Agent\Contracts\ApprovalGateInterface;
 use PhpClaw\Agent\MessageAugmenter;
@@ -596,6 +597,34 @@ final class ClawBuilder
     public function addTool(ToolInterface $tool): static
     {
         $this->tools[] = $tool;
+
+        return $this;
+    }
+
+    /**
+     * Apply a named agent: its instructions, and its tools, provider and model when it sets them.
+     *
+     * @param  AgentDefinition  $agent  Agent whose instructions become the system prompt; empty tools, provider or model keep the current ones.
+     * @return static Builder instance for fluent chaining.
+     */
+    public function agent(AgentDefinition $agent): static
+    {
+        $this->systemPrompt = $agent->instructions();
+
+        $tools = $agent->tools();
+        if ($tools !== []) {
+            $this->tools = $tools;
+        }
+
+        $provider = $agent->provider();
+        if ($provider !== '') {
+            $this->provider = $provider;
+        }
+
+        $model = $agent->model();
+        if ($model !== '') {
+            $this->model = $model;
+        }
 
         return $this;
     }
