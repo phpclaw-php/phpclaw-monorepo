@@ -278,13 +278,13 @@ final class DatabaseTool extends AbstractJoomlaTool
      */
     private static function correctableSqlMessage(\Throwable $e): ?string
     {
-        for ($cur = $e; $cur !== null; $cur = $cur->getPrevious()) {
+        for ($current = $e; $current !== null; $current = $current->getPrevious()) {
             $state = null;
 
-            if (is_callable([$cur, 'getSqlState'])) {
-                $state = (string) $cur->getSqlState();
-            } elseif ($cur instanceof \PDOException && isset($cur->errorInfo[0])) {
-                $state = (string) $cur->errorInfo[0];
+            if (is_callable([$current, 'getSqlState'])) {
+                $state = (string) $current->getSqlState();
+            } elseif ($current instanceof \PDOException && isset($current->errorInfo[0])) {
+                $state = (string) $current->errorInfo[0];
             }
 
             if ($state === null) {
@@ -297,8 +297,8 @@ final class DatabaseTool extends AbstractJoomlaTool
 
             $codes = self::CORRECTABLE_SQLSTATES[$state];
 
-            return $codes === [] || in_array((int) $cur->getCode(), $codes, true)
-                ? $cur->getMessage()
+            return $codes === [] || in_array((int) $current->getCode(), $codes, true)
+                ? $current->getMessage()
                 : null;
         }
 
@@ -417,10 +417,10 @@ final class DatabaseTool extends AbstractJoomlaTool
             return $this->error(
                 'BLOCKED_IDENTIFIER',
                 sprintf('The query references "%s", which this tool will not read.', $identifier)
-                    .($useInstead !== null
-                        ? ' Extension params hold credentials; use the joomla_extensions tool, which '
-                          .'returns a named set of fields instead of the raw row.'
-                        : '')
+                    .($useInstead === null
+                        ? ''
+                        : ' Extension params hold credentials; use the joomla_extensions tool, which '
+                          .'returns a named set of fields instead of the raw row.')
                     .($isConversationTable
                         ? ' It holds phpClaw conversations scoped to their owner; ask for your own '
                           .'conversation history instead.'

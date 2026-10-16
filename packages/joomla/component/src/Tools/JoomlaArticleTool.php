@@ -30,6 +30,23 @@ final class JoomlaArticleTool extends AbstractJoomlaTool
         ],
     ];
 
+    protected const DEFAULT_COLUMNS = [
+        'id', 'title', 'alias', 'catid', 'state',
+        'created', 'modified', 'hits', 'introtext',
+    ];
+
+    protected const AVAILABLE_COLUMNS = [
+        'id', 'title', 'alias', 'catid', 'state',
+        'created', 'modified', 'publish_up', 'publish_down',
+        'created_by', 'created_by_alias', 'hits', 'featured',
+        'language', 'access', 'introtext',
+    ];
+
+    protected const BLOCKED_COLUMNS = [
+        'fulltext', 'images', 'urls', 'attribs',
+        'metadata', 'metakey', 'metadesc',
+    ];
+
     private const REQUIRED_ACTION = 'phpclaw.chat.use';
 
     private const REQUIRED_ASSET = 'com_phpclaw';
@@ -50,7 +67,7 @@ final class JoomlaArticleTool extends AbstractJoomlaTool
     private const TOOL_NAME = 'joomla_articles';
 
     private const TOOL_DESCRIPTION = <<<'DESC'
-List and search Joomla articles. Returns id, title, state, created, hits, featured by default.
+List and search Joomla articles. Returns id, title, alias, catid, state, created, modified, hits and introtext (first 300 characters) by default.
 
 STATES: 1 = published, 0 = unpublished, -2 = trashed, 2 = archived
 
@@ -76,23 +93,6 @@ DESC;
     private const ORDER_DIR_DESC = 'DESC';
 
     private const STATE_PUBLISHED = 1;
-
-    protected const DEFAULT_COLUMNS = [
-        'id', 'title', 'alias', 'catid', 'state',
-        'created', 'modified', 'hits', 'introtext',
-    ];
-
-    protected const AVAILABLE_COLUMNS = [
-        'id', 'title', 'alias', 'catid', 'state',
-        'created', 'modified', 'publish_up', 'publish_down',
-        'created_by', 'created_by_alias', 'hits', 'featured',
-        'language', 'access', 'introtext',
-    ];
-
-    protected const BLOCKED_COLUMNS = [
-        'fulltext', 'images', 'urls', 'attribs',
-        'metadata', 'metakey', 'metadesc',
-    ];
 
     private const INTROTEXT_COLUMN = 'introtext';
 
@@ -310,21 +310,7 @@ DESC;
         }
 
         if ($execution['type'] === 'aggregate') {
-            $warnings = [];
-
-            foreach (['columns', 'limit', 'offset', 'order_by', 'order_dir'] as $argument) {
-                if (array_key_exists($argument, $input)) {
-                    $warnings[] = [
-                        'code' => 'IGNORED_ARGUMENT',
-                        'message' => sprintf(
-                            '"%s" was ignored because aggregate mode returns totals only.',
-                            $argument,
-                        ),
-                    ];
-                }
-            }
-
-            return $this->success($payload, ['mode' => 'aggregate'], $warnings);
+            return $this->success($payload, ['mode' => 'aggregate'], self::ignoredArgumentWarnings($input));
         }
 
         $state = isset($input['state']) ? (int) $input['state'] : self::STATE_PUBLISHED;
@@ -489,9 +475,9 @@ DESC;
     private static function buildSelect(array $columns): string
     {
         $parts = array_map(
-            static fn (string $c): string => $c === self::INTROTEXT_COLUMN
+            static fn (string $column): string => $column === self::INTROTEXT_COLUMN
                 ? sprintf('SUBSTRING(c.%s, 1, %d) AS %s', self::INTROTEXT_COLUMN, self::INTROTEXT_MAX_LENGTH, self::INTROTEXT_COLUMN)
-                : "c.{$c}",
+                : "c.{$column}",
             $columns,
         );
 
@@ -513,14 +499,10 @@ DESC;
             return $unknown;
         }
 
-        foreach (['schema', 'aggregate'] as $flag) {
-            if (array_key_exists($flag, $input) && ! is_bool($input[$flag])) {
-                return $this->error('INVALID_ARGUMENT', sprintf('"%s" must be a boolean.', $flag));
-            }
-        }
+        $modes = $this->validateModeFlags($input);
 
-        if (($input['schema'] ?? false) === true && ($input['aggregate'] ?? false) === true) {
-            return $this->error('CONFLICTING_MODES', 'Set only one of "schema" or "aggregate".');
+        if ($modes !== null) {
+            return $modes;
         }
 
         $paging = $this->validatePaging($input, self::MAX_LIMIT, self::MAX_OFFSET);
@@ -537,47 +519,6 @@ DESC;
         }
 
         return $this->validateColumns($input);
-    }
-
-    /**
-     * Validate the columns argument against the available and blocked lists.
-     *
-     * @param  array<string, mixed>  $input  Runtime input.
-     * @return string|null JSON-encoded error envelope, or null when valid.
-     */
-    private function validateColumns(array $input): ?string
-    {
-        if (! array_key_exists('columns', $input)) {
-            return null;
-        }
-
-        if (! is_array($input['columns']) && ! is_string($input['columns'])) {
-            return $this->error('INVALID_COLUMNS', '"columns" must be an array or a string of field names.');
-        }
-
-        foreach (self::normaliseRequestedColumns($input['columns']) as $column) {
-            if ($column === '*') {
-                continue;
-            }
-
-            if (in_array($column, self::BLOCKED_COLUMNS, true)) {
-                return $this->error(
-                    'BLOCKED_COLUMN',
-                    sprintf('Field "%s" is blocked and cannot be read by this tool.', $column),
-                    ['blocked_columns' => self::BLOCKED_COLUMNS],
-                );
-            }
-
-            if (! in_array($column, self::AVAILABLE_COLUMNS, true)) {
-                return $this->error(
-                    'UNKNOWN_COLUMN',
-                    sprintf('Field "%s" is not available from this tool.', $column),
-                    ['available_columns' => self::AVAILABLE_COLUMNS],
-                );
-            }
-        }
-
-        return null;
     }
 
     /**
@@ -608,17 +549,16 @@ DESC;
         }
 
         $intFilters = [
-            'category_id' => ['c.catid',      ':catid'],
-            'created_by' => ['c.created_by', ':created_by'],
-            'min_hits' => ['c.hits >=',    ':min_hits'],
+            'category_id' => ['c.catid', '=', ':catid'],
+            'created_by' => ['c.created_by', '=', ':created_by'],
+            'min_hits' => ['c.hits', '>=', ':min_hits'],
         ];
 
-        foreach ($intFilters as $key => [$columnExpr, $placeholder]) {
+        foreach ($intFilters as $key => [$column, $operator, $placeholder]) {
             if (! isset($input[$key])) {
                 continue;
             }
-            $operator = str_contains($columnExpr, '>=') ? '' : ' =';
-            $conditions[] = "{$columnExpr}{$operator} {$placeholder}";
+            $conditions[] = "{$column} {$operator} {$placeholder}";
             $bindings[$placeholder] = (int) $input[$key];
         }
 
@@ -637,15 +577,15 @@ DESC;
             'modified_after' => ['c.modified', '>=', ':mod_after'],
         ];
 
-        foreach ($dateFilters as $key => [$column, $op, $placeholder]) {
+        foreach ($dateFilters as $key => [$column, $operator, $placeholder]) {
             if (! isset($input[$key])) {
                 continue;
             }
-            $conditions[] = "{$column} {$op} {$placeholder}";
+            $conditions[] = "{$column} {$operator} {$placeholder}";
             $bindings[$placeholder] = $input[$key];
         }
 
-        $where = $conditions !== [] ? 'WHERE '.implode(' AND ', $conditions) : '';
+        $where = $conditions === [] ? '' : 'WHERE '.implode(' AND ', $conditions);
 
         return [$where, $bindings];
     }

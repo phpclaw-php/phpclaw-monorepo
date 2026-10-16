@@ -35,8 +35,8 @@ return new class implements ServiceProviderInterface
 
         $container->set(
             PluginInterface::class,
-            static function (Container $c): PluginInterface {
-                $dispatcher = $c->get(DispatcherInterface::class);
+            static function (Container $container): PluginInterface {
+                $dispatcher = $container->get(DispatcherInterface::class);
                 $plugin = new PhpClawPlugin($dispatcher, []);
                 $plugin->setApplication(Factory::getApplication());
 

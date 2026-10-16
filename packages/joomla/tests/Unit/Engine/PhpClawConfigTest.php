@@ -10,6 +10,18 @@ use PHPUnit\Framework\TestCase;
 
 final class PhpClawConfigTest extends TestCase
 {
+    public function test_remote_skill_urls_text_keeps_only_https_md_and_json_lines(): void
+    {
+        $raw = "https://example.com/skills/SKILL.md\nhttps://example.com/skills.json\nhttp://insecure.example/x.json\nnot-a-url";
+
+        self::assertSame("https://example.com/skills/SKILL.md\nhttps://example.com/skills.json", PhpClawConfig::remoteSkillUrlsText($raw));
+    }
+
+    public function test_remote_skill_urls_text_is_empty_when_nothing_is_valid(): void
+    {
+        self::assertSame('', PhpClawConfig::remoteSkillUrlsText("http://insecure.example/x.json\n\nnot-a-url"));
+    }
+
     public function test_from_registry_maps_all_scalar_fields(): void
     {
         $params = new Registry([

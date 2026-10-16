@@ -54,7 +54,7 @@ defined('_JEXEC') || exit;
             <?php
             $features = [
                 ['icon' => '&#129302;', 'title' => Text::_('COM_PHPCLAW_FEAT_PROVIDERS_TITLE'),  'text' => Text::_('COM_PHPCLAW_FEAT_PROVIDERS_DESC')],
-                ['icon' => '&#128736;', 'title' => Text::_('COM_PHPCLAW_FEAT_TOOLS_TITLE'),      'text' => Text::_('COM_PHPCLAW_FEAT_TOOLS_DESC')],
+                ['icon' => '&#128736;', 'title' => $this->getModel()->getToolsTitle(),            'text' => Text::_('COM_PHPCLAW_FEAT_TOOLS_DESC')],
                 ['icon' => '&#128172;', 'title' => Text::_('COM_PHPCLAW_FEAT_CHAT_TITLE'),       'text' => Text::_('COM_PHPCLAW_FEAT_CHAT_DESC')],
                 ['icon' => '&#9889;',   'title' => Text::_('COM_PHPCLAW_FEAT_STREAMING_TITLE'),  'text' => Text::_('COM_PHPCLAW_FEAT_STREAMING_DESC')],
                 ['icon' => '&#128268;', 'title' => Text::_('COM_PHPCLAW_FEAT_CLI_TITLE'),        'text' => Text::_('COM_PHPCLAW_FEAT_CLI_DESC')],
@@ -97,7 +97,7 @@ foreach ($packages as [$pkg, $sentinel, $desc]) {
                             <?php if ($installed) { ?>
                                 <span class="badge bg-success" aria-label="<?= $this->escape(Text::_('COM_PHPCLAW_PKG_INSTALLED')) ?>">&#10003;</span>
                             <?php } else { ?>
-                                <span class="badge bg-secondary" aria-label="<?= $this->escape(Text::_('COM_PHPCLAW_PKG_NOT_INSTALLED')) ?>">&#8212;</span>
+                                <span class="badge bg-secondary" aria-label="<?= $this->escape(Text::_('COM_PHPCLAW_PKG_NOT_INSTALLED')) ?>">&#10007;</span>
                             <?php } ?>
                             <?= $this->escape($desc) ?>
                         </td>

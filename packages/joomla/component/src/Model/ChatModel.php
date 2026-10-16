@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace PhpClaw\Joomla\Component\Administrator\Model;
 
-use Joomla\CMS\Factory;
 use Joomla\CMS\Language\Text;
 use Joomla\CMS\MVC\Model\BaseDatabaseModel;
 use PhpClaw\Claw;
@@ -60,18 +59,18 @@ final class ChatModel extends BaseDatabaseModel
      */
     public function getInitialConversation(): array
     {
-        $convs = $this->getConversations();
+        $conversations = $this->getConversations();
 
-        if ($convs === []) {
+        if ($conversations === []) {
             return ['id' => '', 'title' => '', 'messages' => []];
         }
 
-        $initId = (string) array_key_first($convs);
+        $firstId = (string) array_key_first($conversations);
 
         return [
-            'id' => $initId,
-            'title' => (string) ($convs[$initId]['title'] ?? ''),
-            'messages' => $this->loadDisplayableMessages($initId),
+            'id' => $firstId,
+            'title' => (string) ($conversations[$firstId]['title'] ?? ''),
+            'messages' => $this->loadDisplayableMessages($firstId),
         ];
     }
 
@@ -126,9 +125,9 @@ final class ChatModel extends BaseDatabaseModel
         return [
             'conversations' => $conversations,
             'messages' => $messages,
-            'provider_status' => $this->getProvider() !== ''
-                ? self::PROVIDER_STATUS_CONNECTED
-                : self::PROVIDER_STATUS_NOT_CONFIGURED,
+            'provider_status' => $this->getProvider() === ''
+                ? self::PROVIDER_STATUS_NOT_CONFIGURED
+                : self::PROVIDER_STATUS_CONNECTED,
         ];
     }
 
@@ -151,17 +150,17 @@ final class ChatModel extends BaseDatabaseModel
         }
 
         $history = (array) ($stored['messages'] ?? $stored['history'] ?? []);
-        $out = [];
+        $messages = [];
 
-        foreach ($history as $msg) {
-            $role = $msg['role'] ?? '';
+        foreach ($history as $entry) {
+            $role = $entry['role'] ?? '';
 
             if (in_array($role, self::DISPLAYABLE_ROLES, strict: true)) {
-                $out[] = ['role' => $role, 'content' => (string) ($msg['content'] ?? '')];
+                $messages[] = ['role' => $role, 'content' => (string) ($entry['content'] ?? '')];
             }
         }
 
-        return $out;
+        return $messages;
     }
 
     /**
@@ -173,11 +172,7 @@ final class ChatModel extends BaseDatabaseModel
      */
     private function getEngine(): Claw
     {
-        if ($this->engine === null) {
-            $this->engine = (new EngineFactory)->build(EngineFactory::getPluginParams());
-        }
-
-        return $this->engine;
+        return $this->engine ??= (new EngineFactory)->build(EngineFactory::getPluginParams());
     }
 
     /**
@@ -190,60 +185,30 @@ final class ChatModel extends BaseDatabaseModel
     {
         try {
             $db = $this->getDatabase();
-            $convTable = $db->quoteName(PhpClawTables::CONVERSATIONS_TABLE);
-            $msgTable = $db->quoteName(PhpClawTables::MESSAGES_TABLE);
+            $conversationTable = $db->quoteName(PhpClawTables::CONVERSATIONS_TABLE);
+            $messageTable = $db->quoteName(PhpClawTables::MESSAGES_TABLE);
 
             $ownerClause = '';
 
             if (! $this->canManageAll()) {
-                $ownerClause = ' WHERE '.$convTable.'.'.$db->quoteName('user_id')
+                $ownerClause = ' WHERE '.$conversationTable.'.'.$db->quoteName('user_id')
                     .' = '.$this->resolveActingUserId();
             }
 
             $conversations = (int) $db->setQuery(
-                'SELECT COUNT(*) FROM '.$convTable.$ownerClause,
+                'SELECT COUNT(*) FROM '.$conversationTable.$ownerClause,
             )->loadResult();
 
             $messages = (int) $db->setQuery(
-                'SELECT COUNT(*) FROM '.$msgTable
-                .' INNER JOIN '.$convTable.' ON '.$convTable.'.'.$db->quoteName('id')
-                .' = '.$msgTable.'.'.$db->quoteName('conversation_id')
+                'SELECT COUNT(*) FROM '.$messageTable
+                .' INNER JOIN '.$conversationTable.' ON '.$conversationTable.'.'.$db->quoteName('id')
+                .' = '.$messageTable.'.'.$db->quoteName('conversation_id')
                 .$ownerClause,
             )->loadResult();
 
             return [$conversations, $messages];
         } catch (\Throwable) {
             return [0, 0];
-        }
-    }
-
-    /**
-     * Return true if the acting user holds phpclaw.chat.manageall on com_phpclaw.
-     *
-     * @return bool
-     */
-    private function canManageAll(): bool
-    {
-        try {
-            return (bool) Factory::getApplication()
-                ->getIdentity()
-                ->authorise('phpclaw.chat.manageall', 'com_phpclaw');
-        } catch (\Throwable) {
-            return false;
-        }
-    }
-
-    /**
-     * Resolve the acting user's id, 0 if unavailable.
-     *
-     * @return int
-     */
-    private function resolveActingUserId(): int
-    {
-        try {
-            return (int) Factory::getApplication()->getIdentity()->id;
-        } catch (\Throwable) {
-            return 0;
         }
     }
 }

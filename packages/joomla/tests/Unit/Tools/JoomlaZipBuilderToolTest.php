@@ -175,6 +175,28 @@ final class JoomlaZipBuilderToolTest extends TestCase
         $this->assertValidationProblem(['extension_dir' => 'evilext'], 'forbidden call');
     }
 
+    public function test_a_call_whose_name_only_ends_in_a_forbidden_name_is_allowed(): void
+    {
+        $this->writeExtension('fetchmod', [
+            'fetchmod.xml' => '<?xml version="1.0"?><extension type="module"><name>x</name></extension>',
+            'fetchmod.php' => "<?php\n\\defined('_JEXEC') or die;\n\$h = curl_init();\ncurl_exec(\$h);\n\$fs = new Filesystem();\n",
+        ]);
+
+        $out = json_decode($this->tool->execute(['extension_dir' => 'fetchmod']), true);
+
+        $this->assertTrue($out['success'], implode("\n", $out['error']['problems'] ?? []));
+    }
+
+    public function test_a_forbidden_call_inside_a_longer_line_is_still_rejected(): void
+    {
+        $this->writeExtension('evilext', [
+            'evilext.xml' => '<?xml version="1.0"?><extension type="module"><name>x</name></extension>',
+            'evilext.php' => "<?php\n\\defined('_JEXEC') or die;\n\$out = shell_exec('id');\n",
+        ]);
+
+        $this->assertValidationProblem(['extension_dir' => 'evilext'], 'forbidden call shell_exec()');
+    }
+
     public function test_rejects_syntax_error(): void
     {
         $this->writeExtension('brokenext', [

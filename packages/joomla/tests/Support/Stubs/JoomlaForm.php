@@ -5,7 +5,14 @@ declare(strict_types=1);
 namespace Joomla\CMS\Form {
     class Form
     {
+        public string $name = '';
+
         public array $values = [];
+
+        public function getName()
+        {
+            return $this->name;
+        }
 
         public array $fields = [];
 

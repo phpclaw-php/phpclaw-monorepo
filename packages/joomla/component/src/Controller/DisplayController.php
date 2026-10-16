@@ -14,6 +14,12 @@ use Joomla\CMS\MVC\Controller\BaseController;
  */
 final class DisplayController extends BaseController
 {
+    private const CHAT_ACTION = 'phpclaw.chat.use';
+
+    private const COMPONENT = 'com_phpclaw';
+
+    private const STATUS_FORBIDDEN = 403;
+
     protected $default_view = 'chat';
 
     /**
@@ -28,8 +34,8 @@ final class DisplayController extends BaseController
     {
         $identity = Factory::getApplication()->getIdentity();
 
-        if ($identity === null || ! $identity->authorise('phpclaw.chat.use', 'com_phpclaw')) {
-            throw new NotAllowed(Text::_('JERROR_ALERTNOAUTHOR'), 403);
+        if ($identity === null || ! $identity->authorise(self::CHAT_ACTION, self::COMPONENT)) {
+            throw new NotAllowed(Text::_('JERROR_ALERTNOAUTHOR'), self::STATUS_FORBIDDEN);
         }
 
         return parent::display($cachable, $urlparams);

@@ -115,7 +115,7 @@ final class EngineFactory
      */
     private static function applyAgentPrimitives(ClawBuilder $builder, PhpClawConfig $config): void
     {
-        $primary = $config->provider !== '' ? $config->provider : (new ClawConfig)->providerName;
+        $primary = $config->provider === '' ? (new ClawConfig)->providerName : $config->provider;
         $fallbackCompatible = $config->fallbackProvider !== ''
             && $config->fallbackProvider !== self::PROVIDER_CUSTOM
             && ToolRegistry::toolFormat($config->fallbackProvider) === ToolRegistry::toolFormat($primary);
@@ -215,7 +215,7 @@ final class EngineFactory
 
         return new OpenAIProvider(
             apiKey: $config->apiKey,
-            model: $config->model !== '' ? $config->model : (string) ($preset['model'] ?? ''),
+            model: $config->model === '' ? (string) ($preset['model'] ?? '') : $config->model,
             systemPrompt: $config->systemPrompt,
             endpoint: $baseUrl,
             name: $config->provider,

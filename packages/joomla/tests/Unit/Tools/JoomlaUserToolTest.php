@@ -8,6 +8,7 @@ use PhpClaw\Exceptions\ToolException;
 use PhpClaw\Joomla\Component\Administrator\Tools\JoomlaUserTool;
 use PhpClaw\Joomla\Tests\Support\MockDatabase;
 use PhpClaw\Joomla\Tests\Support\StubsJoomlaAccess;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
 final class JoomlaUserToolTest extends TestCase
@@ -418,21 +419,24 @@ final class JoomlaUserToolTest extends TestCase
         self::assertStringContainsString('8', $sql, 'The resolved group id must reach the query.');
     }
 
-    public function test_an_unknown_group_name_does_not_filter_by_a_bogus_id(): void
+    public static function unknownGroupModes(): iterable
+    {
+        yield 'query' => [[]];
+        yield 'aggregate' => [['aggregate' => true]];
+    }
+
+    #[DataProvider('unknownGroupModes')]
+    public function test_an_unknown_group_name_is_refused_instead_of_returning_every_user(array $mode): void
     {
         $db = MockDatabase::fluent($this);
         MockDatabase::enqueueAssocList($db, [['id' => 8, 'title' => 'Super Users']]);
-        MockDatabase::enqueueResult($db, 0);
-        MockDatabase::enqueueAssocList($db, []);
 
         $this->grantJoomlaAccess();
-        (new JoomlaUserTool($db))->execute(['group' => 'no such group']);
+        $result = json_decode((new JoomlaUserTool($db))->execute(['group' => 'no such group'] + $mode), true);
 
-        self::assertStringNotContainsString(
-            'user_usergroup_map',
-            implode(' ', MockDatabase::queries($db)),
-            'An unresolvable group name must not silently become group_id 0.'
-        );
+        self::assertSame('UNKNOWN_GROUP', $result['error']['code']);
+        self::assertSame([['id' => 8, 'title' => 'Super Users']], $result['error']['user_groups']);
+        self::assertStringNotContainsString('#__users', implode(' ', MockDatabase::queries($db)));
     }
 
     public function test_aggregate_honours_the_group_filter(): void

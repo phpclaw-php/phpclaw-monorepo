@@ -27,6 +27,11 @@ namespace Joomla\CMS\Application {
         public function sendHeaders(): void {}
         public function getLanguage(): \Joomla\CMS\Language\Language {}
     }
+    class ApiApplication extends CMSApplication
+    {
+        public function addFormatMap($contentHeader, $format) {}
+    }
+
     class ConsoleApplication extends CMSApplication
     {
         public function addCommand(\Joomla\Console\Command\AbstractCommand $command): void {}

@@ -31,6 +31,20 @@ final class JoomlaCategoryTool extends AbstractJoomlaTool
         ],
     ];
 
+    protected const DEFAULT_COLUMNS = [
+        'id', 'title', 'alias', 'parent_id', 'level',
+        'published', 'extension', 'language',
+    ];
+
+    protected const AVAILABLE_COLUMNS = [
+        'id', 'title', 'alias', 'parent_id', 'level', 'lft', 'rgt',
+        'published', 'extension', 'language', 'access',
+        'created_time', 'modified_time', 'hits', 'path',
+        'description',
+    ];
+
+    protected const BLOCKED_COLUMNS = ['params', 'metadata', 'metadesc', 'metakey', 'note'];
+
     private const TOOL_NAME = 'joomla_categories';
 
     private const REQUIRED_ACTION = 'phpclaw.chat.use';
@@ -46,14 +60,14 @@ final class JoomlaCategoryTool extends AbstractJoomlaTool
     private const TOOL_DESCRIPTION = <<<'DESC'
 List and search Joomla categories. Returns id, title, parent_id, level, published, extension by default.
 
-HIERARCHY: parent_id = 1 means top-level. level = 1 is root, level = 2 is child.
+HIERARCHY: parent_id = 1 means top-level. level = 1 is top-level, level = 2 is its child.
 
 FILTERS:
   - search: partial match on title
   - extension: e.g. "com_content", "com_contact"
   - parent_id: show subcategories of a specific category
   - level: depth in hierarchy (1 = top-level)
-  - published: true/false
+  - published: 1 = published, 0 = unpublished, -2 = trashed (omit for every state)
 
 NEVER USE FOR
   Creating, editing or deleting categories. This tool cannot perform those operations.
@@ -80,20 +94,6 @@ DESC;
     private const ROOT_NODE_ID = 1;
 
     private const ARTICLE_STATE_PUBLISHED = 1;
-
-    protected const DEFAULT_COLUMNS = [
-        'id', 'title', 'alias', 'parent_id', 'level',
-        'published', 'extension', 'language',
-    ];
-
-    protected const AVAILABLE_COLUMNS = [
-        'id', 'title', 'alias', 'parent_id', 'level', 'lft', 'rgt',
-        'published', 'extension', 'language', 'access',
-        'created_time', 'modified_time', 'hits', 'path',
-        'description',
-    ];
-
-    protected const BLOCKED_COLUMNS = ['params', 'metadata', 'metadesc', 'metakey', 'note'];
 
     private const UNTRUSTED_COLUMNS = ['title', 'description'];
 
@@ -164,7 +164,7 @@ DESC;
                 ],
                 'published' => [
                     'type' => 'integer',
-                    'description' => '1 = published (default), 0 = unpublished, -2 = trashed.',
+                    'description' => '1 = published, 0 = unpublished, -2 = trashed. Omit for every state.',
                 ],
                 'language' => [
                     'type' => 'string',
@@ -197,7 +197,7 @@ DESC;
                 ],
                 'aggregate' => [
                     'type' => 'boolean',
-                    'description' => 'true = stats only. Returns: total, published, unpublished, by_extension, by_level.',
+                    'description' => 'true = stats only. Returns total and by_extension: published and unpublished counts per extension and level.',
                 ],
                 'schema' => [
                     'type' => 'boolean',
@@ -304,21 +304,7 @@ DESC;
         }
 
         if ($execution['type'] === 'aggregate') {
-            $warnings = [];
-
-            foreach (['columns', 'limit', 'offset', 'order_by', 'order_dir'] as $argument) {
-                if (array_key_exists($argument, $input)) {
-                    $warnings[] = [
-                        'code' => 'IGNORED_ARGUMENT',
-                        'message' => sprintf(
-                            '"%s" was ignored because aggregate mode returns totals only.',
-                            $argument,
-                        ),
-                    ];
-                }
-            }
-
-            return $this->success($payload, ['mode' => 'aggregate'], $warnings);
+            return $this->success($payload, ['mode' => 'aggregate'], self::ignoredArgumentWarnings($input));
         }
 
         $meta = [
@@ -483,14 +469,10 @@ DESC;
             return $unknown;
         }
 
-        foreach (['schema', 'aggregate', 'with_article_count'] as $flag) {
-            if (array_key_exists($flag, $input) && ! is_bool($input[$flag])) {
-                return $this->error('INVALID_ARGUMENT', sprintf('"%s" must be a boolean.', $flag));
-            }
-        }
+        $modes = $this->validateModeFlags($input, [...self::MODE_FLAGS, 'with_article_count']);
 
-        if (($input['schema'] ?? false) === true && ($input['aggregate'] ?? false) === true) {
-            return $this->error('CONFLICTING_MODES', 'Set only one of "schema" or "aggregate".');
+        if ($modes !== null) {
+            return $modes;
         }
 
         $paging = $this->validatePaging($input, self::MAX_LIMIT, self::MAX_OFFSET);
@@ -509,49 +491,6 @@ DESC;
     }
 
     /**
-     * Validate the columns argument against the available and blocked lists.
-     *
-     * @param  array<string, mixed>  $input  Runtime input.
-     * @return string|null JSON-encoded error envelope, or null when valid.
-     */
-    private function validateColumns(array $input): ?string
-    {
-        if (! array_key_exists('columns', $input)) {
-            return null;
-        }
-
-        $requested = self::normaliseRequestedColumns($input['columns']);
-
-        if ($requested === [] && ! is_array($input['columns']) && ! is_string($input['columns'])) {
-            return $this->error('INVALID_COLUMNS', '"columns" must be an array or a string of field names.');
-        }
-
-        foreach ($requested as $column) {
-            if ($column === '*') {
-                continue;
-            }
-
-            if (in_array($column, self::BLOCKED_COLUMNS, true)) {
-                return $this->error(
-                    'BLOCKED_COLUMN',
-                    sprintf('Field "%s" is blocked and cannot be read by this tool.', $column),
-                    ['blocked_columns' => self::BLOCKED_COLUMNS],
-                );
-            }
-
-            if (! in_array($column, self::AVAILABLE_COLUMNS, true)) {
-                return $this->error(
-                    'UNKNOWN_COLUMN',
-                    sprintf('Field "%s" is not available from this tool.', $column),
-                    ['available_columns' => self::AVAILABLE_COLUMNS],
-                );
-            }
-        }
-
-        return null;
-    }
-
-    /**
      * Build the per-column SELECT fragments.
      *
      * @param  string[]  $columns
@@ -561,9 +500,9 @@ DESC;
     private static function buildSelectParts(array $columns, bool $withArticleCount): array
     {
         $parts = array_map(
-            static fn (string $c): string => $c === self::DESCRIPTION_COLUMN
+            static fn (string $column): string => $column === self::DESCRIPTION_COLUMN
                 ? sprintf('SUBSTRING(cat.%s, 1, %d) AS %s', self::DESCRIPTION_COLUMN, self::DESCRIPTION_MAX_LENGTH, self::DESCRIPTION_COLUMN)
-                : "cat.{$c}",
+                : "cat.{$column}",
             $columns,
         );
 

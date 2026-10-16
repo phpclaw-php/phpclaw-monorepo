@@ -30,6 +30,22 @@ final class JoomlaUserTool extends AbstractJoomlaTool
         ],
     ];
 
+    protected const BLOCKED_COLUMNS = [
+        'password', 'otpKey', 'otep', 'activation',
+        'params',   'token',  'secret',
+    ];
+
+    protected const DEFAULT_COLUMNS = [
+        'id', 'name', 'username', 'email',
+        'registerDate', 'lastvisitDate', 'block',
+    ];
+
+    protected const AVAILABLE_COLUMNS = [
+        'id', 'name', 'username', 'email', 'registerDate',
+        'lastvisitDate', 'lastResetTime', 'resetCount',
+        'block', 'sendEmail', 'requireReset',
+    ];
+
     private const REQUIRED_ACTION = 'phpclaw.chat.use';
 
     private const REQUIRED_ASSET = 'com_phpclaw';
@@ -82,23 +98,7 @@ DESC;
 
     private const ORDER_DIR_DESC = 'DESC';
 
-    protected const BLOCKED_COLUMNS = [
-        'password', 'otpKey', 'otep', 'activation',
-        'params',   'token',  'secret',
-    ];
-
     private const SENSITIVE_COLUMNS = ['email', 'username', 'lastvisitDate'];
-
-    protected const DEFAULT_COLUMNS = [
-        'id', 'name', 'username', 'email',
-        'registerDate', 'lastvisitDate', 'block',
-    ];
-
-    protected const AVAILABLE_COLUMNS = [
-        'id', 'name', 'username', 'email', 'registerDate',
-        'lastvisitDate', 'lastResetTime', 'resetCount',
-        'block', 'sendEmail', 'requireReset',
-    ];
 
     /**
      * Worked examples for this tool, surfaced through schema discovery.
@@ -283,6 +283,17 @@ DESC;
             return ['type' => 'schema', 'payload' => $this->schemaData()];
         }
 
+        if (self::filtersByGroupName($input)) {
+            $groups = $this->userGroups();
+            $groupId = self::groupIdByTitle($groups, $input['group']);
+
+            if ($groupId === null) {
+                return ['type' => 'unknown_group', 'payload' => ['group' => $input['group'], 'user_groups' => $groups]];
+            }
+
+            $input['group_id'] = $groupId;
+        }
+
         if (($input['aggregate'] ?? false) === true) {
             return ['type' => 'aggregate', 'payload' => $this->aggregateData($input)];
         }
@@ -301,6 +312,16 @@ DESC;
      */
     protected function verify(array $execution, array $input): array
     {
+        if ($execution['type'] === 'unknown_group') {
+            return [
+                'result' => $this->error(
+                    'UNKNOWN_GROUP',
+                    sprintf('No user group is named "%s". Use one of the listed group titles.', $execution['payload']['group']),
+                    ['user_groups' => $execution['payload']['user_groups']],
+                ),
+            ];
+        }
+
         if ($execution['type'] === 'query' && ! is_array($execution['payload']['users'] ?? null)) {
             throw new ToolException('JoomlaUserTool returned an incomplete user result.');
         }
@@ -324,21 +345,7 @@ DESC;
         }
 
         if ($execution['type'] === 'aggregate') {
-            $warnings = [];
-
-            foreach (['columns', 'limit', 'offset', 'order_by', 'order_dir'] as $argument) {
-                if (array_key_exists($argument, $input)) {
-                    $warnings[] = [
-                        'code' => 'IGNORED_ARGUMENT',
-                        'message' => sprintf(
-                            '"%s" was ignored because aggregate mode returns totals only.',
-                            $argument,
-                        ),
-                    ];
-                }
-            }
-
-            return $this->success($payload, ['mode' => 'aggregate'], $warnings);
+            return $this->success($payload, ['mode' => 'aggregate'], self::ignoredArgumentWarnings($input));
         }
 
         $meta = [
@@ -399,7 +406,7 @@ DESC;
         $orderDir = self::safeDirection((string) ($input['order_dir'] ?? self::ORDER_DIR_DESC), self::ORDER_DIR_DESC);
         $columns = $this->resolveColumns($input['columns'] ?? []);
 
-        $select = implode(', ', array_map(static fn (string $c): string => "u.{$c}", $columns));
+        $select = implode(', ', array_map(static fn (string $column): string => "u.{$column}", $columns));
         $table = $this->db->quoteName('#__users');
         [$where, $bindings] = $this->buildWhere($input);
         [$join,  $bindings] = $this->buildGroupJoin($input, $bindings);
@@ -495,7 +502,7 @@ DESC;
             'filters' => [
                 'search', 'blocked', 'send_email', 'require_reset',
                 'never_logged_in', 'registered_after', 'registered_before',
-                'last_visit_after', 'last_visit_before', 'group_id',
+                'last_visit_after', 'last_visit_before', 'group', 'group_id',
             ],
             'modes' => ['schema', 'aggregate', 'query'],
             'pagination' => ['type' => 'offset'],
@@ -525,14 +532,10 @@ DESC;
             return $unknown;
         }
 
-        foreach (['schema', 'aggregate'] as $flag) {
-            if (array_key_exists($flag, $input) && ! is_bool($input[$flag])) {
-                return $this->error('INVALID_ARGUMENT', sprintf('"%s" must be a boolean.', $flag));
-            }
-        }
+        $modes = $this->validateModeFlags($input);
 
-        if (($input['schema'] ?? false) === true && ($input['aggregate'] ?? false) === true) {
-            return $this->error('CONFLICTING_MODES', 'Set only one of "schema" or "aggregate".');
+        if ($modes !== null) {
+            return $modes;
         }
 
         $paging = $this->validatePaging($input, self::MAX_LIMIT, self::MAX_OFFSET);
@@ -546,47 +549,6 @@ DESC;
         }
 
         return $this->validateColumns($input);
-    }
-
-    /**
-     * Validate the columns argument against the available and blocked lists.
-     *
-     * @param  array<string, mixed>  $input  Runtime input.
-     * @return string|null JSON-encoded error envelope, or null when valid.
-     */
-    private function validateColumns(array $input): ?string
-    {
-        if (! array_key_exists('columns', $input)) {
-            return null;
-        }
-
-        if (! is_array($input['columns']) && ! is_string($input['columns'])) {
-            return $this->error('INVALID_COLUMNS', '"columns" must be an array or a string of field names.');
-        }
-
-        foreach (self::normaliseRequestedColumns($input['columns']) as $column) {
-            if ($column === '*') {
-                continue;
-            }
-
-            if (in_array($column, self::BLOCKED_COLUMNS, true)) {
-                return $this->error(
-                    'BLOCKED_COLUMN',
-                    sprintf('Field "%s" is blocked and cannot be read by this tool.', $column),
-                    ['blocked_columns' => self::BLOCKED_COLUMNS],
-                );
-            }
-
-            if (! in_array($column, self::AVAILABLE_COLUMNS, true)) {
-                return $this->error(
-                    'UNKNOWN_COLUMN',
-                    sprintf('Field "%s" is not available from this tool.', $column),
-                    ['available_columns' => self::AVAILABLE_COLUMNS],
-                );
-            }
-        }
-
-        return null;
     }
 
     /**
@@ -633,15 +595,15 @@ DESC;
             'last_visit_before' => ['u.lastvisitDate',  '<=', ':lv_before'],
         ];
 
-        foreach ($dateFilters as $key => [$column, $op, $placeholder]) {
+        foreach ($dateFilters as $key => [$column, $operator, $placeholder]) {
             if (! isset($input[$key])) {
                 continue;
             }
-            $conditions[] = "{$column} {$op} {$placeholder}";
+            $conditions[] = "{$column} {$operator} {$placeholder}";
             $bindings[$placeholder] = $input[$key];
         }
 
-        $where = $conditions !== [] ? 'WHERE '.implode(' AND ', $conditions) : '';
+        $where = $conditions === [] ? '' : 'WHERE '.implode(' AND ', $conditions);
 
         return [$where, $bindings];
     }
@@ -671,16 +633,28 @@ DESC;
     }
 
     /**
-     * Resolve a user-group name to its id, case-insensitively.
+     * Whether the caller filters by a group name that still has to be resolved to an id.
      *
-     * @param  string  $name  Group title as a person would write it.
+     * @param  array<string, mixed>  $input  Validated runtime input.
+     * @return bool
+     */
+    private static function filtersByGroupName(array $input): bool
+    {
+        return ! isset($input['group_id']) && isset($input['group']) && is_string($input['group']);
+    }
+
+    /**
+     * Find a user group's id by its title, case-insensitively.
+     *
+     * @param  array<int, array{id: int, title: string}>  $groups  The site's user groups.
+     * @param  string  $title  Group title as a person would write it.
      * @return int|null Group id, or null when no group carries that title.
      */
-    private function resolveGroupId(string $name): ?int
+    private static function groupIdByTitle(array $groups, string $title): ?int
     {
-        $needle = strtolower(trim($name));
+        $needle = strtolower(trim($title));
 
-        foreach ($this->userGroups() as $group) {
+        foreach ($groups as $group) {
             if (strtolower($group['title']) === $needle) {
                 return $group['id'];
             }
@@ -690,26 +664,20 @@ DESC;
     }
 
     /**
-     * Build the user-group INNER JOIN when group_id filter is present.
+     * Build the user-group INNER JOIN when the group_id filter is present.
      *
-     * @param  array<string, mixed>  $input
+     * @param  array<string, mixed>  $input  Input with any group name already resolved to group_id.
      * @param  array<string, mixed>  $bindings  Existing bindings - group_id is appended.
      * @return array{0: string, 1: array<string, mixed>}
      */
     private function buildGroupJoin(array $input, array $bindings): array
     {
-        $groupId = isset($input['group_id']) ? (int) $input['group_id'] : null;
-
-        if ($groupId === null && isset($input['group']) && is_string($input['group'])) {
-            $groupId = $this->resolveGroupId($input['group']);
-        }
-
-        if ($groupId === null) {
+        if (! isset($input['group_id'])) {
             return ['', $bindings];
         }
 
         $groupTable = $this->db->quoteName('#__user_usergroup_map');
-        $bindings[':group_id'] = $groupId;
+        $bindings[':group_id'] = (int) $input['group_id'];
 
         return ["INNER JOIN {$groupTable} g ON g.user_id = u.id AND g.group_id = :group_id", $bindings];
     }

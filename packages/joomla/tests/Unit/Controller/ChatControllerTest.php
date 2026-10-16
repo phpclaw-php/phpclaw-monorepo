@@ -205,6 +205,7 @@ final class ChatControllerTest extends TestCase
 
     public static function streamFailures(): iterable
     {
+        yield 'another user conversation' => [new ConversationAccessDeniedException('not yours'), 'JERROR_ALERTNOAUTHOR', 403];
         yield 'token budget' => [new TokenBudgetExceededException(500, 400), 'COM_PHPCLAW_ERROR_BUDGET_EXCEEDED', 422];
         yield 'rate limited' => [new ProviderException('rate limit wait exceeded', 429), 'COM_PHPCLAW_ERROR_RATE_LIMITED', 429];
         yield 'guard block' => [new GuardException('blocked'), 'COM_PHPCLAW_ERROR_GUARD_BLOCKED', null];
@@ -213,7 +214,7 @@ final class ChatControllerTest extends TestCase
     }
 
     #[DataProvider('streamFailures')]
-    public function test_a_stream_failure_sets_a_status_only_for_a_spent_budget_or_a_rate_limit(\Throwable $error, string $message, ?int $status): void
+    public function test_a_stream_failure_sets_a_status_only_for_denied_access_a_spent_budget_or_a_rate_limit(\Throwable $error, string $message, ?int $status): void
     {
         self::assertSame([$message, $status], $this->invoke('streamFailure', $error));
     }

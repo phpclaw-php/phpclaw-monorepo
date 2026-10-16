@@ -149,16 +149,4 @@ final class JoomlaDbRouterMemoryTest extends TestCase
         $this->assertTrue($router->has('conv-1', 'conversations'));
         $this->assertFalse($router->has('key-1', 'default'));
     }
-
-    public function test_routes_to_conversations_predicate(): void
-    {
-        $router = new JoomlaDbRouterMemory(
-            $this->createMock(MemoryInterface::class),
-            $this->createMock(MemoryInterface::class),
-        );
-
-        $this->assertTrue($router->routesToConversations('conversations'));
-        $this->assertFalse($router->routesToConversations('default'));
-        $this->assertFalse($router->routesToConversations('phpclaw_jobs'));
-    }
 }

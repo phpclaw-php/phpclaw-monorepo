@@ -14,6 +14,7 @@ use PhpClaw\Exceptions\AdapterException;
 use PhpClaw\Exceptions\PhpClawException;
 use PhpClaw\Hooks\HookRegistry;
 use PhpClaw\Hooks\LifecycleEvent;
+use PhpClaw\Joomla\Component\Administrator\Admin\DebugPanel;
 use PhpClaw\Joomla\Component\Administrator\Console\Concerns\RendersToolTrace;
 use PhpClaw\Joomla\Component\Administrator\Console\Concerns\ReportsAgentTurns;
 use PhpClaw\Joomla\Component\Administrator\Console\Concerns\TracksLastConversation;
@@ -72,6 +73,8 @@ ART;
     private const SPINNER_FRAME_MICROSECONDS = 100000;
 
     private const CLEAR_LINE = "\r\e[2K";
+
+    private const CLEAR_SCREEN = "\033[2J\033[H";
 
     protected static $defaultName = 'phpclaw:chat';
 
@@ -188,8 +191,8 @@ ART;
     {
         $decorated = $io->isDecorated();
 
-        foreach (explode("\n", self::LOGO) as $i => $line) {
-            $color = self::LOGO_GRADIENT[$i] ?? 226;
+        foreach (explode("\n", self::LOGO) as $index => $line) {
+            $color = self::LOGO_GRADIENT[$index] ?? 226;
             $io->writeln($decorated ? "\e[38;5;{$color}m{$line}\e[0m" : $line);
         }
 
@@ -256,13 +259,15 @@ ART;
         }
 
         $io->writeln('');
-        $this->conversation = $turn->conversation;
+        $this->conversation = $this->claw->storeMessages()
+            ? $this->claw->conversation($turn->conversation->id)
+            : $turn->conversation;
         $this->rememberConversation($turn->conversation->id);
         $io->comment($this->turnSummary($turn));
     }
 
     /**
-     * Send one message with the spinner shown until the first word of the reply.
+     * Send one message with the spinner shown until the first word of the reply, storing its tool calls with the conversation.
      *
      * @param  SymfonyStyle  $io  Console style.
      * @param  string  $message  What the user typed.
@@ -272,6 +277,8 @@ ART;
     {
         $this->turnRunning = true;
         $this->startSpinner($io);
+        $toolCalls = [];
+        $collector = DebugPanel::collectToolCalls($toolCalls);
 
         try {
             return $this->claw->streamInConversation(
@@ -281,8 +288,10 @@ ART;
                     $this->stopSpinner($io);
                     $io->write($token);
                 },
+                DebugPanel::toolCallPersister($toolCalls),
             );
         } finally {
+            HookRegistry::off(LifecycleEvent::ToolAfter->value, $collector);
             $this->turnRunning = false;
             $this->stopSpinner($io);
         }
@@ -419,7 +428,7 @@ ART;
             '/new' => $this->startNewConversation($io),
             '/conv' => $io->writeln("Conversation: {$this->conversation->id}"),
             '/quiet' => $this->toggleTrace($io),
-            '/clear' => $io->write("\033[2J\033[H"),
+            '/clear' => $io->write(self::CLEAR_SCREEN),
             default => $io->warning("Unknown command {$command}. Type /help for the list."),
         };
 

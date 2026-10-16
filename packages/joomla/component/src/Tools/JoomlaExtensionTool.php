@@ -30,6 +30,24 @@ final class JoomlaExtensionTool extends AbstractJoomlaTool
         ],
     ];
 
+    protected const DEFAULT_COLUMNS = [
+        'extension_id', 'name', 'type', 'element',
+        'folder', 'enabled', 'access', 'manifest_cache',
+    ];
+
+    protected const AVAILABLE_COLUMNS = [
+        'extension_id', 'name', 'type', 'element', 'folder',
+        'enabled', 'access', 'protected', 'locked',
+        'manifest_cache', 'state', 'client_id',
+    ];
+
+    protected const BLOCKED_COLUMNS = [
+        'params', 'custom_data',
+        'checked_out', 'checked_out_time',
+    ];
+
+    protected const PRIMARY_KEY_COLUMN = 'extension_id';
+
     private const REQUIRED_ACTION = 'phpclaw.chat.use';
 
     private const REQUIRED_ASSET = 'com_phpclaw';
@@ -75,27 +93,9 @@ DESC;
 
     private const STATE_INSTALLED = 0;
 
-    protected const DEFAULT_COLUMNS = [
-        'extension_id', 'name', 'type', 'element',
-        'folder', 'enabled', 'access', 'manifest_cache',
-    ];
-
-    protected const AVAILABLE_COLUMNS = [
-        'extension_id', 'name', 'type', 'element', 'folder',
-        'enabled', 'access', 'protected', 'locked',
-        'manifest_cache', 'state', 'client_id',
-    ];
-
-    protected const BLOCKED_COLUMNS = [
-        'params', 'custom_data',
-        'checked_out', 'checked_out_time',
-    ];
-
     private const MANIFEST_CACHE_COLUMN = 'manifest_cache';
 
     private const MANIFEST_DESC_MAX_LENGTH = 200;
-
-    protected const PRIMARY_KEY_COLUMN = 'extension_id';
 
     private const EXTENSION_TYPES = [
         'component', 'module', 'plugin', 'template',
@@ -200,7 +200,7 @@ DESC;
                 ],
                 'aggregate' => [
                     'type' => 'boolean',
-                    'description' => 'true = stats only. Returns: total, enabled, disabled, by_type, by_folder (plugins).',
+                    'description' => 'true = stats only. Returns total, by_type (count, enabled, disabled per type) and plugin_by_folder.',
                 ],
                 'schema' => [
                     'type' => 'boolean',
@@ -304,21 +304,7 @@ DESC;
         }
 
         if ($execution['type'] === 'aggregate') {
-            $warnings = [];
-
-            foreach (['columns', 'limit', 'offset', 'order_by', 'order_dir'] as $argument) {
-                if (array_key_exists($argument, $input)) {
-                    $warnings[] = [
-                        'code' => 'IGNORED_ARGUMENT',
-                        'message' => sprintf(
-                            '"%s" was ignored because aggregate mode returns totals only.',
-                            $argument,
-                        ),
-                    ];
-                }
-            }
-
-            return $this->success($payload, ['mode' => 'aggregate'], $warnings);
+            return $this->success($payload, ['mode' => 'aggregate'], self::ignoredArgumentWarnings($input));
         }
 
         $meta = [
@@ -368,7 +354,7 @@ DESC;
         $orderDir = self::safeDirection((string) ($input['order_dir'] ?? self::ORDER_DIR_ASC), self::ORDER_DIR_ASC);
         $columns = $this->resolveColumns($input['columns'] ?? []);
 
-        $select = implode(', ', array_map(static fn (string $c): string => "e.{$c}", $columns));
+        $select = implode(', ', array_map(static fn (string $column): string => "e.{$column}", $columns));
         $table = $this->db->quoteName('#__extensions');
         [$where, $bindings] = $this->buildWhere($input);
 
@@ -503,14 +489,10 @@ DESC;
             return $unknown;
         }
 
-        foreach (['schema', 'aggregate'] as $flag) {
-            if (array_key_exists($flag, $input) && ! is_bool($input[$flag])) {
-                return $this->error('INVALID_ARGUMENT', sprintf('"%s" must be a boolean.', $flag));
-            }
-        }
+        $modes = $this->validateModeFlags($input);
 
-        if (($input['schema'] ?? false) === true && ($input['aggregate'] ?? false) === true) {
-            return $this->error('CONFLICTING_MODES', 'Set only one of "schema" or "aggregate".');
+        if ($modes !== null) {
+            return $modes;
         }
 
         $paging = $this->validatePaging($input, self::MAX_LIMIT, self::MAX_OFFSET);
@@ -524,47 +506,6 @@ DESC;
         }
 
         return $this->validateColumns($input);
-    }
-
-    /**
-     * Validate the columns argument against the available and blocked lists.
-     *
-     * @param  array<string, mixed>  $input  Runtime input.
-     * @return string|null JSON-encoded error envelope, or null when valid.
-     */
-    private function validateColumns(array $input): ?string
-    {
-        if (! array_key_exists('columns', $input)) {
-            return null;
-        }
-
-        if (! is_array($input['columns']) && ! is_string($input['columns'])) {
-            return $this->error('INVALID_COLUMNS', '"columns" must be an array or a string of field names.');
-        }
-
-        foreach (self::normaliseRequestedColumns($input['columns']) as $column) {
-            if ($column === '*') {
-                continue;
-            }
-
-            if (in_array($column, self::BLOCKED_COLUMNS, true)) {
-                return $this->error(
-                    'BLOCKED_COLUMN',
-                    sprintf('Field "%s" is blocked and cannot be read by this tool.', $column),
-                    ['blocked_columns' => self::BLOCKED_COLUMNS],
-                );
-            }
-
-            if (! in_array($column, self::AVAILABLE_COLUMNS, true)) {
-                return $this->error(
-                    'UNKNOWN_COLUMN',
-                    sprintf('Field "%s" is not available from this tool.', $column),
-                    ['available_columns' => self::AVAILABLE_COLUMNS],
-                );
-            }
-        }
-
-        return null;
     }
 
     /**
@@ -586,8 +527,8 @@ DESC;
         }
 
         if (isset($input['type'])) {
-            [$cond, $typeBindings] = self::buildTypeCondition($input['type']);
-            $conditions[] = $cond;
+            [$typeCondition, $typeBindings] = self::buildTypeCondition($input['type']);
+            $conditions[] = $typeCondition;
             $bindings = array_merge($bindings, $typeBindings);
         }
 
@@ -632,10 +573,10 @@ DESC;
         $bindings = [];
         $placeholders = [];
 
-        foreach (array_values($rawType) as $i => $t) {
-            $key = ':type'.$i;
+        foreach (array_values($rawType) as $index => $type) {
+            $key = ':type'.$index;
             $placeholders[] = $key;
-            $bindings[$key] = (string) $t;
+            $bindings[$key] = (string) $type;
         }
 
         return ['e.type IN ('.implode(', ', $placeholders).')', $bindings];
@@ -644,16 +585,12 @@ DESC;
     /**
      * Add the plugin-folder suffix to the base WHERE clause.
      *
-     * @param  string  $baseWhere
+     * @param  string  $baseWhere  WHERE clause from buildWhere(), which always has one condition.
      * @return string
      */
     private static function pluginFolderWhere(string $baseWhere): string
     {
-        $extra = "e.type = 'plugin' AND e.folder != ''";
-
-        return $baseWhere !== ''
-            ? $baseWhere.' AND '.$extra
-            : 'WHERE e.state = '.self::STATE_INSTALLED.' AND '.$extra;
+        return $baseWhere." AND e.type = 'plugin' AND e.folder != ''";
     }
 
     /**
@@ -674,7 +611,7 @@ DESC;
                     $row['version'] = $manifest['version'] ?? null;
                     $row['author'] = $manifest['author'] ?? null;
                     $row['description'] = isset($manifest['description'])
-                        ? substr((string) $manifest['description'], 0, self::MANIFEST_DESC_MAX_LENGTH)
+                        ? mb_substr((string) $manifest['description'], 0, self::MANIFEST_DESC_MAX_LENGTH)
                         : null;
                 }
                 unset($row[self::MANIFEST_CACHE_COLUMN]);

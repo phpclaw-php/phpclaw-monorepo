@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace PhpClaw\Joomla\Tests\Unit\WebServices;
 
+use Joomla\CMS\Application\ApiApplication;
 use Joomla\CMS\Event\Application\BeforeApiRouteEvent;
 use Joomla\CMS\Router\ApiRouter;
 use Joomla\Event\Event;
@@ -31,6 +32,30 @@ final class PhpClawRoutesTest extends TestCase
         }
 
         self::fail('No route registered for '.$pattern);
+    }
+
+    public function test_stream_errors_render_as_json_api_on_the_api_application(): void
+    {
+        $app = new ApiApplication;
+        $plugin = new PhpClaw([]);
+        $plugin->setApplication($app);
+
+        $plugin->onBeforeApiRoute(new BeforeApiRouteEvent(new ApiRouter));
+
+        self::assertSame(['text/event-stream' => 'jsonapi'], $app->formatMapper);
+    }
+
+    public function test_no_format_map_is_added_outside_the_api_application(): void
+    {
+        $app = new \stdClass;
+        $plugin = new PhpClaw([]);
+        $plugin->setApplication($app);
+        $router = new ApiRouter;
+
+        $plugin->onBeforeApiRoute(new BeforeApiRouteEvent($router));
+
+        self::assertCount(2, $router->routes);
+        self::assertSame([], get_object_vars($app));
     }
 
     public function test_it_subscribes_to_the_api_routing_event(): void

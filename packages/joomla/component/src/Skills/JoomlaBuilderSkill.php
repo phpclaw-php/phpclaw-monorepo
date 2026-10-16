@@ -12,13 +12,17 @@ use PhpClaw\Skills\Contracts\SkillInterface;
  * The name and description avoid the token "joomla", which would match nearly every prompt.
  */
 #[Skill(
-    name: 'extension_scaffolder',
+    name: self::NAME,
     label: 'Extension Scaffolder',
-    keywords: ['scaffold', 'manifest', 'boilerplate', 'generate', 'installable'],
+    keywords: self::TAGS,
     since: '0.1.0',
 )]
 final class JoomlaBuilderSkill implements SkillInterface
 {
+    private const NAME = 'extension_scaffolder';
+
+    private const TAGS = ['scaffold', 'manifest', 'boilerplate', 'generate', 'installable'];
+
     /**
      * The unique skill identifier.
      *
@@ -26,7 +30,7 @@ final class JoomlaBuilderSkill implements SkillInterface
      */
     public function name(): string
     {
-        return 'extension_scaffolder';
+        return self::NAME;
     }
 
     /**
@@ -46,7 +50,7 @@ final class JoomlaBuilderSkill implements SkillInterface
      */
     public function tags(): array
     {
-        return ['scaffold', 'manifest', 'boilerplate', 'generate', 'installable'];
+        return self::TAGS;
     }
 
     /**
